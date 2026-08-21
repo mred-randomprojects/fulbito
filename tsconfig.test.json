@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": "./.tmp/test-dist",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": [
+    "src/types.ts",
+    "src/mergeAppData.ts",
+    "src/mergeAppData.test.ts",
+    "src/lib/rating.ts",
+    "src/lib/rating.test.ts",
+    "src/lib/formations.ts",
+    "src/lib/formations.test.ts",
+    "src/lib/balance.ts",
+    "src/lib/balance.test.ts",
+    "src/lib/insights.ts",
+    "src/lib/insights.test.ts"
+  ]
+}
