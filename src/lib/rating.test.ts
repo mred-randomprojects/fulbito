@@ -3,7 +3,8 @@ import { describe, it } from "node:test";
 import type { AttributeKey, Player, PlayerId, Role } from "../types.js";
 import {
   ATTR_PULL,
-  GK_WITHOUT_RATING_DISCOUNT,
+  GK_PRIOR,
+  GK_SHRINK,
   ROLE_TRUST,
   attributeEstimate,
   detailLevel,
@@ -36,11 +37,28 @@ describe("effectiveRating", () => {
     }
   });
 
-  it("discounts an unrated player put in goal", () => {
+  it("regresses an unrated player in goal towards a generic keeper", () => {
     const player = makePlayer({ rating: 7.5 });
     assert.equal(
       effectiveRating(player, "GK").value,
-      7.5 - GK_WITHOUT_RATING_DISCOUNT,
+      7.5 + GK_SHRINK * (GK_PRIOR - 7.5),
+    );
+    assert.ok(effectiveRating(player, "GK").value < 7.5);
+  });
+
+  it("does not let a star be worth more in goal than a weak player is", () => {
+    // The bug this exists to stop: with a flat discount a 9 still outscored a
+    // 4 in goal, so the optimiser would park the best forward between the
+    // sticks to keep a weak player off the outfield. The two arrangements tied
+    // on total and it produced lineups nobody would ever play.
+    const star = effectiveRating(makePlayer({ rating: 9 }), "GK").value;
+    const weak = effectiveRating(makePlayer({ rating: 4 }), "GK").value;
+    const starOutfield = effectiveRating(makePlayer({ rating: 9 }), "FWD").value;
+    const weakOutfield = effectiveRating(makePlayer({ rating: 4 }), "FWD").value;
+    // Putting the star in goal has to cost the team more than it gains.
+    assert.ok(
+      star + weakOutfield < weak + starOutfield,
+      "the weaker player belongs in goal",
     );
   });
 
@@ -96,7 +114,7 @@ describe("effectiveRating", () => {
     assert.equal(attributeEstimate(player, "GK"), null);
     assert.equal(
       effectiveRating(player, "GK").value,
-      6 - GK_WITHOUT_RATING_DISCOUNT,
+      6 + GK_SHRINK * (GK_PRIOR - 6),
     );
   });
 

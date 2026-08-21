@@ -23,21 +23,31 @@ export const ROLE_TRUST = 0.7;
 export const ATTR_PULL = 0.4;
 
 /**
- * How much a player is discounted when put in goal with no goalkeeping rating
- * of their own.
+ * What an unrated player is assumed to be worth in goal.
  *
  * Goalkeeping is the one position that general footballing ability does not
- * imply — an excellent midfielder is not an excellent keeper, they are an
- * outfielder standing on a line. Without this, a squad containing nobody rated
- * in goal would score *higher* than one that correctly puts its rated keeper
- * there, because the unrated stand-in carries their full outfield rating.
+ * imply, so an overall rating says very little about it. Rather than discount a
+ * fixed amount, an unrated keeper regresses most of the way to a generic
+ * average keeper: we genuinely do not know, so we should not pretend the club's
+ * best forward is also its best goalkeeper.
  *
- * Crucially this is not inventing information. Every formation with a keeper
- * has exactly one, so when nobody is rated in goal both teams take the same
- * discount and nothing is distorted. It only bites where it should: comparing
- * a known keeper against a guess.
+ * The flat-discount version of this was subtly wrong. It kept a 9 worth more in
+ * goal than a 4, which let the optimiser park a star between the sticks to hide
+ * a weak player from outfield — the arrangements tied on total, and it produced
+ * lineups nobody would ever play. Regression to the mean removes the incentive:
+ * the weakest player in goal now costs the team least, which is also what
+ * actually happens when nobody volunteers.
+ *
+ * This still cannot distort a squad where nobody is rated in goal, because both
+ * sides field exactly one keeper and are judged by the same function.
  */
-export const GK_WITHOUT_RATING_DISCOUNT = 1;
+export const GK_PRIOR = 5.5;
+
+/**
+ * How far an unrated player's goalkeeping regresses to `GK_PRIOR`. 0.6 says the
+ * overall rating explains well under half of how someone keeps goal.
+ */
+export const GK_SHRINK = 0.6;
 
 /**
  * Per-role attribute weights. Weights within a role sum to 1.
@@ -128,7 +138,7 @@ export function effectiveRating(player: Player, role: Role): RatingBreakdown {
   if (roleRating !== null) {
     value = ROLE_TRUST * roleRating + (1 - ROLE_TRUST) * base;
   } else if (role === "GK") {
-    value = base - GK_WITHOUT_RATING_DISCOUNT;
+    value = base + GK_SHRINK * (GK_PRIOR - base);
   }
 
   const attributes = attributeEstimate(player, role);

@@ -47,13 +47,18 @@ describe("summarise", () => {
   });
 
   it("treats a met handicap as fair rather than as an imbalance", () => {
-    const a = squad([8, 8, 8, 8, 8]);
-    const b = squad([7, 7, 7, 7, 7]);
+    const a = squad([9, 9, 9, 9, 9]);
+    const b = squad([5, 5, 5, 5, 5]);
+
     const withoutHandicap = summarise(a, b, "average", 0);
-    const withHandicap = summarise(a, b, "average", 1);
     assert.equal(withoutHandicap.verdict, "lopsided");
+    assert.equal(withoutHandicap.favoured, "A");
+
+    // Asking for exactly the edge this split already has means it is on target.
+    const withHandicap = summarise(a, b, "average", withoutHandicap.edge);
     assert.equal(withHandicap.verdict, "even");
     assert.equal(withHandicap.favoured, null);
+    assert.equal(withHandicap.fairness, 100);
   });
 });
 

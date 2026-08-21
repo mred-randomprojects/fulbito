@@ -26,6 +26,21 @@ export interface Assignment {
  */
 export const MAX_EXACT_ASSIGNMENT = 10;
 
+/**
+ * Per rating point, the nudge applied for standing in a position you were
+ * explicitly rated for. At most 0.002 a slot — far below any real difference,
+ * so it only ever separates arrangements that are otherwise identical. The
+ * chosen lineup is re-scored without it, so it never reaches a displayed
+ * number.
+ */
+const ROLE_FIT_TIEBREAK = 0.0002;
+
+/** Tie-break weight for putting `player` in `role`. */
+function roleFit(player: Player, role: Role): number {
+  const rating = player.roleRatings[role];
+  return rating === undefined ? 0 : ROLE_FIT_TIEBREAK * rating;
+}
+
 /** Rough operation count of assigning `k` players to `k` slots. */
 function assignmentCost(k: number): number {
   if (k <= 1) return 1;
@@ -53,12 +68,30 @@ export function bestAssignment(
     );
   }
 
-  // value[slot][player]
-  const value: number[][] = slots.map((slot) =>
+  // base[slot][player] is what a player is genuinely worth in that slot.
+  const base: number[][] = slots.map((slot) =>
     players.map((player) => effectiveRating(player, slot.role).value),
   );
 
-  if (n > MAX_EXACT_ASSIGNMENT) return greedyAssignment(value, n);
+  // Arrangements tie surprisingly often — swapping two players who are equally
+  // hurt by being out of position changes nothing — and an arbitrary winner is
+  // how a forward rated 10 up front ends up in midfield. `value` adds a
+  // hair's-breadth preference for putting the best-rated specialist in each
+  // position, which decides those coin flips and nothing else.
+  const value: number[][] = base.map((row, slot) =>
+    row.map((v, player) => v + roleFit(players[player], slots[slot].role)),
+  );
+
+  const settle = (assignment: Assignment): Assignment => ({
+    // Report what the lineup is actually worth, without the tie-break dust.
+    total: assignment.slotToPlayer.reduce(
+      (sum, player, slot) => (player >= 0 ? sum + base[slot][player] : sum),
+      0,
+    ),
+    slotToPlayer: assignment.slotToPlayer,
+  });
+
+  if (n > MAX_EXACT_ASSIGNMENT) return settle(greedyAssignment(value, n));
 
   const full = 1 << n;
   const dp = new Float64Array(full).fill(-Infinity);
@@ -90,7 +123,7 @@ export function bestAssignment(
     mask &= ~(1 << p);
   }
 
-  return { total: dp[full - 1], slotToPlayer };
+  return settle({ total: dp[full - 1], slotToPlayer });
 }
 
 /**

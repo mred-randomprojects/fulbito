@@ -96,6 +96,43 @@ describe("bestAssignment", () => {
     assert.ok(Math.abs(assignment.total - best) < 1e-9);
   });
 
+  it("never parks the best outfielder in goal", () => {
+    // Regression test for a real lineup this produced: a 9 rated 10 as a
+    // forward ended up keeping goal while a 6 played up front, because the two
+    // arrangements tied on total strength.
+    const star = player(9, { roleRatings: { FWD: 10 } });
+    const squad = [
+      star,
+      player(6, { roleRatings: { DEF: 8 } }),
+      player(7, { roleRatings: { MID: 8 } }),
+      player(4),
+      player(6, { roleRatings: { FWD: 7 } }),
+    ];
+    const formation = resolveFormation("5-1-2-1", 5);
+    const { slotToPlayer } = bestAssignment(squad, formation.slots);
+    const gkSlot = formation.slots.findIndex((s) => s.role === "GK");
+    const keeper = squad[slotToPlayer[gkSlot]];
+
+    assert.notEqual(keeper.id, star.id, "the best player must not be in goal");
+    assert.equal(keeper.rating, 4, "the weakest player goes in goal");
+  });
+
+  it("breaks ties by playing people where they are rated", () => {
+    // Two arrangements worth exactly the same overall; the readable one wins.
+    const forward = player(9, { roleRatings: { FWD: 10 } });
+    const squad = [
+      forward,
+      player(6, { roleRatings: { DEF: 8 } }),
+      player(7, { roleRatings: { MID: 8 } }),
+      player(4),
+      player(6, { roleRatings: { FWD: 7 } }),
+    ];
+    const formation = resolveFormation("5-1-2-1", 5);
+    const { slotToPlayer } = bestAssignment(squad, formation.slots);
+    const fwdSlot = formation.slots.findIndex((s) => s.role === "FWD");
+    assert.equal(squad[slotToPlayer[fwdSlot]].id, forward.id);
+  });
+
   it("assigns every player exactly once", () => {
     const players = [player(5), player(6), player(7), player(8), player(9), player(4)];
     const formation = defaultFormation(6);
