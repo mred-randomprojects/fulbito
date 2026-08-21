@@ -13,13 +13,9 @@ export default defineConfig(({ command }) => ({
   build: {
     rollupOptions: {
       output: {
-        // Firebase is by far the biggest dependency and changes far less often
-        // than the app does. Splitting it out lets it stay cached across
-        // deploys and load in parallel with the app shell.
-        manualChunks: {
-          firebase: ["firebase/app", "firebase/auth", "firebase/firestore"],
-          react: ["react", "react-dom", "react-router-dom"],
-        },
+        // React changes far less often than the app does, so keeping it in its
+        // own chunk lets it stay cached across deploys.
+        manualChunks: { react: ["react", "react-dom", "react-router-dom"] },
       },
     },
   },

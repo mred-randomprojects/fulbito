@@ -43,7 +43,6 @@ interface Props {
   onDelete: () => void;
   onSavePlayer: (player: Player) => void;
   onBack: () => void;
-  canShare: boolean;
 }
 
 /** Where a tapped player currently is. */
@@ -58,7 +57,6 @@ export function MatchBuilder({
   onDelete,
   onSavePlayer,
   onBack,
-  canShare,
 }: Props) {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [optionIndex, setOptionIndex] = useState(0);
@@ -571,7 +569,6 @@ export function MatchBuilder({
         evalB={evalB}
         formationA={formationA}
         formationB={formationB}
-        canShare={canShare}
       />
 
       <PlayerForm

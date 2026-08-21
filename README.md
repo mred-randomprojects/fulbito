@@ -11,6 +11,8 @@ English.
 
 Live at **https://mred-randomprojects.github.io/fulbito/**
 
+Runs entirely in the browser. No account, no backend, nothing to sign up for.
+
 ## What it does
 
 - **A roster you build once.** Name, photo, and one overall rating per player.
@@ -27,8 +29,8 @@ Live at **https://mred-randomprojects.github.io/fulbito/**
   gap between the two best players, and a plain-English read on what it means.
 - **Uneven sides and deliberate handicaps.** 5 v 6 is normal. So is stacking one
   team on purpose.
-- **Share without leaking ratings.** Copy a lineup into the group chat, or
-  publish a page. Ratings are excluded from both unless you opt in.
+- **Share without leaking ratings.** A PNG of the pitch, or a plain-text list
+  for the group chat. Ratings are excluded from both unless you opt in.
 
 ## How the balancing works
 
@@ -61,8 +63,8 @@ npm install
 npm run dev
 ```
 
-It works with no configuration at all, saving to the browser on that device.
-Firebase only adds cross-device sync and shareable links.
+No configuration, no accounts, no backend. Everything lives in `localStorage`
+and leaves the machine only when you export it.
 
 ```bash
 npm run build   # typecheck + production build
@@ -70,26 +72,25 @@ npm test        # the rating, balancing, formation and merge logic
 npm run lint
 ```
 
-## Firebase (optional)
+## Data
 
-1. Create a Firebase project, enable **Authentication → Google** and
-   **Firestore**.
-2. Copy `.env.example` to `.env` and fill in the six values from the project's
-   web app config.
-3. Deploy the rules in `firestore.rules` (`firebase deploy --only firestore:rules`).
+The whole app state — players, photos, matches, ratings — is one JSON blob in
+`localStorage`, exported and imported from the "Tus datos" screen. Import
+*merges* on per-record timestamps rather than replacing, so restoring an older
+file cannot wipe players added since (`src/mergeAppData.ts`).
 
-Without these the app runs local-only: the sign-in screen offers "Just use it on
-this device", and sharing falls back to the text export.
+Photos are centre-cropped and re-encoded on upload: a 1.7 MB camera photo lands
+at roughly 3 KB, which is what makes storing them inline viable at all.
 
-Photos live in per-player documents rather than in the main roster document, so
-a large squad cannot run into Firestore's 1 MB per-document ceiling, and an
-ordinary edit never re-uploads image data.
+Sharing produces a PNG of the pitch, drawn on a canvas from the same geometry
+the on-screen pitch uses (`src/lib/lineupImage.ts`), plus a plain-text list for
+the group chat. Neither needs a server.
 
 ## Deploying
 
 Pushing to `main` builds and publishes to GitHub Pages via
-`.github/workflows/deploy.yml`. Add the six `VITE_FIREBASE_*` values as
-**repository secrets** so the deployed build gets them.
+`.github/workflows/deploy.yml`. There is nothing to configure — the build takes
+no secrets.
 
 `./deploy.sh` builds, pushes, and watches the run to completion.
 
@@ -97,6 +98,6 @@ Pushing to `main` builds and publishes to GitHub Pages via
 
 - **Free placement on the pitch.** Positions currently come from a formation;
   dragging a player anywhere on the grass is the obvious next step.
-- **Photo hosting.** Photos are embedded in Firestore documents, which needs no
-  paid plan and no Storage bucket. If squads ever get big enough to strain that,
-  the next step is an external free host rather than Firebase Storage.
+- **Sync between devices.** Deliberately absent: the export/import file is the
+  portability story. If it ever becomes a nuisance, the merge logic that would
+  back a real sync already exists and is tested.

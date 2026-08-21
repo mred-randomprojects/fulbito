@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, Link2, Loader2, MessageSquare } from "lucide-react";
+import { Check, Copy, ImageDown, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,10 +11,9 @@ import {
 import { Label } from "@/components/ui/label";
 import type { TeamEvaluation } from "@/lib/balance";
 import type { Formation } from "@/lib/formations";
-import { publishShare, type SharePayload, type ShareTeam } from "@/cloudStorage";
-import { useAuth } from "@/auth";
+import { renderLineupImage } from "@/lib/lineupImage";
 import { formatMatchDate } from "@/lib/dates";
-import { KIT_EMOJI, playerDisplayName, type Match, type TeamConfig } from "@/types";
+import { KIT_EMOJI, playerDisplayName, type Match } from "@/types";
 
 interface Props {
   open: boolean;
@@ -24,18 +23,13 @@ interface Props {
   evalB: TeamEvaluation;
   formationA: Formation;
   formationB: Formation;
-  /** False when there is no signed-in Firebase account behind this session. */
-  canShare: boolean;
 }
 
 /**
- * Two ways out of the app.
+ * Two ways out of the app, both of which land in the group chat where the game
+ * was organised. No link, no account, nothing to expire.
  *
- * The text list is the one that gets used — it pastes straight into the group
- * chat where the game was organised, works with no account, and survives being
- * forwarded. The link is for when people want the picture.
- *
- * Ratings are excluded from both by default. The whole point of rating your
+ * Ratings are excluded from both by default. The whole premise of rating your
  * friends privately is that they never find out what you put.
  */
 export function ShareDialog({
@@ -46,50 +40,52 @@ export function ShareDialog({
   evalB,
   formationA,
   formationB,
-  canShare,
 }: Props) {
   const [includeRatings, setIncludeRatings] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<"text" | "link" | null>(null);
-  const { user } = useAuth();
 
   const text = buildText(match, evalA, evalB, formationA, formationB, includeRatings);
 
-  const copy = async (value: string, kind: "text" | "link") => {
+  const copy = async () => {
+    setError(null);
     try {
-      await navigator.clipboard.writeText(value);
-      setCopied(kind);
-      window.setTimeout(() => setCopied(null), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("El navegador bloqueó el portapapeles. Seleccioná el texto y copialo a mano.");
+      setError("El navegador no dejó copiar. Seleccioná el texto y copialo a mano.");
     }
   };
 
-  const publish = async () => {
-    setPublishing(true);
+  const downloadImage = async () => {
+    setRendering(true);
     setError(null);
     try {
-      const payload: SharePayload = {
-        matchName: match.name,
-        date: match.date,
-        teamA: buildShareTeam(match.teamA, evalA, formationA, includeRatings),
-        teamB: buildShareTeam(match.teamB, evalB, formationB, includeRatings),
+      const blob = await renderLineupImage({
+        match,
+        formationA,
+        formationB,
+        lineupA: [...evalA.lineup],
+        lineupB: [...evalB.lineup],
+        ratingsA: evalA.slotRatings,
+        ratingsB: evalB.slotRatings,
         showRatings: includeRatings,
-        createdAt: new Date().toISOString(),
-        // Recorded so the security rules can let the author — and only the
-        // author — take a published lineup down again.
-        ownerUid: user?.uid ?? "",
-      };
-      const id = await publishShare(payload);
-      const url = `${window.location.origin}${window.location.pathname}#/share/${id}`;
-      setShareUrl(url);
+        totalA: evalA.total,
+        totalB: evalB.total,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${slug(match.name)}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
     } catch (e) {
-      console.error("[share] publish failed:", e);
-      setError("No se pudo crear el link. Fijate la conexión y probá de nuevo.");
+      console.error("[share] image failed:", e);
+      setError("No se pudo armar la imagen. Probá de nuevo.");
     } finally {
-      setPublishing(false);
+      setRendering(false);
     }
   };
 
@@ -97,9 +93,9 @@ export function ShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Compartir los equipos</DialogTitle>
+          <DialogTitle>Pasar los equipos</DialogTitle>
           <DialogDescription>
-            Los niveles quedan privados salvo que vos digas lo contrario.
+            Los niveles no van, salvo que vos digas lo contrario.
           </DialogDescription>
         </DialogHeader>
 
@@ -107,123 +103,64 @@ export function ShareDialog({
           <input
             type="checkbox"
             checked={includeRatings}
-            onChange={(e) => {
-              setIncludeRatings(e.target.checked);
-              setShareUrl(null);
-            }}
+            onChange={(e) => setIncludeRatings(e.target.checked)}
             className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
           />
           <span className="text-sm">
-            <span className="font-medium">Incluir los niveles</span>
+            <span className="font-medium">Mostrar los niveles</span>
             <span className="block text-xs text-muted-foreground">
-              Muestra el número de cada uno y el total del equipo. Apagado por
-              defecto: a nadie le gusta enterarse de que es un 4.
+              Sale el número de cada uno y el total del equipo. Va apagado
+              porque a nadie le cae bien enterarse de que es un 4.
             </span>
           </span>
         </label>
 
         <div className="space-y-2">
           <Label className="flex items-center gap-1.5">
-            <MessageSquare className="h-3.5 w-3.5" />
-            Como mensaje
+            <ImageDown className="h-3.5 w-3.5" />
+            La cancha, en imagen
           </Label>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-3 text-xs leading-relaxed">
-            {text}
-          </pre>
           <Button
             variant="secondary"
             className="w-full"
-            onClick={() => void copy(text, "text")}
+            onClick={() => void downloadImage()}
+            disabled={rendering}
           >
-            {copied === "text" ? (
-              <Check className="mr-1.5 h-4 w-4" />
+            {rendering ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             ) : (
-              <Copy className="mr-1.5 h-4 w-4" />
+              <ImageDown className="mr-1.5 h-4 w-4" />
             )}
-            {copied === "text" ? "Copiado" : "Copiar para WhatsApp"}
+            {rendering ? "Dibujando…" : "Bajar la formación"}
           </Button>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Un PNG con la cancha, las caras y los nombres. Listo para mandar al
+            grupo.
+          </p>
         </div>
 
         <div className="space-y-2 border-t border-border pt-4">
           <Label className="flex items-center gap-1.5">
-            <Link2 className="h-3.5 w-3.5" />
-            Como link
+            <MessageSquare className="h-3.5 w-3.5" />
+            La lista, en texto
           </Label>
-          {!canShare ? (
-            <p className="rounded-lg border border-border bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
-              Entrá con tu cuenta para publicar un link. Todo funciona sin
-              cuenta, pero una página para compartir tiene que vivir en algún
-              lado que no sea este aparato.
-            </p>
-          ) : shareUrl != null ? (
-            <div className="space-y-2">
-              <p className="break-all rounded-lg border border-border bg-background p-3 text-xs">
-                {shareUrl}
-              </p>
-              <Button
-                variant="secondary"
-                className="w-full"
-                onClick={() => void copy(shareUrl, "link")}
-              >
-                {copied === "link" ? (
-                  <Check className="mr-1.5 h-4 w-4" />
-                ) : (
-                  <Copy className="mr-1.5 h-4 w-4" />
-                )}
-                {copied === "link" ? "Copiado" : "Copiar link"}
-              </Button>
-              <p className="text-[11px] leading-snug text-muted-foreground">
-                Es una foto del momento: si después rearmás los equipos, la
-                página no cambia. Cualquiera con el link la puede abrir.
-              </p>
-            </div>
-          ) : (
-            <Button className="w-full" onClick={() => void publish()} disabled={publishing}>
-              {publishing ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-              ) : (
-                <Link2 className="mr-1.5 h-4 w-4" />
-              )}
-              Crear la página para compartir
-            </Button>
-          )}
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-3 text-xs leading-relaxed">
+            {text}
+          </pre>
+          <Button variant="secondary" className="w-full" onClick={() => void copy()}>
+            {copied ? (
+              <Check className="mr-1.5 h-4 w-4" />
+            ) : (
+              <Copy className="mr-1.5 h-4 w-4" />
+            )}
+            {copied ? "Copiado" : "Copiar para WhatsApp"}
+          </Button>
         </div>
 
         {error != null && <p className="text-sm text-destructive">{error}</p>}
       </DialogContent>
     </Dialog>
   );
-}
-
-function buildShareTeam(
-  config: TeamConfig,
-  evaluation: TeamEvaluation,
-  formation: Formation,
-  includeRatings: boolean,
-): ShareTeam {
-  const team: ShareTeam = {
-    name: config.name,
-    kit: config.kit,
-    formationLabel: formation.label,
-    slots: formation.slots.map((slot, index) => {
-      const player = evaluation.lineup[index];
-      const entry = {
-        role: slot.role,
-        x: slot.x,
-        y: slot.y,
-        name: player == null ? "" : playerDisplayName(player),
-        avatar: player?.avatar ?? "",
-      };
-      return includeRatings && player != null
-        ? { ...entry, rating: Number(evaluation.slotRatings[index].toFixed(2)) }
-        : entry;
-    }),
-  };
-  if (includeRatings) {
-    team.total = Number(evaluation.total.toFixed(2));
-    team.average = Number(evaluation.average.toFixed(2));
-  }
-  return team;
 }
 
 /** Plain text, formatted for a group chat rather than for a spreadsheet. */
@@ -236,7 +173,7 @@ function buildText(
   includeRatings: boolean,
 ): string {
   const lines: string[] = [];
-  lines.push(`⚽ ${match.name}${match.date !== "" ? ` — ${formatDate(match.date)}` : ""}`);
+  lines.push(`⚽ ${match.name}${match.date !== "" ? ` — ${formatMatchDate(match.date)}` : ""}`);
   lines.push("");
 
   for (const [config, evaluation, formation] of [
@@ -265,4 +202,13 @@ function buildText(
   return lines.join("\n").trimEnd();
 }
 
-const formatDate = formatMatchDate;
+/** Filename-safe version of the match name. */
+function slug(name: string): string {
+  const cleaned = name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return cleaned === "" ? "fulbito" : cleaned;
+}

@@ -83,9 +83,9 @@ export function MatchSetup({
 
         {uneven && missing === 0 && (
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Equipos disparejos. El jugador de más vale más de lo que muestran
-            los números, así que conviene darle los mejores al que tiene menos —
-            para eso está <em>talento total</em> acá abajo.
+            Van disparejos. El jugador de más vale más de lo que dicen los
+            números, así que conviene darle los mejores al que tiene menos: para
+            eso está <em>nivel total</em> acá abajo.
           </p>
         )}
       </div>
@@ -110,8 +110,8 @@ export function MatchSetup({
         <div className="flex rounded-lg border border-border p-0.5">
           {(
             [
-              ["total", "Talento total"],
-              ["average", "Promedio por jugador"],
+              ["total", "Nivel total"],
+              ["average", "Promedio por cabeza"],
             ] as [BalanceBasis, string][]
           ).map(([key, label]) => (
             <button
@@ -131,8 +131,8 @@ export function MatchSetup({
         </div>
         <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
           {basis === "total"
-            ? "Los dos lados suman lo mismo. Si son disparejos en número, el que tiene menos queda más fuerte hombre a hombre."
-            : "Los dos lados promedian lo mismo. Si son disparejos en número, el que tiene más queda mejor en total."}
+            ? "Los dos suman lo mismo. Si son disparejos en número, el que tiene menos queda más fuerte hombre a hombre."
+            : "Los dos promedian lo mismo. Si son disparejos en número, el que tiene más queda mejor en total."}
         </p>
       </div>
 
@@ -140,7 +140,7 @@ export function MatchSetup({
         <div className="mb-1.5 flex items-baseline justify-between gap-2">
           <Label className="flex items-center gap-1.5">
             <Scale className="h-3.5 w-3.5" />
-            Ventaja a propósito
+            Emparejar a mano
           </Label>
           <span className="tabular text-xs font-medium">
             {handicap === 0 ? (
@@ -160,12 +160,12 @@ export function MatchSetup({
           value={handicap}
           onChange={(e) => onHandicapChange(Number(e.target.value))}
           className="w-full"
-          aria-label="Ventaja a propósito"
+          aria-label="Emparejar a mano"
         />
         <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-          Para cargar un equipo a propósito: revancha, promesa de asado, o
+          Para cargar un equipo a propósito: revancha, apuesta de asado, o
           cuando los números dicen que está parejo pero todos sabemos que no.
-          Se mide en puntos de nivel por jugador.
+          Se mide en puntos de nivel por cabeza.
         </p>
       </div>
     </div>

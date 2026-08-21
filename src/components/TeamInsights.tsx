@@ -150,15 +150,15 @@ function searchNote(
   edited: boolean,
 ): string {
   if (edited) {
-    return "Moviste jugadores a mano, así que esta formación es tuya, no la que eligió el reparto. Dale a Rearmar si querés volver a una repartida óptima.";
+    return "Moviste jugadores a mano, así que esta formación es tuya y no la que salió del reparto. Dale a Rearmar si querés volver a la óptima.";
   }
   if (search == null) {
-    return "Estos equipos vienen guardados de antes. Dale a Armar los equipos para buscar el reparto más parejo con la lista y la configuración de ahora.";
+    return "Estos equipos quedaron guardados de antes. Dale a Armar los equipos para buscar el reparto más parejo con la lista de ahora.";
   }
   if (search.exhaustive) {
-    return `Se probaron las ${search.evaluated.toLocaleString("es-AR")} repartidas posibles, una por una. Esta es la mejor de verdad, no una que salió de casualidad.`;
+    return `Se probaron las ${search.evaluated.toLocaleString("es-AR")} combinaciones posibles, una por una. Esta es la mejor de verdad, no una que salió de pedo.`;
   }
-  return `Son demasiadas combinaciones para probarlas todas, así que se afinaron ${search.evaluated} repartidas prometedoras a fuerza de prueba y error. Va a estar muy bien, pero no se puede jurar que sea la óptima.`;
+  return `Son demasiadas combinaciones para probarlas todas, así que se afinaron ${search.evaluated} repartos prometedores a fuerza de prueba y error. Va a estar muy bien, pero no te lo puedo jurar.`;
 }
 
 function Legend({ color, label }: { color: string; label: string }) {
@@ -290,10 +290,10 @@ function ConfidenceMeter({ value }: { value: number }) {
   const percent = Math.round(value * 100);
   const label =
     percent >= 75
-      ? "Bien fundado"
+      ? "Data completa"
       : percent >= 55
-        ? "Más o menos fundado"
-        : "Solo nivel general";
+        ? "Data a medias"
+        : "Solo el nivel general";
 
   return (
     <>
@@ -309,7 +309,7 @@ function ConfidenceMeter({ value }: { value: number }) {
       />
       <span className="flex-1">
         <span className="font-medium text-foreground">{label}</span> — tenés
-        cargado el {percent}% del detalle que afinaría este reparto.
+        cargado el {percent}% de lo que haría más fino este reparto.
       </span>
     </>
   );

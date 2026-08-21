@@ -154,8 +154,8 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
         <DialogHeader>
           <DialogTitle>{isNew ? "Jugador nuevo" : "Editar jugador"}</DialogTitle>
           <DialogDescription>
-            Con el nombre y un nivel general ya está. Todo lo demás es
-            opcional: completalo solo para los que tenés una opinión formada.
+            Con el nombre y un nivel general ya está. El resto es opcional:
+            llenalo solo para los que tenés bien claro cómo juegan.
           </DialogDescription>
         </DialogHeader>
 
@@ -195,7 +195,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
                     onClick={() => update({ avatar: "" })}
                   >
                     <X className="mr-1 h-3.5 w-3.5" />
-                    Sacar
+                    Borrar foto
                   </Button>
                 )}
               </div>
@@ -293,9 +293,9 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
             }
           >
             <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-              Solo para los que en un puesto son otra cosa: el 6 de la cancha
-              que al arco es un 9. Lo que dejes vacío usa el nivel general, así
-              que no salteártelo no te cuesta nada.
+              Solo para los que en un puesto son otra cosa: el que en la
+              cancha es un 6 pero al arco es un 9. Lo que dejes vacío usa el
+              nivel general, así que saltearlo no le cuesta nada a nadie.
             </p>
             <div className="space-y-4">
               {ROLES.map((role) => (
@@ -323,10 +323,10 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
             }
           >
             <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-              Estos lo mueven un poco para arriba o para abajo dentro del
-              puesto, no lo reemplazan. Cargá los uno o dos que saltan a la
-              vista y dejá el resto tranquilo: media lista bien puesta vale más
-              que una lista entera inventada.
+              Estos lo corren un poco para arriba o para abajo dentro del
+              puesto, no lo reemplazan. Poné los uno o dos que saltan a la
+              vista y dejá el resto en blanco: media lista bien puesta vale
+              más que una lista entera inventada.
             </p>
             <div className="space-y-4">
               {ATTRIBUTES.map((key) => (

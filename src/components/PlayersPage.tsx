@@ -66,7 +66,7 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
           <h1 className="text-2xl font-semibold tracking-tight">Jugadores</h1>
           <p className="text-sm text-muted-foreground">
             {players.length === 0
-              ? "Acá vive el plantel."
+              ? "Acá va tu plantel."
               : `${players.length} en el plantel.`}
           </p>
         </div>
@@ -189,8 +189,8 @@ function EmptyRoster({ onAdd }: { onAdd: () => void }) {
       <h2 className="text-lg font-medium">Todavía no hay nadie</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
         Cargá a todos los que van. Con el nombre y un nivel del 1 al 10 ya
-        arrancás; los puestos y atributos los agregás después, y solo para los
-        que de verdad cambia algo.
+        arrancás; los puestos y los atributos vienen después, y solo para los
+        que de verdad mueven la aguja.
       </p>
       <div className="mt-5 flex flex-col items-center gap-3">
         <Button onClick={onAdd}>
@@ -200,12 +200,12 @@ function EmptyRoster({ onAdd }: { onAdd: () => void }) {
         <ul className="space-y-1.5 text-left text-xs text-muted-foreground">
           <li className="flex items-start gap-2">
             <Star className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" />
-            Poné el 1 al 10 a ojo. Que seas consistente importa más que que
-            seas preciso.
+            Poné el 1 al 10 a ojo. Ser parejo con el criterio importa mucho
+            más que ser exacto.
           </li>
           <li className="flex items-start gap-2">
             <SlidersHorizontal className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" />
-            Cargá el puesto solo cuando cambia el cuadro: un arquero, o un
+            El puesto cargalo solo cuando cambia algo: un arquero, o un
             defensor que de cara al arco es un desastre.
           </li>
         </ul>

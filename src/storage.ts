@@ -7,7 +7,7 @@ const CORRUPT_RECOVERY_KEY = "fulbito-data-corrupt-recovery";
 export class StorageQuotaError extends Error {
   constructor() {
     super(
-      "No entra más nada en este aparato. Borrá algunas fotos o partidos viejos, o bajate una copia de seguridad y empezá de cero.",
+      "Se llenó el navegador y no entra más nada. Borrá algunas fotos o partidos viejos, o bajate el backup desde Tus datos y arrancá de nuevo.",
     );
     this.name = "StorageQuotaError";
   }

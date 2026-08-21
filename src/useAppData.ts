@@ -1,18 +1,13 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { AppData, Match, MatchId, Player, PlayerId } from "./types";
 import { normalizeAppData } from "./types";
 import { loadAppData, saveAppData, StorageQuotaError } from "./storage";
-import { loadCloudData, saveCloudData } from "./cloudStorage";
 import { mergeAppData } from "./mergeAppData";
-import { useAuth } from "./auth";
-
-export type SyncState = "off" | "syncing" | "synced" | "error";
 
 export interface AppDataApi {
   data: AppData;
   players: Player[];
   matches: Match[];
-  syncState: SyncState;
   storageError: string | null;
   savePlayer: (player: Player) => void;
   deletePlayer: (id: PlayerId) => void;
@@ -20,104 +15,31 @@ export interface AppDataApi {
   deleteMatch: (id: MatchId) => void;
   getPlayer: (id: PlayerId) => Player | undefined;
   getMatch: (id: MatchId) => Match | undefined;
-  replaceAll: (data: AppData) => void;
+  importData: (data: AppData) => void;
 }
 
+/**
+ * All of the app's state, saved to this browser and nowhere else.
+ *
+ * There is no account and no server. Moving a roster between devices is done by
+ * exporting a file and importing it on the other side, which is slower than
+ * sync but has the considerable advantage of being obvious: the data is a file
+ * you own, and nothing leaves the machine unless you carry it.
+ */
 export function useAppData(): AppDataApi {
-  const { user, localOnly } = useAuth();
   const [data, setData] = useState<AppData>(loadAppData);
   const [storageError, setStorageError] = useState<string | null>(null);
-  const [syncState, setSyncState] = useState<SyncState>("off");
-  const [cloudSynced, setCloudSynced] = useState(false);
 
-  // Photos already known to be in the cloud, so ordinary edits never re-upload
-  // image data. Lives in a ref because it is bookkeeping, not render state.
-  const avatarCache = useRef(new Map<PlayerId, string>());
-  const saveInFlight = useRef(false);
-  const pendingSave = useRef<AppData | null>(null);
-
-  const flushCloudSave = useCallback((uid: string, toSave: AppData) => {
-    saveInFlight.current = true;
-    setSyncState("syncing");
-    saveCloudData(uid, toSave, avatarCache.current)
-      .then(() => {
-        setSyncState("synced");
-      })
-      .catch((err: unknown) => {
-        console.error("[cloud-sync] save failed:", err);
-        setSyncState("error");
-      })
-      .finally(() => {
-        const queued = pendingSave.current;
-        pendingSave.current = null;
-        if (queued != null) flushCloudSave(uid, queued);
-        else saveInFlight.current = false;
-      });
-  }, []);
-
-  useEffect(() => {
-    if (user == null || cloudSynced) return;
-
-    let cancelled = false;
-    setSyncState("syncing");
-    loadCloudData(user.uid, avatarCache.current)
-      .then((cloudData) => {
-        if (cancelled) return;
-        const local = loadAppData();
-        const next = cloudData == null ? local : mergeAppData(local, cloudData);
-        setData(next);
-        try {
-          saveAppData(next);
-        } catch (e) {
-          if (e instanceof StorageQuotaError) setStorageError(e.message);
-          else throw e;
-        }
-        saveCloudData(user.uid, next, avatarCache.current)
-          .then(() => setSyncState("synced"))
-          .catch((err: unknown) => {
-            console.error("[cloud-sync] initial push failed:", err);
-            setSyncState("error");
-          });
-        setCloudSynced(true);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        console.error("[cloud-sync] initial load failed:", err);
-        setSyncState("error");
-        setCloudSynced(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, cloudSynced]);
-
-  useEffect(() => {
-    if (user == null) {
-      setCloudSynced(false);
-      setSyncState("off");
-      avatarCache.current.clear();
+  const persist = useCallback((next: AppData) => {
+    setData(next);
+    try {
+      saveAppData(next);
+      setStorageError(null);
+    } catch (e) {
+      if (e instanceof StorageQuotaError) setStorageError(e.message);
+      else throw e;
     }
-  }, [user]);
-
-  const persist = useCallback(
-    (next: AppData) => {
-      setData(next);
-      try {
-        saveAppData(next);
-        setStorageError(null);
-      } catch (e) {
-        if (e instanceof StorageQuotaError) setStorageError(e.message);
-        else throw e;
-      }
-
-      if (user != null && !localOnly) {
-        if (saveInFlight.current) pendingSave.current = next;
-        else flushCloudSave(user.uid, next);
-      }
-    },
-    [user, localOnly, flushCloudSave],
-  );
+  }, []);
 
   const savePlayer = useCallback(
     (player: Player) => {
@@ -179,7 +101,12 @@ export function useAppData(): AppDataApi {
     [data, persist],
   );
 
-  const replaceAll = useCallback(
+  /**
+   * Merges a backup into what is already here rather than replacing it, so
+   * importing an older file cannot wipe players added since. Same timestamp
+   * merge the app has always used; the file is just the other side of it.
+   */
+  const importData = useCallback(
     (incoming: AppData) => {
       persist(mergeAppData(normalizeAppData(incoming), data));
     },
@@ -205,7 +132,6 @@ export function useAppData(): AppDataApi {
     data,
     players: data.players,
     matches: data.matches,
-    syncState: user != null && !localOnly ? syncState : "off",
     storageError,
     savePlayer,
     deletePlayer,
@@ -213,7 +139,7 @@ export function useAppData(): AppDataApi {
     deleteMatch,
     getPlayer,
     getMatch,
-    replaceAll,
+    importData,
   };
 }
 

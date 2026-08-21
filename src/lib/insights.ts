@@ -75,7 +75,7 @@ export function comparisons(
   const rows: Comparison[] = [
     {
       key: "total",
-      label: "Fuerza total",
+      label: "Nivel total",
       hint: "El nivel de cada uno en el puesto que le tocó, todo sumado.",
       a: a.total,
       b: b.total,
@@ -83,8 +83,8 @@ export function comparisons(
     },
     {
       key: "average",
-      label: "Promedio por jugador",
-      hint: "El total dividido por la cantidad. Es la comparación justa cuando los equipos no son parejos en número.",
+      label: "Promedio por cabeza",
+      hint: "El total dividido por la cantidad. Es la comparación justa cuando van disparejos en número.",
       a: a.average,
       b: b.average,
       scale: 10,
@@ -107,8 +107,8 @@ export function comparisons(
     },
     {
       key: "spread",
-      label: "Dependencia de las figuras",
-      hint: "La distancia entre el mejor y el peor. Alto quiere decir que dos tipos cargan con todo.",
+      label: "Cuánto dependen de las figuras",
+      hint: "La distancia entre el mejor y el peor. Alto quiere decir que un par cargan con todo.",
       a: a.spread,
       b: b.spread,
       scale: Math.max(a.spread, b.spread, 1),
