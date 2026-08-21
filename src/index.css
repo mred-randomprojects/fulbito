@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 155 30% 5%;
+    --foreground: 150 12% 95%;
+    --card: 158 22% 8%;
+    --card-foreground: 150 12% 95%;
+    --popover: 158 24% 7%;
+    --popover-foreground: 150 12% 95%;
+    --primary: 142 72% 45%;
+    --primary-foreground: 150 40% 6%;
+    --secondary: 158 16% 14%;
+    --secondary-foreground: 150 12% 92%;
+    --muted: 158 14% 14%;
+    --muted-foreground: 150 8% 58%;
+    --accent: 158 16% 17%;
+    --accent-foreground: 150 12% 95%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 158 14% 17%;
+    --input: 158 14% 17%;
+    --ring: 142 72% 45%;
+    --radius: 0.75rem;
+
+    /* Team identities, referenced from both the pitch and the summary panels. */
+    --team-a: 210 20% 88%;
+    --team-b: 225 35% 30%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-height: 100dvh;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(142 60% 20% / 0.35), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 100%, hsl(160 50% 18% / 0.25), transparent);
+    background-attachment: fixed;
+  }
+}
+
+html {
+  touch-action: manipulation;
+}
+
+/* iOS refuses to stop zooming on focus below 16px. */
+input,
+select,
+textarea {
+  font-size: 16px !important;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@layer components {
+  /* The pitch. Drawn in CSS so it scales to any viewport without an image
+     request and stays crisp on a phone held up at the side of a real one. */
+  .pitch-surface {
+    /* Lets everything drawn on the grass size itself in `cqw`, i.e. as a
+       share of the pitch's own width, so the layout holds at any screen size. */
+    container-type: inline-size;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        hsl(146 45% 17%) 0px,
+        hsl(146 45% 17%) 7%,
+        hsl(146 42% 15%) 7%,
+        hsl(146 42% 15%) 14%
+      );
+  }
+
+  .pitch-line {
+    @apply absolute pointer-events-none;
+    border-color: hsl(150 30% 88% / 0.28);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Range inputs get a consistent, thumb-friendly look across browsers. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -7px;
+  height: 20px;
+  width: 20px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  border: 2px solid hsl(var(--background));
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border: 2px solid hsl(var(--background));
+  border-radius: 999px;
+  background: hsl(var(--primary));
+}
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
