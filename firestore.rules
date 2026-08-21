@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// Firestore security rules for Fulbito.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A user's roster, matches and player photos. Private, full stop — the
+    // whole premise of rating your friends is that they never see the numbers.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Published lineups. Readable by anyone holding the link: the id is a
+    // 20-character random string, and the alternative — making people sign in
+    // to see which team they are on — would defeat the point of sharing.
+    //
+    // Snapshots are immutable once published. A link someone has already sent
+    // to twelve people should not be able to change underneath them, so there
+    // is no update rule at all; re-sharing creates a new snapshot.
+    match /shares/{shareId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if false;
+      allow delete: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}
