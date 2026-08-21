@@ -63,16 +63,16 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
     <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Players</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Jugadores</h1>
           <p className="text-sm text-muted-foreground">
             {players.length === 0
-              ? "Your roster lives here."
-              : `${players.length} player${players.length === 1 ? "" : "s"} in the roster.`}
+              ? "Acá vive el plantel."
+              : `${players.length} en el plantel.`}
           </p>
         </div>
         <Button onClick={openNew}>
           <Plus className="mr-1.5 h-4 w-4" />
-          New player
+          Jugador nuevo
         </Button>
       </header>
 
@@ -83,7 +83,7 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search"
+              placeholder="Buscar"
               className="pl-9"
             />
           </div>
@@ -91,8 +91,8 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
             {(
               [
                 ["name", "A–Z"],
-                ["rating", "Rating"],
-                ["detail", "Detail"],
+                ["rating", "Nivel"],
+                ["detail", "Detalle"],
               ] as [SortKey, string][]
             ).map(([key, label]) => (
               <button
@@ -117,7 +117,7 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
         <EmptyRoster onAdd={openNew} />
       ) : visible.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          Nobody matches “{query}”.
+          No hay nadie que se llame así.
         </p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
@@ -160,12 +160,12 @@ function PlayerRow({ player, onClick }: { player: Player; onClick: () => void })
             </span>
           )}
           {detail.total === 0 ? (
-            <span>Overall rating only</span>
+            <span>Solo nivel general</span>
           ) : (
             <span>
-              {detail.roles > 0 && `${detail.roles} position${detail.roles === 1 ? "" : "s"}`}
+              {detail.roles > 0 && `${detail.roles} puesto${detail.roles === 1 ? "" : "s"}`}
               {detail.roles > 0 && detail.attributes > 0 && " · "}
-              {detail.attributes > 0 && `${detail.attributes} attribute${detail.attributes === 1 ? "" : "s"}`}
+              {detail.attributes > 0 && `${detail.attributes} atributo${detail.attributes === 1 ? "" : "s"}`}
             </span>
           )}
         </p>
@@ -175,7 +175,7 @@ function PlayerRow({ player, onClick }: { player: Player; onClick: () => void })
           {player.rating.toFixed(0)}
         </span>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          overall
+          nivel
         </span>
       </div>
     </button>
@@ -186,26 +186,27 @@ function EmptyRoster({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="rounded-xl border border-dashed border-border bg-card/40 px-6 py-12 text-center">
       <Users className="mx-auto mb-3 h-10 w-10 text-muted-foreground/60" />
-      <h2 className="text-lg font-medium">No players yet</h2>
+      <h2 className="text-lg font-medium">Todavía no hay nadie</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Add everyone who turns up. A name and a single overall rating is enough
-        to start — you can layer on positions and attributes later, for the
-        players where it actually matters.
+        Cargá a todos los que van. Con el nombre y un nivel del 1 al 10 ya
+        arrancás; los puestos y atributos los agregás después, y solo para los
+        que de verdad cambia algo.
       </p>
       <div className="mt-5 flex flex-col items-center gap-3">
         <Button onClick={onAdd}>
           <Plus className="mr-1.5 h-4 w-4" />
-          Add your first player
+          Cargar al primero
         </Button>
         <ul className="space-y-1.5 text-left text-xs text-muted-foreground">
           <li className="flex items-start gap-2">
             <Star className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" />
-            Rate everyone 1–10 on gut feel. Consistency beats precision.
+            Poné el 1 al 10 a ojo. Que seas consistente importa más que que
+            seas preciso.
           </li>
           <li className="flex items-start gap-2">
             <SlidersHorizontal className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" />
-            Add a position rating only where it changes the picture — a keeper,
-            a defender who cannot finish.
+            Cargá el puesto solo cuando cambia el cuadro: un arquero, o un
+            defensor que de cara al arco es un desastre.
           </li>
         </ul>
       </div>

@@ -13,6 +13,7 @@ import type { TeamEvaluation } from "@/lib/balance";
 import type { Formation } from "@/lib/formations";
 import { publishShare, type SharePayload, type ShareTeam } from "@/cloudStorage";
 import { useAuth } from "@/auth";
+import { formatMatchDate } from "@/lib/dates";
 import { KIT_EMOJI, playerDisplayName, type Match, type TeamConfig } from "@/types";
 
 interface Props {
@@ -62,7 +63,7 @@ export function ShareDialog({
       setCopied(kind);
       window.setTimeout(() => setCopied(null), 2000);
     } catch {
-      setError("Your browser blocked the clipboard. Select the text and copy it by hand.");
+      setError("El navegador bloqueó el portapapeles. Seleccioná el texto y copialo a mano.");
     }
   };
 
@@ -86,7 +87,7 @@ export function ShareDialog({
       setShareUrl(url);
     } catch (e) {
       console.error("[share] publish failed:", e);
-      setError("Could not create the link. Check your connection and try again.");
+      setError("No se pudo crear el link. Fijate la conexión y probá de nuevo.");
     } finally {
       setPublishing(false);
     }
@@ -96,9 +97,9 @@ export function ShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Share the teams</DialogTitle>
+          <DialogTitle>Compartir los equipos</DialogTitle>
           <DialogDescription>
-            Ratings stay private unless you say otherwise.
+            Los niveles quedan privados salvo que vos digas lo contrario.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,10 +114,10 @@ export function ShareDialog({
             className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
           />
           <span className="text-sm">
-            <span className="font-medium">Include ratings</span>
+            <span className="font-medium">Incluir los niveles</span>
             <span className="block text-xs text-muted-foreground">
-              Shows each player's number and the team totals. Off by default —
-              nobody enjoys finding out they are a 4.
+              Muestra el número de cada uno y el total del equipo. Apagado por
+              defecto: a nadie le gusta enterarse de que es un 4.
             </span>
           </span>
         </label>
@@ -124,7 +125,7 @@ export function ShareDialog({
         <div className="space-y-2">
           <Label className="flex items-center gap-1.5">
             <MessageSquare className="h-3.5 w-3.5" />
-            As a message
+            Como mensaje
           </Label>
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-3 text-xs leading-relaxed">
             {text}
@@ -139,19 +140,20 @@ export function ShareDialog({
             ) : (
               <Copy className="mr-1.5 h-4 w-4" />
             )}
-            {copied === "text" ? "Copied" : "Copy for WhatsApp"}
+            {copied === "text" ? "Copiado" : "Copiar para WhatsApp"}
           </Button>
         </div>
 
         <div className="space-y-2 border-t border-border pt-4">
           <Label className="flex items-center gap-1.5">
             <Link2 className="h-3.5 w-3.5" />
-            As a link
+            Como link
           </Label>
           {!canShare ? (
             <p className="rounded-lg border border-border bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
-              Sign in to publish a link. Everything works without an account, but
-              a shareable page has to live somewhere other than this device.
+              Entrá con tu cuenta para publicar un link. Todo funciona sin
+              cuenta, pero una página para compartir tiene que vivir en algún
+              lado que no sea este aparato.
             </p>
           ) : shareUrl != null ? (
             <div className="space-y-2">
@@ -168,11 +170,11 @@ export function ShareDialog({
                 ) : (
                   <Copy className="mr-1.5 h-4 w-4" />
                 )}
-                {copied === "link" ? "Copied" : "Copy link"}
+                {copied === "link" ? "Copiado" : "Copiar link"}
               </Button>
               <p className="text-[11px] leading-snug text-muted-foreground">
-                A snapshot — the page will not change if you re-shuffle the teams
-                afterwards. Anyone with the link can open it.
+                Es una foto del momento: si después rearmás los equipos, la
+                página no cambia. Cualquiera con el link la puede abrir.
               </p>
             </div>
           ) : (
@@ -182,7 +184,7 @@ export function ShareDialog({
               ) : (
                 <Link2 className="mr-1.5 h-4 w-4" />
               )}
-              Create a shareable page
+              Crear la página para compartir
             </Button>
           )}
         </div>
@@ -263,12 +265,4 @@ function buildText(
   return lines.join("\n").trimEnd();
 }
 
-function formatDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
+const formatDate = formatMatchDate;

@@ -64,17 +64,17 @@ export function SquadPicker({
     <div className="rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between gap-2 border-b border-border p-3">
         <h3 className="text-sm font-medium">
-          Squad
+          Los que juegan
           <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {squad.length} playing
+            {squad.length} anotado{squad.length === 1 ? "" : "s"}
           </span>
         </h3>
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={onSelectAll}>
-            All
+            Todos
           </Button>
           <Button variant="ghost" size="sm" onClick={onClear} disabled={squad.length === 0}>
-            None
+            Ninguno
           </Button>
         </div>
       </div>
@@ -85,7 +85,7 @@ export function SquadPicker({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search the roster"
+            placeholder="Buscar en el plantel"
             className="pl-9"
           />
         </div>
@@ -128,7 +128,7 @@ export function SquadPicker({
                       className="block truncate text-[11px]"
                       style={{ color: pinKit?.fill }}
                     >
-                      locked to {pinName}
+                      fijado a {pinName}
                     </span>
                   )}
                 </span>
@@ -142,8 +142,8 @@ export function SquadPicker({
                 disabled={!playing}
                 title={
                   pin == null
-                    ? "Lock to a team"
-                    : `Locked to ${pinName} — tap to change`
+                    ? "Fijarlo a un equipo"
+                    : `Fijado a ${pinName} — tocá para cambiar`
                 }
                 className={cn(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-25",
@@ -165,7 +165,9 @@ export function SquadPicker({
 
         {visible.length === 0 && (
           <li className="px-2 py-8 text-center text-sm text-muted-foreground">
-            {players.length === 0 ? "No players in the roster yet." : `Nobody matches “${query}”.`}
+            {players.length === 0
+              ? "Todavía no hay nadie en el plantel."
+              : "No hay nadie que se llame así."}
           </li>
         )}
       </ul>
@@ -173,7 +175,7 @@ export function SquadPicker({
       <div className="border-t border-border p-2">
         <Button variant="ghost" size="sm" className="w-full" onClick={onAddPlayer}>
           <UserPlus className="mr-1.5 h-4 w-4" />
-          Add someone new
+          Cargar a alguien nuevo
         </Button>
       </div>
     </div>

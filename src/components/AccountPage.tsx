@@ -36,10 +36,10 @@ export function AccountPage({ data, onImport }: Props) {
       const parsed = normalizeAppData(JSON.parse(await file.text()));
       onImport(parsed);
       setMessage(
-        `Merged in ${parsed.players.length} player${parsed.players.length === 1 ? "" : "s"} and ${parsed.matches.length} match${parsed.matches.length === 1 ? "" : "es"}.`,
+        `Se sumaron ${parsed.players.length} jugador${parsed.players.length === 1 ? "" : "es"} y ${parsed.matches.length} partido${parsed.matches.length === 1 ? "" : "s"}.`,
       );
     } catch {
-      setMessage("That file could not be read as a Fulbito backup.");
+      setMessage("Ese archivo no se puede leer como copia de Fulbito.");
     } finally {
       if (fileInput.current != null) fileInput.current.value = "";
     }
@@ -47,37 +47,38 @@ export function AccountPage({ data, onImport }: Props) {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-4 py-5">
-      <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Mi cuenta</h1>
 
       <section className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-2 text-sm font-medium">Sync</h2>
+        <h2 className="mb-2 text-sm font-medium">Sincronización</h2>
         {!cloudAvailable ? (
           <p className="text-sm leading-relaxed text-muted-foreground">
-            This build has no Firebase project behind it, so everything is saved
-            on this device only. Add the <code className="text-xs">VITE_FIREBASE_*</code>{" "}
-            variables to turn on sync and shareable links.
+            Esta versión no tiene ningún proyecto de Firebase detrás, así que
+            todo se guarda solo en este aparato. Cargá las variables{" "}
+            <code className="text-xs">VITE_FIREBASE_*</code> para prender la
+            sincronización y los links para compartir.
           </p>
         ) : user != null && !localOnly ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              Signed in as{" "}
+              Entraste como{" "}
               <span className="font-medium text-foreground">
                 {user.email ?? user.uid}
               </span>
             </p>
             <Button variant="secondary" size="sm" onClick={() => void signOut()}>
               <LogOut className="mr-1.5 h-4 w-4" />
-              Sign out
+              Salir
             </Button>
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              Working on this device only. Sign in to sync across devices and
-              publish share links.
+              Estás trabajando solo en este aparato. Entrá con tu cuenta para
+              sincronizar entre dispositivos y publicar links.
             </p>
             <Button size="sm" onClick={() => void signIn()}>
-              Sign in
+              Entrar
             </Button>
           </div>
         )}
@@ -86,7 +87,7 @@ export function AccountPage({ data, onImport }: Props) {
       <section className="rounded-xl border border-border bg-card p-4">
         <h2 className="mb-3 flex items-center gap-1.5 text-sm font-medium">
           <HardDrive className="h-4 w-4" />
-          Storage on this device
+          Espacio en este aparato
         </h2>
         <div className="h-2 overflow-hidden rounded-full bg-secondary">
           <div
@@ -95,28 +96,30 @@ export function AccountPage({ data, onImport }: Props) {
           />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          {(usage.usedBytes / 1024).toFixed(0)} KB of roughly{" "}
-          {(usage.quotaBytes / 1024 / 1024).toFixed(0)} MB used.{" "}
-          {data.players.filter((p) => p.avatar !== "").length} photo
-          {data.players.filter((p) => p.avatar !== "").length === 1 ? "" : "s"} stored
-          — photos are shrunk on upload, but they are still the bulk of it.
+          {(usage.usedBytes / 1024).toFixed(0)} KB usados de unos{" "}
+          {(usage.quotaBytes / 1024 / 1024).toFixed(0)} MB.{" "}
+          {data.players.filter((p) => p.avatar !== "").length} foto
+          {data.players.filter((p) => p.avatar !== "").length === 1 ? "" : "s"}{" "}
+          guardada{data.players.filter((p) => p.avatar !== "").length === 1 ? "" : "s"}.
+          Se achican al subirlas, pero igual son lo que más ocupa.
         </p>
       </section>
 
       <section className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-2 text-sm font-medium">Backup</h2>
+        <h2 className="mb-2 text-sm font-medium">Copia de seguridad</h2>
         <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-          Export everything — players, photos and matches — as a single JSON
-          file. Importing merges rather than replaces, so nothing gets lost.
+          Bajate todo — jugadores, fotos y partidos — en un solo archivo JSON.
+          Al importarlo se combina con lo que ya tenés en vez de pisarlo, así
+          que no se pierde nada.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" onClick={exportData}>
             <Download className="mr-1.5 h-4 w-4" />
-            Export
+            Descargar
           </Button>
           <Button variant="secondary" size="sm" onClick={() => fileInput.current?.click()}>
             <Upload className="mr-1.5 h-4 w-4" />
-            Import
+            Importar
           </Button>
           <input
             ref={fileInput}
@@ -132,25 +135,30 @@ export function AccountPage({ data, onImport }: Props) {
       </section>
 
       <section className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-2 text-sm font-medium">How the balancing works</h2>
+        <h2 className="mb-2 text-sm font-medium">Cómo se arman los equipos</h2>
         <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
           <li>
-            Every player has one overall rating. That is the floor — a player
-            with nothing else filled in is worth exactly that number.
+            Cada jugador tiene un nivel general. Ese es el piso: si no cargaste
+            nada más, vale exactamente ese número.
           </li>
           <li>
-            A position rating, where you set one, moves them decisively in that
-            position. Attributes then nudge the result, in proportion to how many
-            you actually filled in. Missing data never costs a player anything.
+            El nivel por puesto, cuando lo cargás, lo mueve fuerte en ese puesto.
+            Los atributos después lo corren un poco, en proporción a cuántos
+            completaste. Lo que falta nunca le juega en contra a nadie.
           </li>
           <li>
-            Each team is scored at its <em>best</em> arrangement, so a specialist
-            keeper only counts if the shape puts them in goal.
+            Cada equipo se mide con su <em>mejor</em> acomodada posible, así que
+            un arquero especialista solo cuenta si el esquema lo pone al arco.
           </li>
           <li>
-            The split is chosen by checking every legal combination and scoring
-            it on total strength, each line, top-heaviness, and the gap between
-            the two best players.
+            El reparto se elige probando todas las combinaciones posibles y
+            puntuándolas por fuerza total, línea por línea, cuánto dependen de
+            las figuras, y la diferencia entre las dos figuras.
+          </li>
+          <li>
+            El arquero es la excepción: saber jugar no implica saber atajar, así
+            que a quien no tenga nivel de arquero cargado se lo trata como un
+            arquero del montón. Por eso al arco conviene mandar al más flojo.
           </li>
         </ul>
       </section>

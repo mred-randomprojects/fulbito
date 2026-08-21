@@ -88,7 +88,7 @@ describe("insights", () => {
     const b = squad([7, 7, 7, 7, 7]);
     const notes = insights(a, b, "Claro", "Oscuro", "total");
     assert.equal(notes.length, 1);
-    assert.match(notes[0].text, /as even as it gets|rests on overall ratings/);
+    assert.match(notes[0].text, /Más parejo|nivel general/);
   });
 
   it("flags the numerical advantage when sides are uneven", () => {
@@ -98,7 +98,7 @@ describe("insights", () => {
       resolveFormation("6-2-2-1", 6),
     );
     const notes = insights(a, b, "Claro", "Oscuro", "average");
-    assert.ok(notes.some((n) => /6 v 5/.test(n.text)));
+    assert.ok(notes.some((n) => /6 contra 5/.test(n.text)));
   });
 
   it("calls out a decisive keeper mismatch", () => {
@@ -108,13 +108,13 @@ describe("insights", () => {
     );
     const b = squad([6, 6, 6, 6, 6]);
     const notes = insights(a, b, "Claro", "Oscuro", "total");
-    assert.ok(notes.some((n) => /keeper/i.test(n.text)));
+    assert.ok(notes.some((n) => /arquero/i.test(n.text)));
   });
 
   it("warns when the split rests on overall ratings alone", () => {
     const a = squad([7, 7, 7, 7, 7]);
     const b = squad([7, 7, 7, 7, 7]);
     const notes = insights(a, b, "Claro", "Oscuro", "total");
-    assert.ok(notes.some((n) => /overall ratings/.test(n.text)));
+    assert.ok(notes.some((n) => /nivel general/.test(n.text)));
   });
 });

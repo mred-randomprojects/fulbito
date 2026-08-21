@@ -429,7 +429,7 @@ export function findSplits(request: SplitRequest): SplitResult {
 
   if (sizeA + sizeB !== players.length) {
     throw new SplitError(
-      `Team sizes (${sizeA} + ${sizeB}) must add up to the ${players.length} players on the pitch.`,
+      `Los equipos (${sizeA} + ${sizeB}) tienen que sumar los ${players.length} que van a la cancha.`,
     );
   }
   if (sizeA === 0 && sizeB === 0) {
@@ -448,12 +448,12 @@ export function findSplits(request: SplitRequest): SplitResult {
 
   if (pinnedA.length > sizeA) {
     throw new SplitError(
-      `${pinnedA.length} players are locked to a team of ${sizeA}.`,
+      `Fijaste ${pinnedA.length} jugadores a un equipo de ${sizeA}. No entran.`,
     );
   }
   if (pinnedB.length > sizeB) {
     throw new SplitError(
-      `${pinnedB.length} players are locked to a team of ${sizeB}.`,
+      `Fijaste ${pinnedB.length} jugadores a un equipo de ${sizeB}. No entran.`,
     );
   }
 

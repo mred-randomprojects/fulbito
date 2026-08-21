@@ -3,6 +3,12 @@
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, and let it work out the split.
 
+The interface is in Argentinian Spanish — that is a product decision, not a
+localisation layer, so strings live inline rather than in a message catalogue.
+The rating rubrics that anchor the 1-10 scale are in `src/lib/scales.ts`, and
+that file is the reference for the voice. Code, comments and this README stay in
+English.
+
 Live at **https://mred-randomprojects.github.io/fulbito/**
 
 ## What it does
@@ -86,3 +92,11 @@ Pushing to `main` builds and publishes to GitHub Pages via
 **repository secrets** so the deployed build gets them.
 
 `./deploy.sh` builds, pushes, and watches the run to completion.
+
+## Not built yet
+
+- **Free placement on the pitch.** Positions currently come from a formation;
+  dragging a player anywhere on the grass is the obvious next step.
+- **Photo hosting.** Photos are embedded in Firestore documents, which needs no
+  paid plan and no Storage bucket. If squads ever get big enough to strain that,
+  the next step is an external free host rather than Firebase Storage.

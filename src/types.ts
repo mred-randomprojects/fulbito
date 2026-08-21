@@ -15,10 +15,18 @@ export const ROLES = ["GK", "DEF", "MID", "FWD"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
-  GK: "Goalkeeper",
-  DEF: "Defender",
-  MID: "Midfielder",
-  FWD: "Forward",
+  GK: "Arquero",
+  DEF: "Defensor",
+  MID: "Mediocampista",
+  FWD: "Delantero",
+};
+
+/** Plural form, for lines that field more than one. */
+export const ROLE_LABELS_PLURAL: Record<Role, string> = {
+  GK: "Arqueros",
+  DEF: "Defensores",
+  MID: "Mediocampistas",
+  FWD: "Delanteros",
 };
 
 export const ROLE_SHORT: Record<Role, string> = {
@@ -41,13 +49,13 @@ export const ATTRIBUTES = [
 export type AttributeKey = (typeof ATTRIBUTES)[number];
 
 export const ATTRIBUTE_LABELS: Record<AttributeKey, string> = {
-  pace: "Pace",
-  shooting: "Shooting",
-  passing: "Passing",
-  dribbling: "Dribbling",
-  defending: "Defending",
-  physical: "Physical",
-  stamina: "Stamina",
+  pace: "Pique",
+  shooting: "Definición",
+  passing: "Pase",
+  dribbling: "Gambeta",
+  defending: "Marca",
+  physical: "Físico",
+  stamina: "Aguante",
 };
 
 export type Foot = "left" | "right" | "both";
@@ -83,14 +91,12 @@ export interface TeamConfig {
   formationId: string;
 }
 
-export const KIT_IDS = [
-  "light",
-  "dark",
-  "red",
-  "blue",
-  "green",
-  "amber",
-] as const;
+/**
+ * Light shirts against dark shirts. That is the whole vocabulary of a picked
+ * game — nobody brings six sets of bibs — so the team's identity is its name,
+ * not a colour picker.
+ */
+export const KIT_IDS = ["light", "dark"] as const;
 export type KitId = (typeof KIT_IDS)[number];
 
 export interface Kit {
@@ -98,7 +104,7 @@ export interface Kit {
   label: string;
   /** Shirt fill. */
   fill: string;
-  /** Ring/border around the avatar. */
+  /** Ring around the avatar on the pitch. */
   ring: string;
   /** Text colour that reads on `fill`. */
   text: string;
@@ -109,7 +115,7 @@ export interface Kit {
 export const KITS: Record<KitId, Kit> = {
   light: {
     id: "light",
-    label: "Claro",
+    label: "Claros",
     fill: "#e8ecf2",
     ring: "#e8ecf2",
     text: "#0b1220",
@@ -117,43 +123,11 @@ export const KITS: Record<KitId, Kit> = {
   },
   dark: {
     id: "dark",
-    label: "Oscuro",
+    label: "Oscuros",
     fill: "#161c2b",
     ring: "#5b6caf",
     text: "#e8ecf2",
     soft: "rgba(91,108,175,0.16)",
-  },
-  red: {
-    id: "red",
-    label: "Rojo",
-    fill: "#d33d3d",
-    ring: "#d33d3d",
-    text: "#fff5f5",
-    soft: "rgba(211,61,61,0.16)",
-  },
-  blue: {
-    id: "blue",
-    label: "Azul",
-    fill: "#2f6fd0",
-    ring: "#2f6fd0",
-    text: "#f2f7ff",
-    soft: "rgba(47,111,208,0.16)",
-  },
-  green: {
-    id: "green",
-    label: "Verde",
-    fill: "#1e9e63",
-    ring: "#1e9e63",
-    text: "#f0fff8",
-    soft: "rgba(30,158,99,0.16)",
-  },
-  amber: {
-    id: "amber",
-    label: "Amarillo",
-    fill: "#d9a223",
-    ring: "#d9a223",
-    text: "#211703",
-    soft: "rgba(217,162,35,0.16)",
   },
 };
 
@@ -161,10 +135,6 @@ export const KITS: Record<KitId, Kit> = {
 export const KIT_EMOJI: Record<KitId, string> = {
   light: "🤍",
   dark: "🖤",
-  red: "❤️",
-  blue: "💙",
-  green: "💚",
-  amber: "💛",
 };
 
 export interface Match {
@@ -239,7 +209,7 @@ export function playerDisplayName(player: Player): string {
   const first = player.firstName.trim();
   const last = player.lastName.trim();
   if (first !== "" && last !== "") return `${first} ${last}`;
-  return first !== "" ? first : last !== "" ? last : "Unnamed";
+  return first !== "" ? first : last !== "" ? last : "Sin nombre";
 }
 
 /** Short label used on the pitch, where horizontal room is scarce. */
@@ -365,12 +335,12 @@ function normalizePins(value: unknown): Partial<Record<PlayerId, TeamKey>> {
 }
 
 export const DEFAULT_TEAM_A: TeamConfig = {
-  name: "Claro",
+  name: "Claros",
   kit: "light",
   formationId: "5-1-2-1",
 };
 export const DEFAULT_TEAM_B: TeamConfig = {
-  name: "Oscuro",
+  name: "Oscuros",
   kit: "dark",
   formationId: "5-1-2-1",
 };
@@ -389,7 +359,7 @@ function normalizeMatch(raw: unknown): Match | null {
   const squad = strArray(raw.squad) as PlayerId[];
   return {
     id: id as MatchId,
-    name: str(raw.name, "Partido"),
+    name: str(raw.name, "Picado"),
     date: str(raw.date, new Date().toISOString().slice(0, 10)),
     teamA: normalizeTeamConfig(raw.teamA, DEFAULT_TEAM_A),
     teamB: normalizeTeamConfig(raw.teamB, DEFAULT_TEAM_B),

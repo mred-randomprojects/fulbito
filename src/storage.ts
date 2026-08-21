@@ -7,7 +7,7 @@ const CORRUPT_RECOVERY_KEY = "fulbito-data-corrupt-recovery";
 export class StorageQuotaError extends Error {
   constructor() {
     super(
-      "This device's local storage is full. Remove a few player photos or old matches, or export a backup and start fresh.",
+      "No entra más nada en este aparato. Borrá algunas fotos o partidos viejos, o bajate una copia de seguridad y empezá de cero.",
     );
     this.name = "StorageQuotaError";
   }

@@ -1,4 +1,10 @@
-import { ROLES, ROLE_LABELS, type BalanceBasis, type Role } from "../types.js";
+import {
+  ROLES,
+  ROLE_LABELS,
+  ROLE_LABELS_PLURAL,
+  type BalanceBasis,
+  type Role,
+} from "../types.js";
 import { strengthEdge, type TeamEvaluation } from "./balance.js";
 
 export type Verdict = "even" | "slight" | "clear" | "lopsided";
@@ -69,40 +75,40 @@ export function comparisons(
   const rows: Comparison[] = [
     {
       key: "total",
-      label: "Total strength",
-      hint: "Every player's rating in their assigned position, added up.",
+      label: "Fuerza total",
+      hint: "El nivel de cada uno en el puesto que le tocó, todo sumado.",
       a: a.total,
       b: b.total,
       scale: Math.max(a.total, b.total, 1),
     },
     {
       key: "average",
-      label: "Average player",
-      hint: "Total divided by squad size — the fair comparison when sides differ in number.",
+      label: "Promedio por jugador",
+      hint: "El total dividido por la cantidad. Es la comparación justa cuando los equipos no son parejos en número.",
       a: a.average,
       b: b.average,
       scale: 10,
     },
     {
       key: "best",
-      label: "Best player",
-      hint: "The one who can win it on their own.",
+      label: "La figura",
+      hint: "El que te gana el partido solo.",
       a: a.best,
       b: b.best,
       scale: 10,
     },
     {
       key: "worst",
-      label: "Weakest link",
-      hint: "The player the other side will look to press.",
+      label: "El más flojito",
+      hint: "Por donde te la van a ir a buscar.",
       a: a.worst,
       b: b.worst,
       scale: 10,
     },
     {
       key: "spread",
-      label: "Top-heaviness",
-      hint: "Spread between a team's best and worst. High means a couple of stars carrying.",
+      label: "Dependencia de las figuras",
+      hint: "La distancia entre el mejor y el peor. Alto quiere decir que dos tipos cargan con todo.",
       a: a.spread,
       b: b.spread,
       scale: Math.max(a.spread, b.spread, 1),
@@ -114,13 +120,14 @@ export function comparisons(
     const lineA = a.byRole[role];
     const lineB = b.byRole[role];
     if (lineA.count === 0 && lineB.count === 0) continue;
+    const plural = lineA.count > 1 || lineB.count > 1;
     rows.push({
       key: `line-${role}`,
-      label: ROLE_LABELS[role] + (lineA.count > 1 || lineB.count > 1 ? "s" : ""),
+      label: plural ? ROLE_LABELS_PLURAL[role] : ROLE_LABELS[role],
       hint:
         lineA.count === lineB.count
-          ? `${lineA.count} a side.`
-          : `${lineA.count} v ${lineB.count} — different shapes, so this compares averages.`,
+          ? `${lineA.count} por lado.`
+          : `${lineA.count} contra ${lineB.count} — esquemas distintos, así que acá se comparan promedios.`,
       a: lineA.average,
       b: lineB.average,
       scale: 10,
@@ -137,10 +144,10 @@ export interface Insight {
 }
 
 const ROLE_NOUN: Record<Role, string> = {
-  GK: "goalkeeping",
-  DEF: "defence",
-  MID: "midfield",
-  FWD: "attack",
+  GK: "el arco",
+  DEF: "el fondo",
+  MID: "el medio",
+  FWD: "el ataque",
 };
 
 /**
@@ -167,7 +174,7 @@ export function insights(
     const smaller = sizeA > sizeB ? nameB : nameA;
     out.push({
       side: "none",
-      text: `${bigger} play ${Math.max(sizeA, sizeB)} v ${Math.min(sizeA, sizeB)} — the extra body is worth more than the ratings show, so give ${smaller} the benefit of the doubt.`,
+      text: `${bigger} juegan ${Math.max(sizeA, sizeB)} contra ${Math.min(sizeA, sizeB)}. Un jugador de más vale más de lo que muestran los números, así que a ${smaller} dale una manito.`,
     });
   }
 
@@ -177,8 +184,8 @@ export function insights(
     out.push({
       side: "none",
       text: hit
-        ? `Handicap applied: ${target} are stacked by about ${Math.abs(handicap).toFixed(2)} pts per player, as asked.`
-        : `Handicap target is ${Math.abs(handicap).toFixed(2)} pts per player to ${target}; this split lands at ${Math.abs(summary.edge).toFixed(2)}.`,
+        ? `Ventaja aplicada: ${target} quedaron arriba por ${Math.abs(handicap).toFixed(2)} por jugador, como pediste.`
+        : `Pediste ${Math.abs(handicap).toFixed(2)} de ventaja por jugador para ${target}, pero lo mejor que se consigue es ${Math.abs(summary.edge).toFixed(2)}.`,
     });
   }
 
@@ -199,8 +206,8 @@ export function insights(
       side: entry.gap > 0 ? "A" : "B",
       text:
         entry.role === "GK"
-          ? `${stronger} have the better keeper by ${Math.abs(entry.gap).toFixed(1)} — in a small-sided game that is worth more than it looks.`
-          : `${stronger} are stronger in ${ROLE_NOUN[entry.role]} by ${Math.abs(entry.gap).toFixed(1)} per player.`,
+          ? `${stronger} tienen mejor arquero por ${Math.abs(entry.gap).toFixed(1)}. En cancha chica eso pesa más de lo que parece.`
+          : `${stronger} son más fuertes en ${ROLE_NOUN[entry.role]} por ${Math.abs(entry.gap).toFixed(1)} por jugador.`,
     });
   }
 
@@ -210,7 +217,7 @@ export function insights(
     const even = spreadGap > 0 ? nameB : nameA;
     out.push({
       side: "none",
-      text: `${topHeavy} are the more top-heavy side — a couple of players carrying, and a weak link to press. ${even} are more uniform, which usually holds up better over a long game.`,
+      text: `${topHeavy} dependen mucho de un par de figuras, y tienen un eslabón flojo para ir a buscar. ${even} son más parejos, y eso normalmente aguanta mejor el partido entero.`,
     });
   }
 
@@ -219,21 +226,21 @@ export function insights(
     const withStar = starGap > 0 ? nameA : nameB;
     out.push({
       side: starGap > 0 ? "A" : "B",
-      text: `${withStar} have the single best player on the pitch by a clear margin.`,
+      text: `${withStar} tienen al mejor de la cancha, y por diferencia.`,
     });
   }
 
   if (summary.confidence < 0.55) {
     out.push({
       side: "none",
-      text: `Most of this rests on overall ratings alone. Add position ratings for the players you know best and the split will sharpen up.`,
+      text: "Todo esto se apoya casi solo en el nivel general. Cargá el puesto de los que mejor conocés y el reparto se afina bastante.",
     });
   }
 
   if (out.length === 0) {
     out.push({
       side: "none",
-      text: "Nothing to separate them — no line, no star, no weak link stands out. This is as even as it gets.",
+      text: "No hay con qué separarlos. Ni una línea, ni una figura, ni un eslabón flojo. Más parejo que esto no se consigue.",
     });
   }
 
@@ -241,8 +248,8 @@ export function insights(
 }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
-  even: "Dead even",
-  slight: "Slight edge",
-  clear: "Clear edge",
-  lopsided: "Lopsided",
+  even: "Parejísimo",
+  slight: "Leve ventaja",
+  clear: "Ventaja clara",
+  lopsided: "Está afanado",
 };

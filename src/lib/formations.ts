@@ -66,7 +66,7 @@ function build(size: number, shape: Shape, description: string, withGk = true): 
   return {
     id: `${size}-${label}${withGk ? "" : "-nogk"}`,
     size,
-    label: withGk ? label : `${label} (sin arquero)`,
+    label: withGk ? label : `${label} (al arco el que pierde)`,
     description,
     slots: withGk ? [GK, ...lines] : lines,
   };
@@ -74,41 +74,41 @@ function build(size: number, shape: Shape, description: string, withGk = true): 
 
 export const FORMATIONS: Formation[] = [
   // 5-a-side (GK + 4)
-  build(5, { def: 1, mid: 2, fwd: 1 }, "The default diamond — solid and flexible."),
-  build(5, { def: 2, mid: 1, fwd: 1 }, "Two at the back, safe against fast forwards."),
-  build(5, { def: 1, mid: 1, fwd: 2 }, "Two up top, chases the game."),
-  build(5, { def: 2, mid: 2, fwd: 0 }, "Flat box, very hard to break down."),
-  build(5, { def: 2, mid: 2, fwd: 1 }, "Rush-keeper, all five outfield.", false),
+  build(5, { def: 1, mid: 2, fwd: 1 }, "El rombo de siempre. Sólido y sin vueltas."),
+  build(5, { def: 2, mid: 1, fwd: 1 }, "Dos atrás. Contra delanteros rápidos, se agradece."),
+  build(5, { def: 1, mid: 1, fwd: 2 }, "Dos arriba. Para ir a buscarlo."),
+  build(5, { def: 2, mid: 2, fwd: 0 }, "Cuadrado. Romperlo es un dolor de cabeza."),
+  build(5, { def: 2, mid: 2, fwd: 1 }, "Sin arquero fijo: los cinco a la cancha.", false),
 
   // 6-a-side (GK + 5)
-  build(6, { def: 2, mid: 2, fwd: 1 }, "The balanced default for six."),
-  build(6, { def: 1, mid: 3, fwd: 1 }, "Owns the middle of the pitch."),
-  build(6, { def: 2, mid: 1, fwd: 2 }, "Direct — split midfield, two strikers."),
-  build(6, { def: 3, mid: 2, fwd: 0 }, "Deep block, counter-attacking."),
-  build(6, { def: 2, mid: 2, fwd: 2 }, "Rush-keeper, all six outfield.", false),
+  build(6, { def: 2, mid: 2, fwd: 1 }, "El equilibrado para seis. Nunca falla."),
+  build(6, { def: 1, mid: 3, fwd: 1 }, "Se adueña del medio."),
+  build(6, { def: 2, mid: 1, fwd: 2 }, "Directo: poco medio y dos puntas."),
+  build(6, { def: 3, mid: 2, fwd: 0 }, "Atrincherado atrás, a salir de contra."),
+  build(6, { def: 2, mid: 2, fwd: 2 }, "Sin arquero fijo: los seis a la cancha.", false),
 
   // 7-a-side (GK + 6)
-  build(7, { def: 2, mid: 3, fwd: 1 }, "The classic seven-a-side shape."),
-  build(7, { def: 3, mid: 2, fwd: 1 }, "Back three, hard to play through."),
-  build(7, { def: 2, mid: 2, fwd: 2 }, "Two banks of two plus a front pair."),
-  build(7, { def: 3, mid: 3, fwd: 0 }, "Defensive, everyone behind the ball."),
-  build(7, { def: 1, mid: 3, fwd: 2 }, "All-out attack."),
+  build(7, { def: 2, mid: 3, fwd: 1 }, "El clásico de siete. El que juegan todos."),
+  build(7, { def: 3, mid: 2, fwd: 1 }, "Línea de tres atrás. Pasar por el medio, imposible."),
+  build(7, { def: 2, mid: 2, fwd: 2 }, "Dos líneas de dos y una dupla arriba."),
+  build(7, { def: 3, mid: 3, fwd: 0 }, "Todos atrás de la pelota. Especular, básicamente."),
+  build(7, { def: 1, mid: 3, fwd: 2 }, "Todo para adelante. Que sea lo que Dios quiera."),
 
   // 8-a-side (GK + 7)
-  build(8, { def: 3, mid: 3, fwd: 1 }, "Balanced eight."),
-  build(8, { def: 3, mid: 2, fwd: 2 }, "Back three with a front two."),
-  build(8, { def: 2, mid: 4, fwd: 1 }, "Midfield-heavy, controls possession."),
+  build(8, { def: 3, mid: 3, fwd: 1 }, "Ocho equilibrado."),
+  build(8, { def: 3, mid: 2, fwd: 2 }, "Tres atrás y dos arriba."),
+  build(8, { def: 2, mid: 4, fwd: 1 }, "Mucho medio: la pelota no se le escapa a nadie."),
 
   // Small sides
-  build(4, { def: 1, mid: 1, fwd: 1 }, "Four-a-side line."),
-  build(4, { def: 1, mid: 2, fwd: 0 }, "Four-a-side, defensive."),
-  build(4, { def: 1, mid: 2, fwd: 1 }, "Rush-keeper four-a-side.", false),
-  build(3, { def: 1, mid: 1, fwd: 0 }, "Three-a-side."),
-  build(3, { def: 1, mid: 1, fwd: 1 }, "Rush-keeper three-a-side.", false),
-  build(9, { def: 3, mid: 3, fwd: 2 }, "Nine-a-side."),
-  build(10, { def: 4, mid: 3, fwd: 2 }, "Ten-a-side."),
-  build(11, { def: 4, mid: 4, fwd: 2 }, "Full eleven, 4-4-2."),
-  build(11, { def: 4, mid: 3, fwd: 3 }, "Full eleven, 4-3-3."),
+  build(4, { def: 1, mid: 1, fwd: 1 }, "Cuatro en línea."),
+  build(4, { def: 1, mid: 2, fwd: 0 }, "Cuatro, con la persiana baja."),
+  build(4, { def: 1, mid: 2, fwd: 1 }, "Cuatro sin arquero fijo.", false),
+  build(3, { def: 1, mid: 1, fwd: 0 }, "Tres contra tres."),
+  build(3, { def: 1, mid: 1, fwd: 1 }, "Tres sin arquero fijo.", false),
+  build(9, { def: 3, mid: 3, fwd: 2 }, "Nueve por lado."),
+  build(10, { def: 4, mid: 3, fwd: 2 }, "Diez por lado."),
+  build(11, { def: 4, mid: 4, fwd: 2 }, "Once completo, el 4-4-2 de toda la vida."),
+  build(11, { def: 4, mid: 3, fwd: 3 }, "Once completo, 4-3-3."),
 ];
 
 const BY_ID = new Map(FORMATIONS.map((f) => [f.id, f]));
@@ -135,13 +135,13 @@ export function defaultFormation(size: number): Formation {
 /** Spreads `size` players into a plausible shape when there is no preset. */
 export function generateFormation(size: number): Formation {
   if (size <= 1) {
-    return { id: `gen-${size}`, size, label: "1", description: "Solo.", slots: [GK].slice(0, size) };
+    return { id: `gen-${size}`, size, label: "1", description: "Vos solo.", slots: [GK].slice(0, size) };
   }
   const outfield = size - 1;
   const def = Math.max(1, Math.round(outfield * 0.4));
   const fwd = Math.max(0, Math.round(outfield * 0.25));
   const mid = Math.max(0, outfield - def - fwd);
-  const formation = build(size, { def, mid, fwd }, "Auto-generated shape.");
+  const formation = build(size, { def, mid, fwd }, "Esquema armado al toque.");
   return { ...formation, id: `gen-${size}` };
 }
 

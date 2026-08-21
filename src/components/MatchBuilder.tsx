@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ChevronLeft,
+  CalendarDays,
   ChevronRight,
   Info,
   Lock,
@@ -23,6 +24,7 @@ import { PlayerAvatar } from "./PlayerAvatar";
 import { evaluateLineup, findSplits, SplitError, type TeamEvaluation } from "@/lib/balance";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
+import { formatMatchDate } from "@/lib/dates";
 import {
   KITS,
   playerShortName,
@@ -156,12 +158,19 @@ export function MatchBuilder({
     [match, patch],
   );
 
-  const setSizeA = useCallback(
-    (sizeA: number) => {
-      const clamped = Math.max(0, Math.min(match.squad.length, sizeA));
-      patch({ sizeA: clamped, sizeB: match.squad.length - clamped });
+  /**
+   * Sets one side's size and leaves the other alone.
+   *
+   * The first version kept `sizeA + sizeB` pinned to the headcount, so nudging
+   * one team silently shrank the other — which is baffling to watch. Now the
+   * two are independent and the app just says when the numbers do not add up.
+   */
+  const setSize = useCallback(
+    (team: TeamKey, size: number) => {
+      const clamped = Math.max(0, Math.min(11, size));
+      patch(team === "A" ? { sizeA: clamped } : { sizeB: clamped });
     },
-    [match.squad.length, patch],
+    [patch],
   );
 
   const [options, setOptions] = useState<ReturnType<typeof findSplits> | null>(null);
@@ -187,6 +196,17 @@ export function MatchBuilder({
    * failure mode that is much worse than a brief pause: a callback that never
    * fires because the browser backgrounded the tab, leaving the button dead.
    */
+  const selectAll = useCallback(() => {
+    const squad = players.map((p) => p.id);
+    const sizeA = Math.floor(squad.length / 2);
+    patch({ squad, sizeA, sizeB: squad.length - sizeA });
+  }, [players, patch]);
+
+  const clearSquad = useCallback(
+    () => patch({ squad: [], pins: {}, sizeA: 0, sizeB: 0, lineupA: [], lineupB: [] }),
+    [patch],
+  );
+
   const balance = useCallback(() => {
     setBalanceError(null);
     try {
@@ -208,7 +228,7 @@ export function MatchBuilder({
     } catch (e) {
       console.error("[balance] failed:", e);
       setBalanceError(
-        e instanceof SplitError ? e.message : "Something went wrong balancing.",
+        e instanceof SplitError ? e.message : "Algo salió mal al armar los equipos.",
       );
     }
   }, [
@@ -296,30 +316,35 @@ export function MatchBuilder({
 
   const squadReady = match.squad.length >= 2;
 
+  // With the two sides set independently they can stop adding up to the
+  // headcount, which is fine while you are still fiddling — but the split
+  // cannot run until they match, so say why rather than fail on the click.
+  const mismatch = match.sizeA + match.sizeB - match.squad.length;
+  const sizeHint =
+    mismatch > 0
+      ? `Te falta${mismatch === 1 ? "" : "n"} ${mismatch} jugador${mismatch === 1 ? "" : "es"} para llenar un ${match.sizeA} v ${match.sizeB}. Sumá gente o achicá un equipo.`
+      : mismatch < 0
+        ? `Sobra${mismatch === -1 ? "" : "n"} ${-mismatch}. Sacá a alguien de la lista o agrandá un equipo.`
+        : null;
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5">
       <header className="mb-4 flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to matches">
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Volver a los partidos">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Input
           value={match.name}
           onChange={(e) => patch({ name: e.target.value })}
           className="h-10 w-auto min-w-0 flex-1 border-transparent bg-transparent px-2 text-lg font-semibold"
-          aria-label="Match name"
+          aria-label="Nombre del partido"
         />
-        <Input
-          type="date"
-          value={match.date}
-          onChange={(e) => patch({ date: e.target.value })}
-          className="h-10 w-auto"
-          aria-label="Match date"
-        />
+        <DateField value={match.date} onChange={(date) => patch({ date })} />
         <Button
           variant="ghost"
           size="icon"
           onClick={onDelete}
-          aria-label="Delete match"
+          aria-label="Borrar partido"
           className="text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="h-4 w-4" />
@@ -330,15 +355,14 @@ export function MatchBuilder({
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-dashed border-border bg-card/40 p-6">
             <Users className="mb-3 h-9 w-9 text-muted-foreground/60" />
-            <h2 className="text-lg font-medium">Who is playing?</h2>
+            <h2 className="text-lg font-medium">¿Quiénes juegan?</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Tick everyone who turned up. The sides are set from the headcount —
-              eleven players becomes 5 v 6 by default, and you can pull that
-              apart however you like.
+              Marcá a todos los que cayeron. Los equipos se arman según cuántos
+              son: once jugadores queda 5 v 6, y después lo movés como quieras.
             </p>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Use the lock button next to a name to force someone onto a
-              particular team before the split is worked out.
+              El candadito al lado del nombre fija a alguien a un equipo antes
+              de repartir. Ideal para los que no se pueden separar.
             </p>
           </div>
           <SquadPicker
@@ -349,14 +373,8 @@ export function MatchBuilder({
             teamB={match.teamB}
             onToggle={toggleSquad}
             onCycleLock={cycleLock}
-            onSelectAll={() => {
-              const squad = players.map((p) => p.id);
-              const sizeA = Math.floor(squad.length / 2);
-              patch({ squad, sizeA, sizeB: squad.length - sizeA });
-            }}
-            onClear={() =>
-              patch({ squad: [], pins: {}, sizeA: 0, sizeB: 0, lineupA: [], lineupB: [] })
-            }
+            onSelectAll={selectAll}
+            onClear={clearSquad}
             onAddPlayer={() => setAddPlayerOpen(true)}
           />
         </div>
@@ -366,9 +384,14 @@ export function MatchBuilder({
               teams are the thing you keep glancing back at. */}
           <div className="space-y-4 lg:sticky lg:top-14">
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={balance} className="flex-1 sm:flex-none">
+              <Button
+                onClick={balance}
+                disabled={mismatch !== 0}
+                title={mismatch === 0 ? undefined : sizeHint ?? undefined}
+                className="flex-1 sm:flex-none"
+              >
                 <Shuffle className="mr-1.5 h-4 w-4" />
-                {hasLineup ? "Re-balance" : "Balance the teams"}
+                {hasLineup ? "Rearmar" : "Armar los equipos"}
               </Button>
 
               {options != null && options.options.length > 1 && (
@@ -377,18 +400,18 @@ export function MatchBuilder({
                     type="button"
                     onClick={() => stepOption(-1)}
                     className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
-                    aria-label="Previous option"
+                    aria-label="Opción anterior"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
                   <span className="px-1.5 text-xs text-muted-foreground">
                     {edited ? (
                       <span className="flex items-center gap-1">
-                        <Undo2 className="h-3 w-3" /> edited
+                        <Undo2 className="h-3 w-3" /> a mano
                       </span>
                     ) : (
                       <>
-                        Option {optionIndex + 1}/{options.options.length}
+                        Opción {optionIndex + 1}/{options.options.length}
                       </>
                     )}
                   </span>
@@ -396,7 +419,7 @@ export function MatchBuilder({
                     type="button"
                     onClick={() => stepOption(1)}
                     className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
-                    aria-label="Next option"
+                    aria-label="Opción siguiente"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
@@ -408,10 +431,16 @@ export function MatchBuilder({
               {hasLineup && (
                 <Button variant="secondary" onClick={() => setShareOpen(true)}>
                   <Share2 className="mr-1.5 h-4 w-4" />
-                  Share
+                  Compartir
                 </Button>
               )}
             </div>
+
+            {sizeHint != null && (
+              <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                {sizeHint}
+              </p>
+            )}
 
             {balanceError != null && (
               <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -442,8 +471,8 @@ export function MatchBuilder({
             {hasLineup && (
               <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Tap a player, then tap another — or an empty shirt — to swap them.
-                The numbers update as you go.
+                Tocá un jugador y después a otro — o una camiseta vacía — para
+                cambiarlos de lugar. Los números se actualizan solos.
               </p>
             )}
 
@@ -479,6 +508,21 @@ export function MatchBuilder({
           </div>
 
           <div className="space-y-4">
+            {/* Who is playing comes first: it is the thing you reach for most,
+                and burying it under the settings made it hard to find. */}
+            <SquadPicker
+              players={players}
+              squad={match.squad}
+              pins={match.pins}
+              teamA={match.teamA}
+              teamB={match.teamB}
+              onToggle={toggleSquad}
+              onCycleLock={cycleLock}
+              onSelectAll={selectAll}
+              onClear={clearSquad}
+              onAddPlayer={() => setAddPlayerOpen(true)}
+            />
+
             <MatchSetup
               teamA={match.teamA}
               teamB={match.teamB}
@@ -492,7 +536,7 @@ export function MatchBuilder({
               onTeamChange={(team, config) =>
                 patch(team === "A" ? { teamA: config } : { teamB: config })
               }
-              onSizeChange={setSizeA}
+              onSizeChange={setSize}
               onBasisChange={(basis) => patch({ basis })}
               onHandicapChange={(handicap) => patch({ handicap })}
             />
@@ -515,25 +559,6 @@ export function MatchBuilder({
                 />
               </div>
             )}
-
-            <SquadPicker
-              players={players}
-              squad={match.squad}
-              pins={match.pins}
-              teamA={match.teamA}
-              teamB={match.teamB}
-              onToggle={toggleSquad}
-              onCycleLock={cycleLock}
-              onSelectAll={() => {
-                const squad = players.map((p) => p.id);
-                const sizeA = Math.floor(squad.length / 2);
-                patch({ squad, sizeA, sizeB: squad.length - sizeA });
-              }}
-              onClear={() =>
-                patch({ squad: [], pins: {}, sizeA: 0, sizeB: 0, lineupA: [], lineupB: [] })
-              }
-              onAddPlayer={() => setAddPlayerOpen(true)}
-            />
           </div>
         </div>
       )}
@@ -648,6 +673,36 @@ function buildTokens(
   });
 }
 
+/**
+ * The date, written out, with the browser's own picker behind it.
+ *
+ * A native date input renders as `25/08/2026`, which is ambiguous to half the
+ * world and tells you nothing about which day of the week the game is. The
+ * visible label spells it out in Spanish; the real input sits on top of it,
+ * invisible, so tapping still opens the picker everyone already knows.
+ */
+function DateField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="relative flex h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-input px-3 text-sm">
+      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="whitespace-nowrap">{formatMatchDate(value)}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Fecha del partido"
+        className="absolute inset-0 cursor-pointer opacity-0"
+      />
+    </label>
+  );
+}
+
 function TeamChip({
   config,
   evaluation,
@@ -670,7 +725,7 @@ function TeamChip({
       <span className="tabular rounded-full bg-black/15 px-1.5 py-0.5">
         {evaluation.total.toFixed(1)}
       </span>
-      {favoured === true && <span title="Slight favourite">★</span>}
+      {favoured === true && <span title="Levemente favorito">★</span>}
     </div>
   );
 }
@@ -693,8 +748,8 @@ function UnassignedStrip({
   return (
     <div className="rounded-xl border border-dashed border-border bg-card/40 p-3">
       <p className="mb-2 text-xs font-medium text-muted-foreground">
-        Not on the pitch — tap a shirt on the pitch, then one of these, to bring
-        them on.
+        Afuera de la cancha. Tocá una camiseta en la cancha y después uno de
+        estos para que entre.
       </p>
       <ul className="flex flex-wrap gap-2">
         {players.map((player) => {

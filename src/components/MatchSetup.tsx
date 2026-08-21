@@ -1,8 +1,8 @@
-import { Minus, Plus, Scale } from "lucide-react";
+import { Minus, Plus, Scale, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formationsForSize, generateFormation, type Formation } from "@/lib/formations";
-import { KITS, KIT_IDS, type BalanceBasis, type KitId, type TeamConfig } from "@/types";
+import { KITS, type BalanceBasis, type TeamConfig } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -16,10 +16,13 @@ interface Props {
   formationA: Formation;
   formationB: Formation;
   onTeamChange: (team: "A" | "B", config: TeamConfig) => void;
-  onSizeChange: (sizeA: number) => void;
+  /** Each side is set on its own; the other one never moves behind your back. */
+  onSizeChange: (team: "A" | "B", size: number) => void;
   onBasisChange: (basis: BalanceBasis) => void;
   onHandicapChange: (handicap: number) => void;
 }
+
+const MAX_PER_SIDE = 11;
 
 export function MatchSetup({
   teamA,
@@ -36,39 +39,53 @@ export function MatchSetup({
   onBasisChange,
   onHandicapChange,
 }: Props) {
+  const needed = sizeA + sizeB;
+  const missing = needed - squadSize;
   const uneven = sizeA !== sizeB;
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-4">
       <div>
         <div className="mb-2 flex items-baseline justify-between">
-          <Label>Sides</Label>
+          <Label>Cuántos por lado</Label>
           <span className="text-xs text-muted-foreground">
-            {squadSize} playing
+            {squadSize} anotado{squadSize === 1 ? "" : "s"}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <Stepper
             value={sizeA}
             kit={KITS[teamA.kit]}
-            onChange={onSizeChange}
-            min={0}
-            max={Math.min(11, squadSize)}
+            onChange={(next) => onSizeChange("A", next)}
+            max={MAX_PER_SIDE}
           />
           <span className="text-sm font-medium text-muted-foreground">v</span>
           <Stepper
             value={sizeB}
             kit={KITS[teamB.kit]}
-            onChange={(next) => onSizeChange(squadSize - next)}
-            min={0}
-            max={Math.min(11, squadSize)}
+            onChange={(next) => onSizeChange("B", next)}
+            max={MAX_PER_SIDE}
           />
         </div>
-        {uneven && (
+
+        {missing > 0 ? (
+          <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-amber-400">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Te falta{missing === 1 ? "" : "n"} {missing} para llenar un {sizeA} v{" "}
+            {sizeB}. Sumá gente o achicá un equipo.
+          </p>
+        ) : missing < 0 ? (
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Uneven sides. The extra body is worth more than the ratings can show,
-            so consider giving the short-handed team the stronger players — switch
-            the comparison to <em>total</em> below to do exactly that.
+            Sobra{missing === -1 ? "" : "n"} {-missing}. Sacá a alguien de la
+            lista de arriba o agrandá un equipo.
+          </p>
+        ) : null}
+
+        {uneven && missing === 0 && (
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Equipos disparejos. El jugador de más vale más de lo que muestran
+            los números, así que conviene darle los mejores al que tiene menos —
+            para eso está <em>talento total</em> acá abajo.
           </p>
         )}
       </div>
@@ -89,13 +106,13 @@ export function MatchSetup({
       </div>
 
       <div>
-        <Label className="mb-2 block">Compare teams by</Label>
+        <Label className="mb-2 block">Comparar los equipos por</Label>
         <div className="flex rounded-lg border border-border p-0.5">
           {(
             [
-              ["total", "Total talent", "Both sides add up to the same. The bigger side is thinner per player."],
-              ["average", "Average player", "Both sides average the same. The bigger side carries more talent overall."],
-            ] as [BalanceBasis, string, string][]
+              ["total", "Talento total"],
+              ["average", "Promedio por jugador"],
+            ] as [BalanceBasis, string][]
           ).map(([key, label]) => (
             <button
               key={key}
@@ -114,8 +131,8 @@ export function MatchSetup({
         </div>
         <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
           {basis === "total"
-            ? "Both sides add up to the same total. With uneven numbers this leaves the short-handed team stronger player-for-player."
-            : "Both sides average the same. With uneven numbers this leaves the bigger team ahead overall."}
+            ? "Los dos lados suman lo mismo. Si son disparejos en número, el que tiene menos queda más fuerte hombre a hombre."
+            : "Los dos lados promedian lo mismo. Si son disparejos en número, el que tiene más queda mejor en total."}
         </p>
       </div>
 
@@ -123,11 +140,11 @@ export function MatchSetup({
         <div className="mb-1.5 flex items-baseline justify-between gap-2">
           <Label className="flex items-center gap-1.5">
             <Scale className="h-3.5 w-3.5" />
-            Handicap
+            Ventaja a propósito
           </Label>
           <span className="tabular text-xs font-medium">
             {handicap === 0 ? (
-              <span className="text-emerald-400">Fair game</span>
+              <span className="text-emerald-400">Partido parejo</span>
             ) : (
               <span style={{ color: KITS[handicap > 0 ? teamA.kit : teamB.kit].fill }}>
                 {(handicap > 0 ? teamA : teamB).name} +{Math.abs(handicap).toFixed(2)}
@@ -143,12 +160,12 @@ export function MatchSetup({
           value={handicap}
           onChange={(e) => onHandicapChange(Number(e.target.value))}
           className="w-full"
-          aria-label="Handicap"
+          aria-label="Ventaja a propósito"
         />
         <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-          Stack one side on purpose — for a grudge match, or when the numbers
-          say even but everyone knows better. Measured in rating points per
-          player.
+          Para cargar un equipo a propósito: revancha, promesa de asado, o
+          cuando los números dicen que está parejo pero todos sabemos que no.
+          Se mide en puntos de nivel por jugador.
         </p>
       </div>
     </div>
@@ -159,23 +176,21 @@ function Stepper({
   value,
   kit,
   onChange,
-  min,
   max,
 }: {
   value: number;
   kit: { fill: string; text: string };
   onChange: (value: number) => void;
-  min: number;
   max: number;
 }) {
   return (
     <div className="flex flex-1 items-center gap-1 rounded-lg border border-border p-1">
       <button
         type="button"
-        onClick={() => onChange(Math.max(min, value - 1))}
-        disabled={value <= min}
+        onClick={() => onChange(Math.max(0, value - 1))}
+        disabled={value <= 0}
         className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent disabled:opacity-30"
-        aria-label="One fewer"
+        aria-label="Uno menos"
       >
         <Minus className="h-4 w-4" />
       </button>
@@ -190,7 +205,7 @@ function Stepper({
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
         className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent disabled:opacity-30"
-        aria-label="One more"
+        aria-label="Uno más"
       >
         <Plus className="h-4 w-4" />
       </button>
@@ -219,36 +234,24 @@ function TeamCard({
       className="space-y-2 rounded-lg border p-3"
       style={{ borderColor: `${kit.fill}44`, background: kit.soft }}
     >
-      <Input
-        value={config.name}
-        onChange={(e) => onChange({ ...config, name: e.target.value })}
-        className="h-9 border-transparent bg-transparent px-2 font-semibold"
-        aria-label="Team name"
-      />
-
-      <div className="flex flex-wrap gap-1">
-        {KIT_IDS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            aria-label={KITS[id].label}
-            onClick={() => onChange({ ...config, kit: id as KitId })}
-            className={cn(
-              "h-6 w-6 rounded-full border-2 transition-transform",
-              config.kit === id
-                ? "border-white scale-110"
-                : "border-transparent hover:scale-105",
-            )}
-            style={{ background: KITS[id].fill }}
-          />
-        ))}
+      <div className="flex items-center gap-2">
+        <span
+          className="h-4 w-4 shrink-0 rounded-full border border-white/20"
+          style={{ background: kit.fill }}
+        />
+        <Input
+          value={config.name}
+          onChange={(e) => onChange({ ...config, name: e.target.value })}
+          className="h-9 border-transparent bg-transparent px-2 font-semibold"
+          aria-label="Nombre del equipo"
+        />
       </div>
 
       <select
         value={formation.id}
         onChange={(e) => onChange({ ...config, formationId: e.target.value })}
         className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
-        aria-label="Formation"
+        aria-label="Formación"
       >
         {options.map((option) => (
           <option key={option.id} value={option.id}>

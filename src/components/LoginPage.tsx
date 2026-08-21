@@ -15,7 +15,7 @@ export function LoginPage() {
       await signIn();
     } catch (e) {
       console.error("[auth] sign-in failed:", e);
-      setError("Sign-in did not complete. Check the popup was not blocked.");
+      setError("No se completó el ingreso. Fijate que el navegador no haya bloqueado la ventanita.");
     } finally {
       setBusy(false);
     }
@@ -29,8 +29,8 @@ export function LoginPage() {
         </span>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight">Fulbito</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Rate your mates once. Pick fair teams in seconds, every week, without
-          the argument.
+          Calificá a los muchachos una vez. Después armás equipos parejos en
+          segundos, todas las semanas, sin discutir al pedo.
         </p>
       </div>
 
@@ -41,11 +41,11 @@ export function LoginPage() {
           ) : (
             <LogIn className="mr-2 h-4 w-4" />
           )}
-          Sign in with Google
+          Entrar con Google
         </Button>
         <Button variant="ghost" className="w-full" onClick={continueLocally}>
           <Smartphone className="mr-2 h-4 w-4" />
-          Just use it on this device
+          Usarlo solo en este aparato
         </Button>
       </div>
 
@@ -54,9 +54,9 @@ export function LoginPage() {
       )}
 
       <p className="mt-8 text-center text-xs leading-relaxed text-muted-foreground">
-        Signing in syncs your roster across your phone and laptop, and lets you
-        publish a lineup as a link. Your ratings stay private either way —
-        nothing is shared until you share it.
+        Si entrás, el plantel te queda sincronizado entre el celu y la
+        computadora, y podés publicar la formación como link. Los niveles
+        quedan privados igual: no se comparte nada hasta que vos lo compartas.
       </p>
     </div>
   );

@@ -53,24 +53,24 @@ export function TeamInsights({
           <div>
             <p className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
               <Scale className="h-3.5 w-3.5" />
-              Balance
+              Equilibrio
             </p>
             <p className={cn("mt-1 text-2xl font-semibold", verdictTone)}>
               {VERDICT_LABEL[summary.verdict]}
             </p>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {summary.favoured == null ? (
-                "Neither side has a meaningful edge."
+                "Ninguno de los dos saca ventaja real."
               ) : (
                 <>
                   <span className="font-medium text-foreground">
                     {summary.favoured === "A" ? teamA.name : teamB.name}
                   </span>{" "}
-                  by{" "}
+                  por{" "}
                   <span className="tabular font-medium text-foreground">
                     {Math.abs(summary.edge - handicap).toFixed(2)}
                   </span>{" "}
-                  points per player.
+                  puntos por jugador.
                 </>
               )}
             </p>
@@ -85,7 +85,7 @@ export function TeamInsights({
 
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-medium">Side by side</h3>
+          <h3 className="text-sm font-medium">Cara a cara</h3>
           <div className="flex items-center gap-3 text-xs">
             <Legend color={colorA} label={teamA.name} />
             <Legend color={colorB} label={teamB.name} />
@@ -110,7 +110,7 @@ export function TeamInsights({
       <div className="rounded-xl border border-border bg-card p-4">
         <h3 className="mb-3 flex items-center gap-1.5 text-sm font-medium">
           <Sparkles className="h-4 w-4 text-primary" />
-          What this actually means
+          Qué quiere decir todo esto
         </h3>
         <ul className="space-y-2.5">
           {notes.map((note, index) => (
@@ -150,15 +150,15 @@ function searchNote(
   edited: boolean,
 ): string {
   if (edited) {
-    return "You have moved players by hand, so this is your lineup rather than the one the search picked. Re-balance to go back to an optimised split.";
+    return "Moviste jugadores a mano, así que esta formación es tuya, no la que eligió el reparto. Dale a Rearmar si querés volver a una repartida óptima.";
   }
   if (search == null) {
-    return "These teams were saved earlier. Re-balance to search for the fairest split with the current squad and settings.";
+    return "Estos equipos vienen guardados de antes. Dale a Armar los equipos para buscar el reparto más parejo con la lista y la configuración de ahora.";
   }
   if (search.exhaustive) {
-    return `Every one of the ${search.evaluated.toLocaleString()} possible splits was checked — this really is the best one, not a lucky shuffle.`;
+    return `Se probaron las ${search.evaluated.toLocaleString("es-AR")} repartidas posibles, una por una. Esta es la mejor de verdad, no una que salió de casualidad.`;
   }
-  return `Too many combinations to check them all, so ${search.evaluated} promising splits were refined by trial and error. Expect very good, not provably optimal.`;
+  return `Son demasiadas combinaciones para probarlas todas, así que se afinaron ${search.evaluated} repartidas prometedoras a fuerza de prueba y error. Va a estar muy bien, pero no se puede jurar que sea la óptima.`;
 }
 
 function Legend({ color, label }: { color: string; label: string }) {
@@ -290,10 +290,10 @@ function ConfidenceMeter({ value }: { value: number }) {
   const percent = Math.round(value * 100);
   const label =
     percent >= 75
-      ? "Well-evidenced"
+      ? "Bien fundado"
       : percent >= 55
-        ? "Reasonably evidenced"
-        : "Overall ratings only";
+        ? "Más o menos fundado"
+        : "Solo nivel general";
 
   return (
     <>
@@ -308,8 +308,8 @@ function ConfidenceMeter({ value }: { value: number }) {
         )}
       />
       <span className="flex-1">
-        <span className="font-medium text-foreground">{label}</span> — {percent}% of
-        the detail that would sharpen this split is filled in.
+        <span className="font-medium text-foreground">{label}</span> — tenés
+        cargado el {percent}% del detalle que afinaría este reparto.
       </span>
     </>
   );

@@ -17,6 +17,7 @@ import {
   type Match,
   type MatchId,
 } from "./types";
+import { defaultMatchName, todayIso } from "./lib/dates";
 
 export default function App() {
   return (
@@ -54,8 +55,8 @@ function AuthenticatedApp() {
   const createMatch = useCallback(() => {
     const match: Match = {
       id: newMatchId(),
-      name: nextMatchName(),
-      date: new Date().toISOString().slice(0, 10),
+      name: defaultMatchName(todayIso()),
+      date: todayIso(),
       teamA: { ...DEFAULT_TEAM_A },
       teamB: { ...DEFAULT_TEAM_B },
       squad: [],
@@ -119,8 +120,8 @@ function AuthenticatedApp() {
 
       <footer className="px-4 py-8 text-center text-xs text-muted-foreground">
         {user != null && !localOnly
-          ? "Synced to your account."
-          : "Saved on this device."}
+          ? "Sincronizado con tu cuenta."
+          : "Guardado en este aparato."}
       </footer>
     </div>
   );
@@ -150,12 +151,4 @@ function MatchRoute({ app }: { app: ReturnType<typeof useAppData> }) {
   );
 }
 
-/** "Partido — Sat 21 Aug", the way you would name it in a group chat. */
-function nextMatchName(): string {
-  const now = new Date();
-  return `Partido ${now.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  })}`;
-}
+

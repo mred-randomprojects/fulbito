@@ -39,7 +39,7 @@ export function RatingControl({
         <span className="flex items-center gap-2">
           {value === undefined && placeholderValue !== undefined && (
             <span className="text-xs text-muted-foreground">
-              using {placeholderValue.toFixed(1)}
+              va con {placeholderValue.toFixed(1)}
             </span>
           )}
           {clearable && value !== undefined && (
@@ -48,7 +48,7 @@ export function RatingControl({
               onClick={() => onChange(undefined)}
               className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
-              clear
+              limpiar
             </button>
           )}
         </span>

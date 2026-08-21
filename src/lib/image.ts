@@ -38,18 +38,18 @@ function loadImage(file: File): Promise<HTMLImageElement> {
  */
 export async function fileToAvatar(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {
-    throw new ImageError("Pick an image file.");
+    throw new ImageError("Elegí un archivo de imagen.");
   }
 
   const img = await loadImage(file);
   const side = Math.min(img.naturalWidth, img.naturalHeight);
-  if (side === 0) throw new ImageError("That image appears to be empty.");
+  if (side === 0) throw new ImageError("Esa imagen está vacía.");
 
   const canvas = document.createElement("canvas");
   canvas.width = AVATAR_SIZE;
   canvas.height = AVATAR_SIZE;
   const ctx = canvas.getContext("2d");
-  if (ctx == null) throw new ImageError("Your browser would not give us a canvas.");
+  if (ctx == null) throw new ImageError("El navegador no nos dio un canvas. Probá con otro.");
 
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(

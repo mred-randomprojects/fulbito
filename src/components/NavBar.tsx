@@ -4,9 +4,9 @@ import type { SyncState } from "@/useAppData";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { to: "/matches", label: "Matches", icon: Trophy },
-  { to: "/players", label: "Players", icon: Users },
-  { to: "/account", label: "Account", icon: User },
+  { to: "/matches", label: "Partidos", icon: Trophy },
+  { to: "/players", label: "Jugadores", icon: Users },
+  { to: "/account", label: "Mi cuenta", icon: User },
 ];
 
 export function NavBar({ syncState }: { syncState: SyncState }) {
@@ -46,11 +46,11 @@ function SyncBadge({ state }: { state: SyncState }) {
   if (state === "off") {
     return (
       <span
-        title="Saved on this device only"
+        title="Se guarda solo en este aparato"
         className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground"
       >
         <CloudOff className="h-3.5 w-3.5" />
-        <span className="hidden md:inline">This device</span>
+        <span className="hidden md:inline">Este aparato</span>
       </span>
     );
   }
@@ -58,25 +58,25 @@ function SyncBadge({ state }: { state: SyncState }) {
     return (
       <span className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground">
         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-        <span className="hidden md:inline">Syncing</span>
+        <span className="hidden md:inline">Sincronizando</span>
       </span>
     );
   }
   if (state === "error") {
     return (
       <span
-        title="Your changes are safe on this device but did not reach the cloud"
+        title="Tus cambios están a salvo acá, pero no llegaron a la nube"
         className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-amber-400"
       >
         <TriangleAlert className="h-3.5 w-3.5" />
-        <span className="hidden md:inline">Offline</span>
+        <span className="hidden md:inline">Sin conexión</span>
       </span>
     );
   }
   return (
     <span className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground">
       <Cloud className="h-3.5 w-3.5 text-primary" />
-      <span className="hidden md:inline">Synced</span>
+      <span className="hidden md:inline">Sincronizado</span>
     </span>
   );
 }

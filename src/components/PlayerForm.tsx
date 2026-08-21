@@ -16,6 +16,12 @@ import { RatingControl } from "./RatingControl";
 import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
 import {
+  ATTRIBUTE_RUBRICS,
+  OVERALL_SCALE,
+  ROLE_RUBRICS,
+  describeOverall,
+} from "@/lib/scales";
+import {
   ATTRIBUTES,
   ATTRIBUTE_LABELS,
   ROLES,
@@ -54,9 +60,9 @@ function blankPlayer(): Player {
 }
 
 const FOOT_OPTIONS: { value: Foot; label: string }[] = [
-  { value: "right", label: "Right" },
-  { value: "left", label: "Left" },
-  { value: "both", label: "Both" },
+  { value: "right", label: "Derecha" },
+  { value: "left", label: "Izquierda" },
+  { value: "both", label: "Las dos" },
 ];
 
 /**
@@ -120,7 +126,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
       update({ avatar: await fileToAvatar(file) });
     } catch (e) {
       setImageError(
-        e instanceof ImageError ? e.message : "That photo could not be processed.",
+        e instanceof ImageError ? e.message : "No se pudo procesar esa foto.",
       );
     } finally {
       setUploading(false);
@@ -146,11 +152,10 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isNew ? "New player" : "Edit player"}</DialogTitle>
+          <DialogTitle>{isNew ? "Jugador nuevo" : "Editar jugador"}</DialogTitle>
           <DialogDescription>
-            A name and an overall rating is all it takes. Everything below that
-            is optional — fill it in only for the players you actually have an
-            opinion about.
+            Con el nombre y un nivel general ya está. Todo lo demás es
+            opcional: completalo solo para los que tenés una opinión formada.
           </DialogDescription>
         </DialogHeader>
 
@@ -160,7 +165,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
               type="button"
               onClick={() => fileInput.current?.click()}
               className="group relative rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Upload photo"
+              aria-label="Subir foto"
             >
               <PlayerAvatar player={draft} size={76} />
               <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
@@ -180,7 +185,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
                   onClick={() => fileInput.current?.click()}
                   disabled={uploading}
                 >
-                  {uploading ? "Processing…" : draft.avatar === "" ? "Add photo" : "Replace"}
+                  {uploading ? "Achicando…" : draft.avatar === "" ? "Subir foto" : "Cambiar"}
                 </Button>
                 {draft.avatar !== "" && (
                   <Button
@@ -190,13 +195,13 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
                     onClick={() => update({ avatar: "" })}
                   >
                     <X className="mr-1 h-3.5 w-3.5" />
-                    Remove
+                    Sacar
                   </Button>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Cropped square and shrunk automatically — a full-size camera
-                photo is fine.
+                Se recorta cuadrada y se achica sola. Mandale la foto de la
+                cámara sin drama.
               </p>
               {imageError != null && (
                 <p className="text-xs text-destructive">{imageError}</p>
@@ -213,7 +218,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="firstName">First name</Label>
+              <Label htmlFor="firstName">Nombre</Label>
               <Input
                 id="firstName"
                 value={draft.firstName}
@@ -222,7 +227,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="lastName">Last name</Label>
+              <Label htmlFor="lastName">Apellido</Label>
               <Input
                 id="lastName"
                 value={draft.lastName}
@@ -233,16 +238,16 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="nickname">Nickname</Label>
+              <Label htmlFor="nickname">Apodo</Label>
               <Input
                 id="nickname"
                 value={draft.nickname}
-                placeholder="What people shout"
+                placeholder="Como le gritan"
                 onChange={(e) => update({ nickname: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Strong foot</Label>
+              <Label>Pierna hábil</Label>
               <div className="flex gap-1">
                 {FOOT_OPTIONS.map((option) => (
                   <button
@@ -269,33 +274,35 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
 
           <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
             <RatingControl
-              label="Overall rating"
-              hint="The one number the whole app falls back on. Roughly: 1 is a beginner, 5 is a solid regular, 9 plus is the person everyone wants on their side."
+              label="Nivel general"
+              hint={`El único número del que no se puede zafar. ${describeOverall(draft.rating)}`}
               value={draft.rating}
               onChange={(value) => update({ rating: value ?? 6 })}
             />
+            <ScaleLegend />
           </div>
 
           <Disclosure
             open={showRoles}
             onToggle={() => setShowRoles((v) => !v)}
-            title="Position ratings"
+            title="Nivel por puesto"
             summary={
               roleCount === 0
-                ? "Optional — for specialists"
-                : `${roleCount} set`
+                ? "Opcional — para especialistas"
+                : `${roleCount} cargado${roleCount === 1 ? "" : "s"}`
             }
           >
             <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-              Only for players who are genuinely different in a given position —
-              a 6 outfield who is a 9 in goal. Anything left blank falls back to
-              the overall rating, so there is no penalty for skipping it.
+              Solo para los que en un puesto son otra cosa: el 6 de la cancha
+              que al arco es un 9. Lo que dejes vacío usa el nivel general, así
+              que no salteártelo no te cuesta nada.
             </p>
             <div className="space-y-4">
               {ROLES.map((role) => (
                 <RatingControl
                   key={role}
                   label={ROLE_LABELS[role]}
+                  hint={`${ROLE_RUBRICS[role].what} 1 = ${ROLE_RUBRICS[role].low} · 10 = ${ROLE_RUBRICS[role].high}`}
                   value={draft.roleRatings[role]}
                   placeholderValue={effectiveRating(draft, role).value}
                   clearable
@@ -308,23 +315,25 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
           <Disclosure
             open={showAttributes}
             onToggle={() => setShowAttributes((v) => !v)}
-            title="Attributes"
+            title="Atributos"
             summary={
               attributeCount === 0
-                ? "Optional — for fine tuning"
-                : `${attributeCount} of ${ATTRIBUTES.length} set`
+                ? "Opcional — para afinar"
+                : `${attributeCount} de ${ATTRIBUTES.length}`
             }
           >
             <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-              These nudge a player up or down within a position rather than
-              replacing it. Set the one or two that stand out and leave the rest
-              alone — a half-filled list is worth more than a guessed one.
+              Estos lo mueven un poco para arriba o para abajo dentro del
+              puesto, no lo reemplazan. Cargá los uno o dos que saltan a la
+              vista y dejá el resto tranquilo: media lista bien puesta vale más
+              que una lista entera inventada.
             </p>
             <div className="space-y-4">
               {ATTRIBUTES.map((key) => (
                 <RatingControl
                   key={key}
                   label={ATTRIBUTE_LABELS[key]}
+                  hint={`${ATTRIBUTE_RUBRICS[key].what} 1 = ${ATTRIBUTE_RUBRICS[key].low} · 10 = ${ATTRIBUTE_RUBRICS[key].high}`}
                   value={draft.attributes[key]}
                   clearable
                   onChange={(value) => setAttribute(key, value)}
@@ -334,11 +343,11 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
           </Disclosure>
 
           <div className="space-y-1.5">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">Notas</Label>
             <Input
               id="notes"
               value={draft.notes}
-              placeholder="Bad knee, always late, only plays left…"
+              placeholder="Anda con la rodilla, siempre llega tarde, solo juega por izquierda…"
               onChange={(e) => update({ notes: e.target.value })}
             />
           </div>
@@ -355,17 +364,33 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
                 }}
               >
                 <Trash2 className="mr-1.5 h-4 w-4" />
-                Delete
+                Borrar
               </Button>
             )}
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              Cancelar
             </Button>
-            <Button type="submit">{isNew ? "Add player" : "Save"}</Button>
+            <Button type="submit">{isNew ? "Agregar" : "Guardar"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The 1-10 scale, spelled out, so everyone's 7 means roughly the same thing. */
+function ScaleLegend() {
+  return (
+    <ul className="mt-3 space-y-1 border-t border-primary/20 pt-2.5">
+      {OVERALL_SCALE.map((anchor) => (
+        <li key={anchor.from} className="flex gap-2 text-[11px] leading-snug">
+          <span className="tabular w-8 shrink-0 font-semibold text-primary/80">
+            {anchor.from}–{anchor.to}
+          </span>
+          <span className="text-muted-foreground">{anchor.label}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

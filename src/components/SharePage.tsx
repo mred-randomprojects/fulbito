@@ -5,6 +5,7 @@ import { Pitch, type PitchToken } from "./Pitch";
 import { loadShare, type SharePayload, type ShareTeam } from "@/cloudStorage";
 import { isFirebaseConfigured } from "@/firebase";
 import { KITS, type KitId } from "@/types";
+import { formatLongDate } from "@/lib/dates";
 
 /**
  * The read-only lineup, for everyone who was not the one picking the teams.
@@ -61,12 +62,14 @@ export function SharePage() {
           ⚽
         </span>
         <h1 className="text-xl font-medium">
-          {state === "error" ? "Could not load these teams" : "These teams are gone"}
+          {state === "error"
+            ? "No se pudieron cargar los equipos"
+            : "Estos equipos ya no están"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {state === "error"
-            ? "Something went wrong fetching the lineup. Try again in a moment."
-            : "The link may have expired, or it was never published from this app."}
+            ? "Algo salió mal al buscar la formación. Probá de nuevo en un rato."
+            : "Puede que el link haya vencido, o que nunca se haya publicado desde acá."}
         </p>
       </div>
     );
@@ -98,7 +101,7 @@ export function SharePage() {
       </div>
 
       <p className="mt-6 text-center text-xs text-muted-foreground">
-        Teams picked with <span className="font-medium">Fulbito</span>
+        Equipos armados con <span className="font-medium">Fulbito</span>
       </p>
     </div>
   );
@@ -189,13 +192,4 @@ function shortName(name: string): string {
   return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
 }
 
-function formatDate(iso: string): string {
-  const parsed = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
+const formatDate = formatLongDate;
