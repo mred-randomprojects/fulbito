@@ -17,6 +17,8 @@
     "src/types.ts",
     "src/mergeAppData.ts",
     "src/mergeAppData.test.ts",
+    "src/appDataOps.ts",
+    "src/appDataOps.test.ts",
     "src/lib/rating.ts",
     "src/lib/rating.test.ts",
     "src/lib/formations.ts",

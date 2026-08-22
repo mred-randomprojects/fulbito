@@ -1,8 +1,14 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import type { AppData, Match, MatchId, Player, PlayerId } from "./types";
 import { normalizeAppData } from "./types";
 import { loadAppData, saveAppData, StorageQuotaError } from "./storage";
 import { mergeAppData } from "./mergeAppData";
+import {
+  removeMatch,
+  removePlayer,
+  upsertMatch,
+  upsertPlayer,
+} from "./appDataOps";
 
 export interface AppDataApi {
   data: AppData;
@@ -30,7 +36,19 @@ export function useAppData(): AppDataApi {
   const [data, setData] = useState<AppData>(loadAppData);
   const [storageError, setStorageError] = useState<string | null>(null);
 
-  const persist = useCallback((next: AppData) => {
+  /**
+   * The newest data, readable synchronously.
+   *
+   * React state cannot serve this role: a handler that makes two changes in a
+   * row still sees the state as it was when the component rendered, so the
+   * second change is computed from data the first change is missing and
+   * silently undoes it.
+   */
+  const latest = useRef(data);
+
+  const persist = useCallback((mutate: (current: AppData) => AppData) => {
+    const next = mutate(latest.current);
+    latest.current = next;
     setData(next);
     try {
       saveAppData(next);
@@ -42,63 +60,23 @@ export function useAppData(): AppDataApi {
   }, []);
 
   const savePlayer = useCallback(
-    (player: Player) => {
-      const stamped: Player = { ...player, updatedAt: new Date().toISOString() };
-      const exists = data.players.some((p) => p.id === stamped.id);
-      const players = exists
-        ? data.players.map((p) => (p.id === stamped.id ? stamped : p))
-        : [...data.players, stamped];
-      persist({ ...data, players: players.sort(byDisplayOrder) });
-    },
-    [data, persist],
+    (player: Player) => persist((current) => upsertPlayer(current, player, now())),
+    [persist],
   );
 
   const deletePlayer = useCallback(
-    (id: PlayerId) => {
-      const deletedAt = new Date().toISOString();
-      persist({
-        ...data,
-        players: data.players.filter((p) => p.id !== id),
-        // Matches keep the id in their squad list; the UI treats an unknown id
-        // as an empty slot, so a deleted player quietly falls out of old
-        // lineups without corrupting them.
-        deletedPlayers: [
-          ...data.deletedPlayers.filter((e) => e.id !== id),
-          { id, deletedAt },
-        ],
-      });
-    },
-    [data, persist],
+    (id: PlayerId) => persist((current) => removePlayer(current, id, now())),
+    [persist],
   );
 
   const saveMatch = useCallback(
-    (match: Match) => {
-      const stamped: Match = { ...match, updatedAt: new Date().toISOString() };
-      const exists = data.matches.some((m) => m.id === stamped.id);
-      const matches = exists
-        ? data.matches.map((m) => (m.id === stamped.id ? stamped : m))
-        : [stamped, ...data.matches];
-      persist({
-        ...data,
-        matches: matches.sort((a, b) => b.date.localeCompare(a.date)),
-      });
-    },
-    [data, persist],
+    (match: Match) => persist((current) => upsertMatch(current, match, now())),
+    [persist],
   );
 
   const deleteMatch = useCallback(
-    (id: MatchId) => {
-      const deletedAt = new Date().toISOString();
-      persist({
-        ...data,
-        matches: data.matches.filter((m) => m.id !== id),
-        deletedMatches: [
-          ...data.deletedMatches.filter((e) => e.id !== id),
-          { id, deletedAt },
-        ],
-      });
-    },
-    [data, persist],
+    (id: MatchId) => persist((current) => removeMatch(current, id, now())),
+    [persist],
   );
 
   /**
@@ -107,10 +85,9 @@ export function useAppData(): AppDataApi {
    * merge the app has always used; the file is just the other side of it.
    */
   const importData = useCallback(
-    (incoming: AppData) => {
-      persist(mergeAppData(normalizeAppData(incoming), data));
-    },
-    [data, persist],
+    (incoming: AppData) =>
+      persist((current) => mergeAppData(normalizeAppData(incoming), current)),
+    [persist],
   );
 
   const playersById = useMemo(
@@ -143,8 +120,6 @@ export function useAppData(): AppDataApi {
   };
 }
 
-function byDisplayOrder(a: Player, b: Player): number {
-  const left = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
-  const right = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
-  return left.localeCompare(right);
+function now(): string {
+  return new Date().toISOString();
 }
