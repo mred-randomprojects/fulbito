@@ -60,6 +60,11 @@ export const ATTRIBUTE_RUBRICS: Record<AttributeKey, Rubric> = {
     low: "La pierde solo.",
     high: "Te hace un caño y se va.",
   },
+  teamplay: {
+    what: "Si juega con los diez o juega para la tribuna. Casi que es sí o no: la mayoría anda por 6 o 7, y los que te hacen renegar caen solos abajo de 3. Ojo que este te baja la gambeta: al que se la come, la gambeta no le sirve al equipo.",
+    low: "Comilón. La agarra y no la larga hasta que la pierde. O solo se la pasa a los dos amigos.",
+    high: "Siempre la da al que está mejor parado. Con él la pelota circula.",
+  },
   defending: {
     what: "Marcar, cortar, y no dejar pasar a nadie.",
     low: "Los mira pasar y saluda.",
@@ -113,6 +118,7 @@ export function allRubrics(): { key: string; title: string; rubric: Rubric }[] {
     shooting: "Definición",
     passing: "Pase",
     dribbling: "Gambeta",
+    teamplay: "Juego en equipo",
     defending: "Marca",
     physical: "Físico",
     stamina: "Aguante",

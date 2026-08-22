@@ -151,6 +151,12 @@ export function SettingsPage({ data, onImport }: Props) {
             Lo que dejás vacío nunca le juega en contra a nadie.
           </li>
           <li>
+            <em>Juego en equipo</em> es el único que le pega a otro: al que se
+            la come, la gambeta no le sirve al equipo. Un 10 gambeteando que
+            nunca la pasa cuenta como un 3, que es más o menos lo que se siente
+            desde afuera. Si no le cargaste nada, no le descuenta nada.
+          </li>
+          <li>
             Cada equipo se mide con la mejor acomodada posible, así que un
             arquero de verdad solo suma si el esquema lo pone al arco.
           </li>

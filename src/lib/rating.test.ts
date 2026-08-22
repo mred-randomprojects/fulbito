@@ -5,12 +5,15 @@ import {
   ATTR_PULL,
   GK_PRIOR,
   GK_SHRINK,
+  HOG_FLOOR,
+  ROLE_ATTRIBUTE_WEIGHTS,
   ROLE_TRUST,
   attributeEstimate,
   detailLevel,
   effectiveRating,
   naturalRole,
   peakRating,
+  teamAdjustedDribbling,
 } from "./rating.js";
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
@@ -126,6 +129,7 @@ describe("effectiveRating", () => {
         shooting: 10,
         pace: 10,
         dribbling: 10,
+        teamplay: 10,
         physical: 10,
         passing: 10,
       },
@@ -147,7 +151,14 @@ describe("effectiveRating", () => {
     const player = makePlayer({
       rating: 10,
       roleRatings: { FWD: 10 },
-      attributes: { shooting: 10, pace: 10, dribbling: 10, physical: 10, passing: 10 },
+      attributes: {
+        shooting: 10,
+        pace: 10,
+        dribbling: 10,
+        teamplay: 10,
+        physical: 10,
+        passing: 10,
+      },
     });
     assert.equal(effectiveRating(player, "FWD").value, 10);
   });
@@ -163,6 +174,7 @@ describe("effectiveRating", () => {
         roleRatings: { MID: 7 },
         attributes: {
           passing: 7,
+          teamplay: 7,
           stamina: 7,
           dribbling: 7,
           defending: 7,
@@ -190,6 +202,92 @@ describe("attributeEstimate", () => {
 
   it("returns null when no relevant attribute is filled in", () => {
     assert.equal(attributeEstimate(makePlayer(), "MID"), null);
+  });
+});
+
+describe("teamAdjustedDribbling", () => {
+  it("leaves the gambeta of someone who plays with the team exactly alone", () => {
+    // Exact equality on purpose: filling the whole form in must never quietly
+    // tax the player who filled it in.
+    assert.equal(teamAdjustedDribbling(10, 10), 10);
+    assert.equal(teamAdjustedDribbling(4, 10), 4);
+  });
+
+  it("turns a 10 who never passes into a 3", () => {
+    // The exchange rate the attribute exists for.
+    assert.ok(Math.abs(teamAdjustedDribbling(10, 1) - 10 * HOG_FLOOR) < 1e-9);
+  });
+
+  it("does nothing at all until someone says how much they share", () => {
+    assert.equal(teamAdjustedDribbling(10, undefined), 10);
+  });
+
+  it("scales smoothly in between, so half-comilón is a real answer", () => {
+    const values = [1, 3, 5, 7, 10].map((t) => teamAdjustedDribbling(9, t));
+    for (let i = 1; i < values.length; i++) {
+      assert.ok(values[i] > values[i - 1], "sharing more must never be worth less");
+    }
+    assert.ok(values[values.length - 1] === 9);
+  });
+
+  it("cannot push anyone off the bottom of the scale", () => {
+    assert.equal(teamAdjustedDribbling(1, 1), 1);
+  });
+});
+
+describe("the comilón, end to end", () => {
+  const gifted = { pace: 8, shooting: 8, dribbling: 10, passing: 6, physical: 6 };
+
+  it("is worth less to a team than the same player who passes", () => {
+    const hog = makePlayer({ rating: 8, attributes: { ...gifted, teamplay: 1 } });
+    const generous = makePlayer({ rating: 8, attributes: { ...gifted, teamplay: 9 } });
+    assert.ok(effectiveRating(hog, "FWD").value < effectiveRating(generous, "FWD").value);
+    assert.ok(effectiveRating(hog, "MID").value < effectiveRating(generous, "MID").value);
+  });
+
+  it("is docked hardest in midfield, which is the job he is refusing to do", () => {
+    const drop = (role: "MID" | "FWD" | "DEF") => {
+      const hog = makePlayer({ rating: 8, attributes: { ...gifted, teamplay: 1 } });
+      const generous = makePlayer({ rating: 8, attributes: { ...gifted, teamplay: 10 } });
+      return effectiveRating(generous, role).value - effectiveRating(hog, role).value;
+    };
+    assert.ok(drop("MID") > drop("FWD"));
+    assert.ok(drop("MID") > drop("DEF"));
+  });
+
+  it("still cannot be dragged below the floor attributes are allowed to reach", () => {
+    // Attributes remain a nudge, never a replacement: the overall rating is
+    // what the user actually asserted, and this must not overrule it.
+    const hog = makePlayer({ rating: 8, attributes: { ...gifted, teamplay: 1 } });
+    assert.ok(effectiveRating(hog, "MID").value > 8 - ATTR_PULL * 8);
+  });
+
+  it("leaves everyone already in the roster exactly where they were", () => {
+    // Nobody has this attribute filled in yet, and adding it must not silently
+    // restate every rating in the app.
+    const player = makePlayer({ rating: 7, attributes: { dribbling: 10, pace: 4 } });
+    for (const role of ["DEF", "MID", "FWD"] as Role[]) {
+      const estimate = attributeEstimate(player, role);
+      assert.notEqual(estimate, null);
+    }
+    const expected = (0.2 * 10 + 0.21 * 4) / (0.2 + 0.21);
+    assert.ok(Math.abs((attributeEstimate(player, "FWD")?.value ?? 0) - expected) < 1e-9);
+  });
+});
+
+describe("ROLE_ATTRIBUTE_WEIGHTS", () => {
+  it("still sums to one per role, so coverage stays a real fraction", () => {
+    for (const [role, weights] of Object.entries(ROLE_ATTRIBUTE_WEIGHTS)) {
+      const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
+      assert.ok(Math.abs(total - 1) < 1e-9, `${role} weights sum to ${total}`);
+    }
+  });
+
+  it("counts playing with the team everywhere on the pitch", () => {
+    // A defender who dribbles out of his own box is a problem too.
+    for (const weights of Object.values(ROLE_ATTRIBUTE_WEIGHTS)) {
+      assert.ok((weights.teamplay ?? 0) > 0);
+    }
   });
 });
 

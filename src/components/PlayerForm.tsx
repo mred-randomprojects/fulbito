@@ -396,7 +396,9 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
               Estos lo corren un poco para arriba o para abajo dentro del
               puesto, no lo reemplazan. Poné los uno o dos que saltan a la
               vista y dejá el resto en blanco: media lista bien puesta vale
-              más que una lista entera inventada.
+              más que una lista entera inventada. El que pega distinto es{" "}
+              <em>juego en equipo</em>: al comilón le baja la gambeta, porque
+              esa gambeta el equipo nunca la ve.
             </p>
             <div className="space-y-4">
               {ATTRIBUTES.map((key) => (

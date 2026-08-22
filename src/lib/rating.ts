@@ -60,17 +60,65 @@ export const ROLE_ATTRIBUTE_WEIGHTS: Record<
   Exclude<Role, "GK">,
   Partial<Record<AttributeKey, number>>
 > = {
-  DEF: { defending: 0.4, physical: 0.2, pace: 0.18, passing: 0.12, stamina: 0.1 },
-  MID: {
-    passing: 0.3,
-    stamina: 0.2,
-    dribbling: 0.18,
-    defending: 0.14,
-    pace: 0.1,
-    shooting: 0.08,
+  DEF: {
+    defending: 0.36,
+    physical: 0.18,
+    pace: 0.16,
+    teamplay: 0.12,
+    passing: 0.1,
+    stamina: 0.08,
   },
-  FWD: { shooting: 0.34, pace: 0.24, dribbling: 0.22, physical: 0.1, passing: 0.1 },
+  MID: {
+    passing: 0.26,
+    teamplay: 0.18,
+    stamina: 0.17,
+    dribbling: 0.15,
+    defending: 0.12,
+    pace: 0.08,
+    shooting: 0.04,
+  },
+  FWD: {
+    shooting: 0.3,
+    pace: 0.21,
+    dribbling: 0.2,
+    teamplay: 0.12,
+    physical: 0.09,
+    passing: 0.08,
+  },
 };
+
+/**
+ * What a total ball hog's dribbling is worth to the team.
+ *
+ * Dribbling is the one attribute whose value depends entirely on what happens
+ * next. Beating two men and then finding the striker wins the game; beating
+ * two men and then trying a third until you lose it hands the ball back, and
+ * you did it while nine people stood still. So a 10 in gambeta from someone
+ * who never releases the ball is not a 10 the team ever gets to use.
+ *
+ * 0.3 is the share that survives at the bottom of the scale, which is to say:
+ * a 10 who never passes is a 3. That number is not from a model, it is the
+ * exchange rate the person who asked for this attribute named, and it matches
+ * what watching one of them for an hour feels like.
+ */
+export const HOG_FLOOR = 0.3;
+
+/**
+ * Dribbling, marked to what the team actually receives.
+ *
+ * Deliberately one-directional: sharing the ball generously does not invent
+ * gambeta the player does not have, it only stops the gambeta they do have
+ * from being wasted. At a teamplay of 10 this returns the rating untouched,
+ * exactly, so nobody who fills the whole form in is quietly taxed for it.
+ */
+export function teamAdjustedDribbling(
+  dribbling: number,
+  teamplay: number | undefined,
+): number {
+  if (teamplay === undefined) return dribbling;
+  const shortfall = (10 - clampRating(teamplay)) / 9;
+  return clampRating(dribbling * (1 - (1 - HOG_FLOOR) * shortfall));
+}
 
 export interface AttributeEstimate {
   /** Weighted mean of the attributes that are actually filled in. */
@@ -94,8 +142,12 @@ export function attributeEstimate(
   let weightedSum = 0;
   let coverage = 0;
   for (const [key, weight] of Object.entries(weights) as [AttributeKey, number][]) {
-    const value = player.attributes[key];
-    if (value === undefined) continue;
+    const raw = player.attributes[key];
+    if (raw === undefined) continue;
+    const value =
+      key === "dribbling"
+        ? teamAdjustedDribbling(raw, player.attributes.teamplay)
+        : raw;
     weightedSum += weight * value;
     coverage += weight;
   }
