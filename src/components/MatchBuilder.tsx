@@ -27,6 +27,7 @@ import { summarise } from "@/lib/insights";
 import { formatMatchDate } from "@/lib/dates";
 import {
   KITS,
+  ROLE_SHORT,
   playerShortName,
   type Match,
   type Player,
@@ -638,7 +639,7 @@ function buildTokens(
         x: slot.x,
         y: slot.y,
         half: team,
-        name: slot.role,
+        name: ROLE_SHORT[slot.role],
         avatar: "",
         seed: `empty-${team}-${index}`,
         role: slot.role,

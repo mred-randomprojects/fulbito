@@ -26,7 +26,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new ImageError("That file could not be read as an image."));
+      reject(new ImageError("Ese archivo no se deja abrir como imagen."));
     };
     img.src = url;
   });

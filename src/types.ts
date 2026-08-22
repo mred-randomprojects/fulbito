@@ -29,11 +29,16 @@ export const ROLE_LABELS_PLURAL: Record<Role, string> = {
   FWD: "Delanteros",
 };
 
+/**
+ * Badge-sized labels. The `Role` keys themselves stay in English because they
+ * are persisted in saved data and in the export file; only what reaches a
+ * screen gets translated.
+ */
 export const ROLE_SHORT: Record<Role, string> = {
-  GK: "GK",
+  GK: "ARQ",
   DEF: "DEF",
-  MID: "MID",
-  FWD: "FWD",
+  MID: "MED",
+  FWD: "DEL",
 };
 
 /** Fine-grained attributes. All optional, all 1..10. */
