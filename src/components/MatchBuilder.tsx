@@ -43,6 +43,7 @@ interface Props {
   onChange: (match: Match) => void;
   onDelete: () => void;
   onSavePlayer: (player: Player) => void;
+  onDeletePlayer: (id: PlayerId) => void;
   onBack: () => void;
 }
 
@@ -57,6 +58,7 @@ export function MatchBuilder({
   onChange,
   onDelete,
   onSavePlayer,
+  onDeletePlayer,
   onBack,
 }: Props) {
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -577,9 +579,20 @@ export function MatchBuilder({
         onOpenChange={setAddPlayerOpen}
         onSave={(player) => {
           onSavePlayer(player);
+          // The form saves itself as you type, so this runs on every edit and
+          // not once at the end: anotarlo has to be idempotent, or a player
+          // typed slowly would land in the squad half a dozen times.
+          if (match.squad.includes(player.id)) return;
           const squad = [...match.squad, player.id];
           const sizeA = Math.floor(squad.length / 2);
           patch({ squad, sizeA, sizeB: squad.length - sizeA });
+        }}
+        onDelete={(player) => {
+          // Without a Cancelar to fall back on, this is the way out of a
+          // jugador nuevo invented by mistake — so it has to take them out of
+          // tonight's game as well as out of the roster.
+          if (match.squad.includes(player.id)) toggleSquad(player.id);
+          onDeletePlayer(player.id);
         }}
       />
     </div>

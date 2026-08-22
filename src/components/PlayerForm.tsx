@@ -1,5 +1,13 @@
-import { useRef, useState } from "react";
-import { Camera, ChevronDown, ClipboardPaste, Loader2, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Camera,
+  Check,
+  ChevronDown,
+  ClipboardPaste,
+  Loader2,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { RatingControl } from "./RatingControl";
+import { createAutosaver, type Clock } from "@/lib/autosave";
 import { pickImageType, pickPastedImage } from "@/lib/clipboard";
 import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
@@ -28,6 +37,7 @@ import {
   ROLES,
   ROLE_LABELS,
   clampRating,
+  hasName,
   newPlayerId,
   type AttributeKey,
   type Foot,
@@ -60,6 +70,19 @@ function blankPlayer(): Player {
   };
 }
 
+/**
+ * How long an edit may sit in the form before it is written down. Long enough
+ * that typing a name is one save rather than eight, short enough that nobody
+ * loses anything worth missing if the tab dies mid-sentence.
+ */
+const AUTOSAVE_DELAY = 600;
+
+/** The browser's timers, narrowed to the two the autosaver asks for. */
+const browserClock: Clock = {
+  setTimeout: (handler, timeout) => window.setTimeout(handler, timeout),
+  clearTimeout: (handle) => window.clearTimeout(handle),
+};
+
 const FOOT_OPTIONS: { value: Foot; label: string }[] = [
   { value: "right", label: "Derecha" },
   { value: "left", label: "Izquierda" },
@@ -88,6 +111,41 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
   const fileInput = useRef<HTMLInputElement>(null);
   const isNew = player === undefined;
 
+  /** Is there a record behind this draft yet? Drives the footer and Borrar. */
+  const [saved, setSaved] = useState(() => open && player !== undefined);
+
+  /**
+   * `onSave` through a ref, because the autosaver outlives any one render and
+   * MatchBuilder passes a fresh closure every time. Reading it at write time
+   * rather than capturing it at creation time is what keeps a save from being
+   * applied to a stale match.
+   */
+  const onSaveRef = useRef(onSave);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  });
+
+  /**
+   * The save button, made unnecessary.
+   *
+   * Created once and kept for the life of the component — the dialog stays
+   * mounted while closed, and `reset` re-points it at whoever is being edited
+   * next. See `@/lib/autosave` for the two rules it enforces.
+   */
+  const [autosave] = useState(() => {
+    const saver = createAutosaver<Player>({
+      delay: AUTOSAVE_DELAY,
+      clock: browserClock,
+      worthSaving: hasName,
+      save: (value) => {
+        onSaveRef.current({ ...value, rating: clampRating(value.rating) });
+        setSaved(true);
+      },
+    });
+    saver.reset(open && player !== undefined);
+    return saver;
+  });
+
   /**
    * Re-seed every time the dialog opens, not only when it opens for a
    * different player.
@@ -107,8 +165,37 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
       setShowRoles(Object.keys(player?.roleRatings ?? {}).length > 0);
       setShowAttributes(Object.keys(player?.attributes ?? {}).length > 0);
       setImageError(null);
+      // Someone else is on screen now: drop anything still queued for the last
+      // one, and remember whether this one is already in the roster.
+      setSaved(player !== undefined);
+      autosave.reset(player !== undefined);
     }
   }
+
+  /**
+   * Every edit, on its way to disk.
+   *
+   * The freshly seeded draft is skipped deliberately: it is the stored player,
+   * object for object, and writing it back would restamp `updatedAt` — the
+   * field a backup merge sorts on — for the crime of opening the dialog.
+   */
+  useEffect(() => {
+    if (!open) return;
+    if (draft === player) return;
+    autosave.push(draft);
+  }, [draft, open, player, autosave]);
+
+  /**
+   * Closing is the deadline. Every way out of this dialog goes through
+   * `open` — the button, Escape, the X, a click on the overlay — so this is
+   * the one place that catches all of them.
+   */
+  useEffect(() => {
+    if (!open) autosave.flush();
+  }, [open, autosave]);
+
+  /** And navigating away with it still open is a deadline too. */
+  useEffect(() => () => autosave.flush(), [autosave]);
 
   const update = (patch: Partial<Player>) => setDraft((prev) => ({ ...prev, ...patch }));
 
@@ -191,14 +278,13 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
 
   const canReadClipboard = typeof navigator.clipboard?.read === "function";
 
+  /**
+   * There is nothing left to submit — the draft has been going to disk all
+   * along. Enter and the button now just mean "I'm done looking at this".
+   */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const named =
-      draft.firstName.trim() !== "" ||
-      draft.lastName.trim() !== "" ||
-      draft.nickname.trim() !== "";
-    if (!named) return;
-    onSave({ ...draft, rating: clampRating(draft.rating) });
+    autosave.flush();
     onOpenChange(false);
   };
 
@@ -212,7 +298,8 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
           <DialogTitle>{isNew ? "Jugador nuevo" : "Editar jugador"}</DialogTitle>
           <DialogDescription>
             Con el nombre y un nivel general ya está. El resto es opcional:
-            llenalo solo para los que tenés bien claro cómo juegan.
+            llenalo solo para los que tenés bien claro cómo juegan. Se va
+            guardando solo mientras escribís.
           </DialogDescription>
         </DialogHeader>
 
@@ -424,25 +511,43 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
             />
           </div>
 
-          <DialogFooter className="gap-2 pt-2">
-            {!isNew && onDelete != null && player != null && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => {
-                  onDelete(player);
-                  onOpenChange(false);
-                }}
-              >
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                Borrar
-              </Button>
-            )}
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit">{isNew ? "Agregar" : "Guardar"}</Button>
+          <DialogFooter className="items-center gap-2 pt-2">
+            <div className="mr-auto flex flex-wrap items-center gap-x-3 gap-y-1">
+              {/* Available as soon as there is something to delete, which with
+                  a form that saves itself includes a jugador nuevo who has
+                  only just been given a name — the way out of a change of
+                  heart used to be Cancelar, and now it is this. */}
+              {onDelete != null && saved && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    // Drop the queued write first, or it would put them
+                    // straight back a moment after they were removed.
+                    autosave.reset(false);
+                    setSaved(false);
+                    onDelete(draft);
+                    onOpenChange(false);
+                  }}
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" />
+                  Borrar
+                </Button>
+              )}
+              {saved ? (
+                <span className="flex items-center gap-1 text-xs text-emerald-400">
+                  <Check className="h-3.5 w-3.5" />
+                  Guardado
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  Poné un nombre y ya queda guardado.
+                </span>
+              )}
+            </div>
+            <Button type="submit">Listo</Button>
           </DialogFooter>
         </form>
       </DialogContent>

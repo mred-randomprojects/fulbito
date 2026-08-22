@@ -106,6 +106,7 @@ function MatchRoute({ app }: { app: ReturnType<typeof useAppData> }) {
         navigate("/matches");
       }}
       onSavePlayer={app.savePlayer}
+      onDeletePlayer={app.deletePlayer}
       onBack={() => navigate("/matches")}
     />
   );

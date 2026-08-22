@@ -27,6 +27,8 @@
     "src/lib/balance.test.ts",
     "src/lib/clipboard.ts",
     "src/lib/clipboard.test.ts",
+    "src/lib/autosave.ts",
+    "src/lib/autosave.test.ts",
     "src/lib/insights.ts",
     "src/lib/insights.test.ts"
   ]

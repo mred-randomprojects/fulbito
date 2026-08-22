@@ -211,6 +211,23 @@ export function newMatchId(): MatchId {
   return generateId() as MatchId;
 }
 
+/**
+ * Is there enough of a name here to be a roster entry?
+ *
+ * The gate the form autosave leans on: a draft with nothing to call it by is
+ * someone who opened "Jugador nuevo" and thought better of it, not a player,
+ * and writing it down would leave a nameless ghost in the roster.
+ */
+export function hasName(
+  player: Pick<Player, "firstName" | "lastName" | "nickname">,
+): boolean {
+  return (
+    player.firstName.trim() !== "" ||
+    player.lastName.trim() !== "" ||
+    player.nickname.trim() !== ""
+  );
+}
+
 export function playerDisplayName(player: Player): string {
   if (player.nickname.trim() !== "") return player.nickname.trim();
   const first = player.firstName.trim();
