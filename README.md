@@ -1,7 +1,10 @@
 # Fulbito ⚽
 
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
-kick-off. Rate your mates once, and let it work out the split.
+kick-off. Rate your mates once, let it work out the split, and write down how
+it ended.
+
+`PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
 The interface is in Argentinian Spanish — that is a product decision, not a
 localisation layer, so strings live inline rather than in a message catalogue.
@@ -31,6 +34,12 @@ Runs entirely in the browser. No account, no backend, nothing to sign up for.
   team on purpose.
 - **Share without leaking ratings.** A PNG of the pitch, or a plain-text list
   for the group chat. Ratings are excluded from both unless you opt in.
+- **How it actually ended.** Write the score down on the match. It sits above
+  the teams that played it, shows in the list of matches, and goes out with the
+  shared text — because that message gets forwarded again after the game.
+- **Nothing to save, and it says so.** Every change is written the moment you
+  make it, and confirms it on screen. If a write ever fails, that stays on
+  screen until it succeeds.
 
 ## How the balancing works
 
@@ -68,7 +77,7 @@ and leaves the machine only when you export it.
 
 ```bash
 npm run build   # typecheck + production build
-npm test        # the rating, balancing, formation, clipboard and merge logic
+npm test        # rating, balancing, formations, results, autosave, merge, …
 npm run lint
 ```
 
@@ -103,3 +112,7 @@ no secrets.
 - **Sync between devices.** Deliberately absent: the export/import file is the
   portability story. If it ever becomes a nuisance, the merge logic that would
   back a real sync already exists and is tested.
+- **A record per player.** Results are recorded on the match, not attributed to
+  the people who played: no won/lost tally, no form, no "always wins when he is
+  on your side". The data is there now, so this should be a decision rather
+  than something that happens by drift.

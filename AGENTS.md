@@ -2,6 +2,19 @@
 
 Conventions for anyone — human or agent — making changes here.
 
+## Start from the map
+
+`PROJECT.md` is the project in one file: what the app is, how the code is laid
+out, the data model, and the invariants that are easy to break by accident.
+Read it before changing anything — it exists so nobody has to re-derive the
+project from the source every time.
+
+Keep it true. A change that adds or removes a feature, a module, a stored
+field, or a convention updates `PROJECT.md` in the same commit — plus the
+README when what the app *does* changed. A map that is right nine times out of
+ten is one nobody trusts the tenth time, and then everyone goes back to reading
+the whole codebase, which is the cost the map exists to remove.
+
 ## Move fast; verify cheaply
 
 This is a small, no-backend, single-user-ish app. A bug costs a reload, not
