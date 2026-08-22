@@ -92,6 +92,14 @@ input[type="number"] {
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /* A scoreline you can read from where the phone is lying on the bench.
+     iOS only zooms in on inputs *under* 16px, so going up is safe — but the
+     blanket rule above is !important, and only a class selector outranks it. */
+  .score-input {
+    font-size: 1.75rem !important;
+    line-height: 1;
+  }
 }
 
 /* Range inputs get a consistent, thumb-friendly look across browsers. */

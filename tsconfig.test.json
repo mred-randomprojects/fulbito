@@ -30,6 +30,10 @@
     "src/lib/autosave.ts",
     "src/lib/autosave.test.ts",
     "src/lib/insights.ts",
-    "src/lib/insights.test.ts"
+    "src/lib/insights.test.ts",
+    "src/lib/result.ts",
+    "src/lib/result.test.ts",
+    "src/lib/saveStatus.ts",
+    "src/lib/saveStatus.test.ts"
   ]
 }

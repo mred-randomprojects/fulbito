@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pitch, type PitchToken } from "./Pitch";
 import { MatchSetup } from "./MatchSetup";
+import { ResultPanel } from "./ResultPanel";
 import { SquadPicker } from "./SquadPicker";
 import { TeamInsights } from "./TeamInsights";
 import { ShareDialog } from "./ShareDialog";
@@ -351,6 +352,13 @@ export function MatchBuilder({
           <Trash2 className="h-4 w-4" />
         </Button>
       </header>
+
+      {/* Hidden on a match with nobody in it: "¿cómo salió?" is a silly
+          question to put above "¿quiénes juegan?", and a game you actually
+          played has a squad. A result already written down always shows. */}
+      {(squadReady || match.result != null) && (
+        <ResultPanel match={match} onChange={(result) => patch({ result })} />
+      )}
 
       {!squadReady ? (
         <div className="grid gap-4 lg:grid-cols-2">

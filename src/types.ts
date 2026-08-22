@@ -144,6 +144,27 @@ export const KIT_EMOJI: Record<KitId, string> = {
   dark: "🖤",
 };
 
+/**
+ * How a match ended.
+ *
+ * `null` until someone writes it down, and that is not the same thing as 0-0:
+ * a game nobody has played yet, a game nobody bothered to record, and a
+ * goalless draw are three different states, and collapsing them would put a
+ * scoreline on every match in the list whether or not it was ever played.
+ */
+export interface MatchResult {
+  goalsA: number;
+  goalsB: number;
+}
+
+/** Nobody scores a hundred. A stray keystroke should not claim they did. */
+export const MAX_GOALS = 99;
+
+export function clampGoals(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(MAX_GOALS, Math.max(0, Math.floor(value)));
+}
+
 export interface Match {
   id: MatchId;
   name: string;
@@ -170,6 +191,8 @@ export interface Match {
    * 0 is a fair game; nudge it to deliberately stack one side.
    */
   handicap: number;
+  /** The scoreline, once it is known. See `MatchResult`. */
+  result: MatchResult | null;
   updatedAt: string;
 }
 
@@ -375,6 +398,20 @@ function normalizeSize(value: unknown, fallback: number): number {
   return Math.min(11, Math.max(0, parsed));
 }
 
+/**
+ * A stored scoreline, or nothing.
+ *
+ * Half a result is no result: a blob carrying one side's goals and not the
+ * other says nothing about how the game ended, and inventing a 0 for the
+ * missing side would put a fabricated scoreline on screen as if it were typed.
+ */
+function normalizeResult(value: unknown): MatchResult | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.goalsA !== "number" || typeof value.goalsB !== "number") return null;
+  if (!Number.isFinite(value.goalsA) || !Number.isFinite(value.goalsB)) return null;
+  return { goalsA: clampGoals(value.goalsA), goalsB: clampGoals(value.goalsB) };
+}
+
 function normalizeMatch(raw: unknown): Match | null {
   if (!isRecord(raw)) return null;
   const id = str(raw.id);
@@ -395,6 +432,7 @@ function normalizeMatch(raw: unknown): Match | null {
     lineupB: normalizeLineup(raw.lineupB),
     basis,
     handicap: Math.min(3, Math.max(-3, num(raw.handicap, 0))),
+    result: normalizeResult(raw.result),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
 }

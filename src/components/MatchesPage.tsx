@@ -74,6 +74,14 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
                     {match.squad.length} anotado{match.squad.length === 1 ? "" : "s"}
                   </p>
                 </div>
+                {/* Reads left to right in the same order as the two shirts on
+                    the left of the row, which is the only thing saying which
+                    number belongs to whom. */}
+                {match.result != null && (
+                  <span className="tabular shrink-0 rounded-lg border border-border bg-secondary/60 px-2 py-1 text-sm font-semibold">
+                    {match.result.goalsA} - {match.result.goalsB}
+                  </span>
+                )}
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </button>
             </li>

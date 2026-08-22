@@ -174,6 +174,13 @@ function buildText(
 ): string {
   const lines: string[] = [];
   lines.push(`⚽ ${match.name}${match.date !== "" ? ` — ${formatMatchDate(match.date)}` : ""}`);
+  // The scoreline goes out with the teams: the same message gets forwarded
+  // again after the game, and by then this is the part people care about.
+  if (match.result != null) {
+    lines.push(
+      `🏁 ${match.teamA.name} ${match.result.goalsA} - ${match.result.goalsB} ${match.teamB.name}`,
+    );
+  }
   lines.push("");
 
   for (const [config, evaluation, formation] of [
