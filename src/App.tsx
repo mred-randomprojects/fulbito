@@ -6,6 +6,7 @@ import { PlayersPage } from "./components/PlayersPage";
 import { MatchesPage } from "./components/MatchesPage";
 import { MatchBuilder } from "./components/MatchBuilder";
 import { SettingsPage } from "./components/SettingsPage";
+import { SaveIndicator } from "./components/SaveIndicator";
 import {
   DEFAULT_TEAM_A,
   DEFAULT_TEAM_B,
@@ -35,6 +36,7 @@ export default function App() {
       lineupB: [],
       basis: "total",
       handicap: 0,
+      result: null,
       updatedAt: new Date().toISOString(),
     };
     app.saveMatch(match);
@@ -45,10 +47,12 @@ export default function App() {
     <div className="min-h-dvh">
       <NavBar />
 
-      {app.storageError != null && (
+      {/* The pill at the bottom says a save failed; this says what to do about
+          it, and stays up for as long as it is true. */}
+      {app.saveStatus.kind === "error" && (
         <p className="mx-auto max-w-6xl px-4 pt-3">
           <span className="block rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-            {app.storageError}
+            {app.saveStatus.message}
           </span>
         </p>
       )}
@@ -85,6 +89,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/matches" replace />} />
         </Routes>
       </main>
+
+      <SaveIndicator status={app.saveStatus} />
     </div>
   );
 }

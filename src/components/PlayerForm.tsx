@@ -21,7 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { RatingControl } from "./RatingControl";
-import { createAutosaver, type Clock } from "@/lib/autosave";
+import { createAutosaver } from "@/lib/autosave";
+import { browserClock } from "@/lib/browserClock";
 import { pickImageType, pickPastedImage } from "@/lib/clipboard";
 import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
@@ -76,12 +77,6 @@ function blankPlayer(): Player {
  * loses anything worth missing if the tab dies mid-sentence.
  */
 const AUTOSAVE_DELAY = 600;
-
-/** The browser's timers, narrowed to the two the autosaver asks for. */
-const browserClock: Clock = {
-  setTimeout: (handler, timeout) => window.setTimeout(handler, timeout),
-  clearTimeout: (handle) => window.clearTimeout(handle),
-};
 
 const FOOT_OPTIONS: { value: Foot; label: string }[] = [
   { value: "right", label: "Derecha" },

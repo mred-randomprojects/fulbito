@@ -1,8 +1,10 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { AppData, Match, MatchId, Player, PlayerId } from "./types";
 import { normalizeAppData } from "./types";
 import { loadAppData, saveAppData, StorageQuotaError } from "./storage";
 import { mergeAppData } from "./mergeAppData";
+import { browserClock } from "./lib/browserClock";
+import { createSaveNotifier, type SaveStatus } from "./lib/saveStatus";
 import {
   removeMatch,
   removePlayer,
@@ -10,11 +12,19 @@ import {
   upsertPlayer,
 } from "./appDataOps";
 
+/**
+ * How long "Guardado" stays up after the last write. Long enough to be read
+ * without looking for it, short enough that it is gone before it becomes
+ * furniture.
+ */
+const SAVE_HOLD = 2400;
+
 export interface AppDataApi {
   data: AppData;
   players: Player[];
   matches: Match[];
-  storageError: string | null;
+  /** Whether the last write landed, for the confirmation the whole app shares. */
+  saveStatus: SaveStatus;
   savePlayer: (player: Player) => void;
   deletePlayer: (id: PlayerId) => void;
   saveMatch: (match: Match) => void;
@@ -34,7 +44,19 @@ export interface AppDataApi {
  */
 export function useAppData(): AppDataApi {
   const [data, setData] = useState<AppData>(loadAppData);
-  const [storageError, setStorageError] = useState<string | null>(null);
+
+  /**
+   * The receipt for every write, shared by the whole app.
+   *
+   * It lives here rather than in each screen because every screen saves the
+   * same way — there is no form to submit anywhere — so the one honest place
+   * to say "that is on disk" is the line that actually put it there.
+   */
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: "idle" });
+  const [notifier] = useState(() =>
+    createSaveNotifier({ hold: SAVE_HOLD, clock: browserClock, onChange: setSaveStatus }),
+  );
+  useEffect(() => () => notifier.dispose(), [notifier]);
 
   /**
    * The newest data, readable synchronously.
@@ -52,12 +74,20 @@ export function useAppData(): AppDataApi {
     setData(next);
     try {
       saveAppData(next);
-      setStorageError(null);
+      notifier.saved();
     } catch (e) {
-      if (e instanceof StorageQuotaError) setStorageError(e.message);
-      else throw e;
+      // Every failure is reported, not only the one we know how to name.
+      // Storage can also be switched off outright — Safari in private mode
+      // throws on the first write — and taking the app down with a blank
+      // screen would be a worse way to find that out than being told.
+      console.error("[storage] save failed:", e);
+      notifier.failed(
+        e instanceof StorageQuotaError
+          ? e.message
+          : "No se pudo guardar en este navegador. Bajate el backup desde Tus datos antes de cerrar la pestaña.",
+      );
     }
-  }, []);
+  }, [notifier]);
 
   const savePlayer = useCallback(
     (player: Player) => persist((current) => upsertPlayer(current, player, now())),
@@ -109,7 +139,7 @@ export function useAppData(): AppDataApi {
     data,
     players: data.players,
     matches: data.matches,
-    storageError,
+    saveStatus,
     savePlayer,
     deletePlayer,
     saveMatch,
