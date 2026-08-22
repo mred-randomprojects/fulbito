@@ -16,9 +16,9 @@ const MAX_BYTES = 60_000;
 
 export class ImageError extends Error {}
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
@@ -35,13 +35,16 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 /**
  * Centre-crops to a square and re-encodes as JPEG, stepping quality down until
  * the result fits the budget. Returns a data URL ready to drop into a player.
+ *
+ * Takes a Blob rather than a File because a pasted image is one: the clipboard
+ * hands over bytes and a MIME type, with no name attached.
  */
-export async function fileToAvatar(file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) {
+export async function fileToAvatar(blob: Blob): Promise<string> {
+  if (!blob.type.startsWith("image/")) {
     throw new ImageError("Elegí un archivo de imagen.");
   }
 
-  const img = await loadImage(file);
+  const img = await loadImage(blob);
   const side = Math.min(img.naturalWidth, img.naturalHeight);
   if (side === 0) throw new ImageError("Esa imagen está vacía.");
 

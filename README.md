@@ -68,7 +68,7 @@ and leaves the machine only when you export it.
 
 ```bash
 npm run build   # typecheck + production build
-npm test        # the rating, balancing, formation and merge logic
+npm test        # the rating, balancing, formation, clipboard and merge logic
 npm run lint
 ```
 
@@ -80,7 +80,9 @@ The whole app state — players, photos, matches, ratings — is one JSON blob i
 file cannot wipe players added since (`src/mergeAppData.ts`).
 
 Photos are centre-cropped and re-encoded on upload: a 1.7 MB camera photo lands
-at roughly 3 KB, which is what makes storing them inline viable at all.
+at roughly 3 KB, which is what makes storing them inline viable at all. They can
+be pasted straight in with Ctrl/⌘+V — most of them start as a screenshot or
+something someone just sent — so nothing has to go via the filesystem first.
 
 Sharing produces a PNG of the pitch, drawn on a canvas from the same geometry
 the on-screen pitch uses (`src/lib/lineupImage.ts`), plus a plain-text list for

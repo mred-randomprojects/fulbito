@@ -25,6 +25,8 @@
     "src/lib/formations.test.ts",
     "src/lib/balance.ts",
     "src/lib/balance.test.ts",
+    "src/lib/clipboard.ts",
+    "src/lib/clipboard.test.ts",
     "src/lib/insights.ts",
     "src/lib/insights.test.ts"
   ]

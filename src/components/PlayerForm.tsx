@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Camera, ChevronDown, Loader2, Trash2, X } from "lucide-react";
+import { Camera, ChevronDown, ClipboardPaste, Loader2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { RatingControl } from "./RatingControl";
+import { pickImageType, pickPastedImage } from "@/lib/clipboard";
 import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
 import {
@@ -129,12 +130,12 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
     });
   };
 
-  const handleFile = async (file: File | undefined) => {
-    if (file === undefined) return;
+  const handleImage = async (image: Blob | undefined) => {
+    if (image === undefined) return;
     setUploading(true);
     setImageError(null);
     try {
-      update({ avatar: await fileToAvatar(file) });
+      update({ avatar: await fileToAvatar(image) });
     } catch (e) {
       setImageError(
         e instanceof ImageError ? e.message : "No se pudo procesar esa foto.",
@@ -144,6 +145,51 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
       if (fileInput.current != null) fileInput.current.value = "";
     }
   };
+
+  /**
+   * Ctrl/⌘+V anywhere in the dialog.
+   *
+   * Most of these photos start life as a screenshot or a picture someone just
+   * sent, so a paste saves a round trip through the filesystem. The one place
+   * it has to keep its hands off is a text box holding real text — see
+   * `pickPastedImage`.
+   */
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (uploading) return;
+    // Array.from, not the list itself: DataTransferItemList is only iterable
+    // by way of its indexed getter, and getAsFile() has to be called now,
+    // inside the handler, because the items go stale the moment it returns.
+    const image = pickPastedImage(
+      Array.from(e.clipboardData.items),
+      isTextField(e.target),
+    );
+    if (image === null) return;
+    e.preventDefault();
+    void handleImage(image);
+  };
+
+  /**
+   * The same thing from a button, for touch keyboards and anyone who does not
+   * think to try the shortcut. Reading the clipboard is the part browsers
+   * disagree about — Firefox has no `read()` at all — so when it goes wrong we
+   * point back at the shortcut, which always works.
+   */
+  const pasteFromClipboard = async () => {
+    setImageError(null);
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = pickImageType(item.types);
+        if (type === null) continue;
+        await handleImage(await item.getType(type));
+        return;
+      }
+      setImageError("No hay ninguna imagen en el portapapeles.");
+    } catch {
+      setImageError("No nos dejaron mirar el portapapeles. Pegala con Ctrl/⌘+V.");
+    }
+  };
+
+  const canReadClipboard = typeof navigator.clipboard?.read === "function";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +207,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[92dvh] max-w-lg overflow-y-auto" onPaste={handlePaste}>
         <DialogHeader>
           <DialogTitle>{isNew ? "Jugador nuevo" : "Editar jugador"}</DialogTitle>
           <DialogDescription>
@@ -198,6 +244,18 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
                 >
                   {uploading ? "Achicando…" : draft.avatar === "" ? "Subir foto" : "Cambiar"}
                 </Button>
+                {canReadClipboard && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void pasteFromClipboard()}
+                    disabled={uploading}
+                  >
+                    <ClipboardPaste className="mr-1 h-3.5 w-3.5" />
+                    Pegar
+                  </Button>
+                )}
                 {draft.avatar !== "" && (
                   <Button
                     type="button"
@@ -211,8 +269,9 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Se recorta cuadrada y se achica sola. Mandale la foto de la
-                cámara sin drama.
+                Subila, o pegá con Ctrl/⌘+V la que tengas copiada. Se recorta
+                cuadrada y se achica sola, así que mandale la de la cámara sin
+                drama.
               </p>
               {imageError != null && (
                 <p className="text-xs text-destructive">{imageError}</p>
@@ -223,7 +282,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => void handleFile(e.target.files?.[0])}
+              onChange={(e) => void handleImage(e.target.files?.[0])}
             />
           </div>
 
@@ -387,6 +446,14 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Would this element have swallowed the paste itself? */
+function isTextField(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  return target instanceof HTMLElement && target.isContentEditable;
 }
 
 /** The 1-10 scale, spelled out, so everyone's 7 means roughly the same thing. */
