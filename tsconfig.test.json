@@ -34,6 +34,11 @@
     "src/lib/result.ts",
     "src/lib/result.test.ts",
     "src/lib/saveStatus.ts",
-    "src/lib/saveStatus.test.ts"
+    "src/lib/saveStatus.test.ts",
+    "src/lib/avoid.ts",
+    "src/lib/avoid.test.ts",
+    "src/lib/stats.ts",
+    "src/lib/stats.test.ts",
+    "src/types.test.ts"
   ]
 }

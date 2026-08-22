@@ -37,6 +37,15 @@ Runs entirely in the browser. No account, no backend, nothing to sign up for.
 - **How it actually ended.** Write the score down on the match. It sits above
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.
+- **A record that keeps itself.** Every scoreline you write down becomes each
+  player's won/drawn/lost tally, their goal difference, their last five, and
+  the run they are on. Nothing is stored on the player: it is read back off the
+  matches every time, so fixing a scoreline fixes the record.
+- **The two who cannot be on the same team.** Tick it once on either profile —
+  it counts from both sides, so nobody has to be told they were named — and the
+  split sends them to opposite teams. One checkbox on the match turns it off
+  for tonight, and if the preferences are impossible to satisfy the app says
+  which pair it could not separate instead of refusing to pick.
 - **Nothing to save, and it says so.** Every change is written the moment you
   make it, and confirms it on screen. If a write ever fails, that stays on
   screen until it succeeds.
@@ -63,6 +72,11 @@ Splits are then ranked on total strength, per-line gaps, top-heaviness, and the
 gap between each side's best player. Below roughly 8-a-side every combination is
 enumerated; above that it falls back to multi-start local search and says so.
 
+Two people who would rather not share a side cost the split a hundred points a
+pair — far more than any imbalance two teams can produce — so it reads as a hard
+rule wherever one is satisfiable, and as "the least bad of a bad set" when three
+people all avoid each other. A lock still beats it: pins are the hard constraint.
+
 See `src/lib/rating.ts` and `src/lib/balance.ts` — both are covered by tests.
 
 ## Running it
@@ -77,7 +91,7 @@ and leaves the machine only when you export it.
 
 ```bash
 npm run build   # typecheck + production build
-npm test        # rating, balancing, formations, results, autosave, merge, …
+npm test        # rating, balancing, avoid pairs, records, formations, merge, …
 npm run lint
 ```
 
@@ -112,7 +126,9 @@ no secrets.
 - **Sync between devices.** Deliberately absent: the export/import file is the
   portability story. If it ever becomes a nuisance, the merge logic that would
   back a real sync already exists and is tested.
-- **A record per player.** Results are recorded on the match, not attributed to
-  the people who played: no won/lost tally, no form, no "always wins when he is
-  on your side". The data is there now, so this should be a decision rather
-  than something that happens by drift.
+- **Head-to-head history.** Each player has a record; pairs do not. "Wins 80% of
+  the time he is on your side" is the obvious next thing to read off the same
+  matches.
+- **Ratings that learn from results.** The 1-10 numbers stay hand-entered.
+  Moving them automatically would turn one bad night into a downgrade, and
+  nobody asked the app to have opinions.

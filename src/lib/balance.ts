@@ -1,6 +1,7 @@
 import type { Player, PlayerId, Role, TeamKey, BalanceBasis } from "../types.js";
 import { ROLES } from "../types.js";
 import { effectiveRating } from "./rating.js";
+import { EMPTY_AVOID_INDEX, keepApart, type AvoidIndex } from "./avoid.js";
 import type { Formation } from "./formations.js";
 
 /* ------------------------------------------------------------------ */
@@ -364,6 +365,11 @@ export interface SplitRequest {
   pins: Partial<Record<PlayerId, TeamKey>>;
   basis: BalanceBasis;
   handicap: number;
+  /**
+   * Who must not end up on the same side. Omit — or pass the empty index — to
+   * ignore the preference entirely, which is what the match's own switch does.
+   */
+  avoid?: AvoidIndex;
   /** How many distinct options to return. */
   optionCount?: number;
   /** Injected in tests for deterministic search. */
@@ -378,6 +384,8 @@ export interface SplitOption {
   cost: number;
   /** Signed strength edge of A over B, points per player. */
   edge: number;
+  /** Pairs that wanted separating and did not get it. Zero on a clean split. */
+  conflicts: number;
 }
 
 export interface SplitResult {
@@ -389,6 +397,19 @@ export interface SplitResult {
 }
 
 export class SplitError extends Error {}
+
+/**
+ * What one unseparated pair costs a split.
+ *
+ * Everything else in `balanceCost` is measured in rating points per player, and
+ * the worst imaginable imbalance — a team of tens against a team of ones, every
+ * line lopsided — comes to under twenty. A hundred a pair therefore behaves as
+ * a hard rule wherever one is satisfiable, while still being a *number*: when
+ * three people all avoid each other and two of them must share a side no matter
+ * what, the search keeps ranking by balance among the splits that break the
+ * fewest preferences, instead of throwing up its hands.
+ */
+export const AVOID_PENALTY = 100;
 
 /** Rough operation budget for exhaustive enumeration, tuned to stay under ~250ms. */
 const OPS_BUDGET = 40_000_000;
@@ -424,6 +445,7 @@ export function findSplits(request: SplitRequest): SplitResult {
     pins,
     basis,
     handicap,
+    avoid = EMPTY_AVOID_INDEX,
     optionCount = 5,
   } = request;
 
@@ -460,6 +482,40 @@ export function findSplits(request: SplitRequest): SplitResult {
   const needFromFree = sizeA - pinnedA.length;
   const evalCache = new Map<string, TeamEvaluation>();
 
+  /**
+   * The avoid relation, re-expressed over squad positions.
+   *
+   * The search deals in indices into `players` and runs the conflict count
+   * millions of times, so resolving ids through a map on every one of them is
+   * the difference between a tap and a stutter. Built once, here, and empty for
+   * the overwhelmingly common case where nobody has fallen out with anybody.
+   */
+  const enemies: Set<number>[] = players.map(() => new Set<number>());
+  let anyAvoids = false;
+  if (avoid.size > 0) {
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        if (!keepApart(avoid, players[i].id, players[j].id)) continue;
+        enemies[i].add(j);
+        enemies[j].add(i);
+        anyAvoids = true;
+      }
+    }
+  }
+
+  const countConflicts = (indices: readonly number[]): number => {
+    if (!anyAvoids) return 0;
+    let found = 0;
+    for (let i = 0; i < indices.length; i++) {
+      const against = enemies[indices[i]];
+      if (against.size === 0) continue;
+      for (let j = i + 1; j < indices.length; j++) {
+        if (against.has(indices[j])) found += 1;
+      }
+    }
+    return found;
+  };
+
   const evaluate = (indices: readonly number[], formation: Formation): TeamEvaluation => {
     const key = `${formation.id}:${[...indices].sort((x, y) => x - y).join(",")}`;
     const cached = evalCache.get(key);
@@ -475,13 +531,20 @@ export function findSplits(request: SplitRequest): SplitResult {
   const scoreSplit = (indicesA: number[], indicesB: number[]): SplitOption => {
     const evalA = evaluate(indicesA, formationA);
     const evalB = evaluate(indicesB, formationB);
+    const conflicts = countConflicts(indicesA) + countConflicts(indicesB);
     return {
       teamA: indicesA.map((i) => players[i]),
       teamB: indicesB.map((i) => players[i]),
       evalA,
       evalB,
-      cost: balanceCost(evalA, evalB, basis, handicap),
+      // Folded into the one number the whole search ranks and hill-climbs on,
+      // rather than sorted on separately afterwards: the local-search fallback
+      // decides which swaps are improvements from `cost` alone, so a penalty
+      // kept outside it would be honoured by the exhaustive path and quietly
+      // ignored by the other one.
+      cost: balanceCost(evalA, evalB, basis, handicap) + AVOID_PENALTY * conflicts,
       edge: strengthEdge(evalA, evalB, basis),
+      conflicts,
     };
   };
 

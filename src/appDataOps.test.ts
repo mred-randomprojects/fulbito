@@ -26,6 +26,7 @@ function player(id: string, firstName = id): Player {
     rating: 6,
     roleRatings: {},
     attributes: {},
+    avoid: [],
     notes: "",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -45,6 +46,7 @@ function match(id: string, overrides: Partial<Match> = {}): Match {
     lineupA: [],
     lineupB: [],
     basis: "total",
+    respectAvoids: true,
     handicap: 0,
     result: null,
     updatedAt: "2026-01-01T00:00:00.000Z",

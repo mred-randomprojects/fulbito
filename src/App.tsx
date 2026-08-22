@@ -35,6 +35,7 @@ export default function App() {
       lineupA: [],
       lineupB: [],
       basis: "total",
+      respectAvoids: true,
       handicap: 0,
       result: null,
       updatedAt: new Date().toISOString(),
@@ -77,6 +78,7 @@ export default function App() {
             element={
               <PlayersPage
                 players={app.players}
+                matches={app.matches}
                 onSave={app.savePlayer}
                 onDelete={app.deletePlayer}
               />
@@ -106,6 +108,7 @@ function MatchRoute({ app }: { app: ReturnType<typeof useAppData> }) {
     <MatchBuilder
       match={match}
       players={app.players}
+      matches={app.matches}
       onChange={app.saveMatch}
       onDelete={() => {
         app.deleteMatch(match.id);

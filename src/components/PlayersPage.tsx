@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
 import { detailLevel, naturalRole } from "@/lib/rating";
+import { computeStats, emptyStats, winPercent, type PlayerStats } from "@/lib/stats";
 import {
   ROLE_SHORT,
   playerDisplayName,
+  type Match,
   type Player,
   type PlayerId,
 } from "@/types";
@@ -15,17 +17,21 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   players: Player[];
+  /** Every match, so each player's record can be read off them. */
+  matches: Match[];
   onSave: (player: Player) => void;
   onDelete: (id: PlayerId) => void;
 }
 
-type SortKey = "name" | "rating" | "detail";
+type SortKey = "name" | "rating" | "record" | "detail";
 
-export function PlayersPage({ players, onSave, onDelete }: Props) {
+export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("name");
   const [editing, setEditing] = useState<Player | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
+
+  const statsById = useMemo(() => computeStats(matches), [matches]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -39,7 +45,16 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
           );
     const sorted = [...filtered];
     if (sort === "rating") sorted.sort((a, b) => b.rating - a.rating);
-    else if (sort === "detail") {
+    else if (sort === "record") {
+      // Win rate first, then matches played, so somebody who won their only
+      // game does not sit above somebody who has won nine of fourteen.
+      sorted.sort((a, b) => {
+        const left = statsById.get(a.id) ?? emptyStats();
+        const right = statsById.get(b.id) ?? emptyStats();
+        if (right.winRate !== left.winRate) return right.winRate - left.winRate;
+        return right.played - left.played;
+      });
+    } else if (sort === "detail") {
       sorted.sort((a, b) => detailLevel(b).total - detailLevel(a).total);
     } else {
       sorted.sort((a, b) =>
@@ -47,7 +62,7 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
       );
     }
     return sorted;
-  }, [players, query, sort]);
+  }, [players, query, sort, statsById]);
 
   const openNew = () => {
     setEditing(undefined);
@@ -92,6 +107,7 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
               [
                 ["name", "A–Z"],
                 ["rating", "Nivel"],
+                ["record", "Ganados"],
                 ["detail", "Detalle"],
               ] as [SortKey, string][]
             ).map(([key, label]) => (
@@ -123,7 +139,11 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
         <ul className="grid gap-2 sm:grid-cols-2">
           {visible.map((player) => (
             <li key={player.id}>
-              <PlayerRow player={player} onClick={() => openEdit(player)} />
+              <PlayerRow
+                player={player}
+                stats={statsById.get(player.id) ?? emptyStats()}
+                onClick={() => openEdit(player)}
+              />
             </li>
           ))}
         </ul>
@@ -133,6 +153,8 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
         open={formOpen}
         onOpenChange={setFormOpen}
         player={editing}
+        roster={players}
+        statsById={statsById}
         onSave={onSave}
         onDelete={(player) => onDelete(player.id)}
       />
@@ -140,7 +162,15 @@ export function PlayersPage({ players, onSave, onDelete }: Props) {
   );
 }
 
-function PlayerRow({ player, onClick }: { player: Player; onClick: () => void }) {
+function PlayerRow({
+  player,
+  stats,
+  onClick,
+}: {
+  player: Player;
+  stats: PlayerStats;
+  onClick: () => void;
+}) {
   const detail = detailLevel(player);
   const best = naturalRole(player);
 
@@ -167,6 +197,17 @@ function PlayerRow({ player, onClick }: { player: Player; onClick: () => void })
               {detail.roles > 0 && detail.attributes > 0 && " · "}
               {detail.attributes > 0 && `${detail.attributes} atributo${detail.attributes === 1 ? "" : "s"}`}
             </span>
+          )}
+          {/* Only once there is a game behind it. "0 de 0" on the whole roster
+              would read as a verdict on everybody rather than as an empty
+              column. */}
+          {stats.played > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="tabular whitespace-nowrap">
+                {stats.won}/{stats.played} ({winPercent(stats)}%)
+              </span>
+            </>
           )}
         </p>
       </div>

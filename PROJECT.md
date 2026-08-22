@@ -69,9 +69,12 @@ enters the app without going through `normalizeAppData` — a hand-edited
 
 - **`Player`** — name, nickname, avatar (a data URL, centre-cropped and
   re-encoded on upload), one required `rating`, optional `roleRatings` and
-  `attributes`, notes, `updatedAt`.
+  `attributes`, `avoid`, notes, `updatedAt`.
+- **`Player.avoid`** — ids this player would rather not share a side with,
+  stored only on whoever said it and read as symmetric. See `lib/avoid.ts`.
 - **`Match`** — name, date, the two `TeamConfig`s, the squad, pins, sizes, the
-  two lineups (slot → player), balance basis, handicap, `result`, `updatedAt`.
+  two lineups (slot → player), balance basis, `respectAvoids`, handicap,
+  `result`, `updatedAt`.
 - **`MatchResult`** — `{ goalsA, goalsB }`, or `null`. `null` and 0-0 are
   different states on purpose: one is a game nobody wrote down, the other is a
   game that finished goalless.
@@ -87,6 +90,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | --- | --- |
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad |
+| `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
+| `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
 | `lib/insights.ts` | Turning two team evaluations into the sentences a person would say |
 | `lib/result.ts` | Reading a typed-in scoreline, and how lopsided the game was |
@@ -100,9 +105,9 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 
 Screens: `MatchesPage` (the list), `MatchBuilder` (the one big screen — squad,
-pitch, setup, insights, result), `PlayersPage` + `PlayerForm` (the roster),
-`SettingsPage` (backup, storage use, rubrics). `SaveIndicator` floats over all
-of them.
+pitch, setup, insights, result), `PlayersPage` + `PlayerForm` (the roster, each
+player's record, and who they will not play with), `SettingsPage` (backup,
+storage use, rubrics). `SaveIndicator` floats over all of them.
 
 ## Invariants worth not breaking
 
@@ -113,6 +118,17 @@ of them.
   that is indistinguishable from one silently losing your work.
 - **Optional stays optional.** Anything unrated falls back to the overall
   rating; no absent field may ever count against a player.
+- **A record is read, never written.** `lib/stats.ts` derives every won/lost
+  tally from the matches on each pass. Nothing is stored on the player, because
+  a stored tally drifts the first time anybody fixes a scoreline, moves
+  somebody between sides after the fact, or merges a backup this device never
+  saw. Only lineups count, and only matches with a `result`.
+- **Avoiding somebody is a price, not a rule.** The split pays
+  `AVOID_PENALTY` (100, far above any reachable balance cost) per pair it fails
+  to separate, so it behaves as a hard rule whenever one is satisfiable and
+  still returns the least-bad answer when three people all avoid each other.
+  A pin beats it: locks are the hard constraint, and the screen says so when a
+  pair ends up together anyway.
 - **English keys, Spanish screens.** `Role` keys and every stored field name
   are English because they are persisted and exported. Only what reaches a
   screen is translated, and it is translated inline.
@@ -133,7 +149,9 @@ out why, and what to do when the change is a visual one.
   The merge logic a real sync would need already exists and is tested.
 - **Free placement on the pitch.** Positions come from a formation; dragging a
   player anywhere on the grass is the obvious next step.
-- **A record per player.** Results are recorded on the match, not attributed to
-  the people who played — no won/lost tally, no form, no "played with" history.
-  The data to build it is now there, which is exactly why it should be a
-  decision rather than a drift.
+- **Head-to-head history.** A player's own record exists, but "wins 80% of the
+  time he is on your side" — and the pair-level stats behind it — does not. It
+  is the obvious next thing to read off the same matches.
+- **Rating people from their results.** The 1-10 numbers are still entirely
+  hand-entered. Nudging them from the record would quietly turn one bad night
+  into a downgrade, and nobody asked the app to have opinions.

@@ -11,6 +11,7 @@ import {
   SplitError,
   strengthEdge,
 } from "./balance.js";
+import { buildAvoidIndex } from "./avoid.js";
 import { defaultFormation, resolveFormation } from "./formations.js";
 
 let counter = 0;
@@ -28,6 +29,7 @@ function player(
     rating,
     roleRatings: {},
     attributes: {},
+    avoid: [],
     notes: "",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...extras,
@@ -519,3 +521,204 @@ describe("strengthEdge", () => {
     assert.ok(strengthEdge(five, six, "total") < 0);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Keeping people apart                                                */
+/* ------------------------------------------------------------------ */
+
+describe("findSplits with avoid preferences", () => {
+  const formation5 = resolveFormation("5-1-2-1", 5);
+
+  /** Ten identical players, so nothing but the preference can decide a split. */
+  function evenSquad(): Player[] {
+    return Array.from({ length: 10 }, () => player(6));
+  }
+
+  function split(players: Player[], avoid: ReturnType<typeof buildAvoidIndex>) {
+    return findSplits({
+      players,
+      sizeA: 5,
+      sizeB: 5,
+      formationA: formation5,
+      formationB: formation5,
+      pins: {},
+      basis: "total",
+      handicap: 0,
+      avoid,
+    });
+  }
+
+  function sideOf(option: { teamA: Player[] }, target: Player): "A" | "B" {
+    return option.teamA.some((p) => p.id === target.id) ? "A" : "B";
+  }
+
+  it("puts a feuding pair on opposite sides", () => {
+    const players = evenSquad();
+    const [one, two] = players;
+    one.avoid = [two.id];
+
+    const best = split(players, buildAvoidIndex(players)).options[0];
+    assert.notEqual(sideOf(best, one), sideOf(best, two));
+    assert.equal(best.conflicts, 0);
+  });
+
+  it("honours a preference recorded on only one of the two", () => {
+    // The relation is symmetric at read time, so nobody has to be told they
+    // were named for the split to respect it.
+    const players = evenSquad();
+    const [one, two] = players;
+    two.avoid = [one.id];
+
+    const best = split(players, buildAvoidIndex(players)).options[0];
+    assert.notEqual(sideOf(best, one), sideOf(best, two));
+  });
+
+  it("keeps every offered option clean, not just the top one", () => {
+    const players = evenSquad();
+    const [one, two] = players;
+    one.avoid = [two.id];
+
+    for (const option of split(players, buildAvoidIndex(players)).options) {
+      assert.equal(option.conflicts, 0, "an option that breaks it is not an option");
+    }
+  });
+
+  it("does nothing at all when the index is empty", () => {
+    // Which is exactly what unticking the match's switch passes in: the
+    // preference is still on the players, and the search must ignore it.
+    const players = evenSquad();
+    const [one, two] = players;
+    one.avoid = [two.id];
+
+    const best = split(players, buildAvoidIndex([])).options[0];
+    assert.equal(best.conflicts, 0, "conflicts are only counted against what was asked for");
+  });
+
+  it("outweighs balance when the two genuinely pull against each other", () => {
+    // A 2 v 2 where one star will not play alongside either of the weak
+    // players, so the only split that keeps everybody happy is the lopsided
+    // one: both tens on a side, both twos on the other. Separating the stars
+    // is worth about eight points here, and a broken preference costs a
+    // hundred, so the preference has to win — that ratio is the whole design.
+    const teamOf2 = defaultFormation(2);
+    const players = [player(10), player(10), player(2), player(2)];
+    const [starA, starB, weakA, weakB] = players;
+    starA.avoid = [weakA.id, weakB.id];
+
+    const best = findSplits({
+      players,
+      sizeA: 2,
+      sizeB: 2,
+      formationA: teamOf2,
+      formationB: teamOf2,
+      pins: {},
+      basis: "total",
+      handicap: 0,
+      avoid: buildAvoidIndex(players),
+    }).options[0];
+
+    assert.equal(best.conflicts, 0);
+    assert.equal(
+      sideOf(best, starA),
+      sideOf(best, starB),
+      "both stars together, because every other split broke a preference",
+    );
+  });
+
+  it("returns the least-bad split when the preferences cannot all be met", () => {
+    // Three people who all avoid each other cannot be spread across two teams.
+    // A hard constraint would leave the button dead; this returns something.
+    const players = evenSquad();
+    const [a, b, c] = players;
+    a.avoid = [b.id, c.id];
+    b.avoid = [c.id];
+
+    const result = split(players, buildAvoidIndex(players));
+    assert.ok(result.options.length > 0, "there is always an answer");
+    assert.equal(result.options[0].conflicts, 1, "one pair stuck together, not two");
+  });
+
+  it("still balances among the splits that break the same preferences", () => {
+    // With the impossible trio out of the way, the remaining seven should
+    // still be arranged to even the two sides up.
+    const players = [
+      player(6),
+      player(6),
+      player(6),
+      player(10),
+      player(10),
+      ...Array.from({ length: 5 }, () => player(4)),
+    ];
+    const [a, b, c] = players;
+    a.avoid = [b.id, c.id];
+    b.avoid = [c.id];
+
+    const best = split(players, buildAvoidIndex(players)).options[0];
+    assert.equal(best.conflicts, 1);
+    assert.notEqual(
+      sideOf(best, players[3]),
+      sideOf(best, players[4]),
+      "the two tens are still split",
+    );
+  });
+
+  it("reports zero conflicts when nobody has a preference", () => {
+    const players = evenSquad();
+    const result = split(players, buildAvoidIndex(players));
+    assert.ok(result.options.every((option) => option.conflicts === 0));
+  });
+
+  it("respects a preference through the sampled search too", () => {
+    // Above the exhaustive budget the split comes from local hill-climbing,
+    // which decides what an improvement is from `cost` alone — so the penalty
+    // has to live inside that number rather than beside it.
+    const players = Array.from({ length: 24 }, () => player(6));
+    players[0].avoid = [players[1].id];
+
+    const result = findSplits({
+      players,
+      sizeA: 12,
+      sizeB: 12,
+      formationA: resolveFormation("", 12),
+      formationB: resolveFormation("", 12),
+      pins: {},
+      basis: "total",
+      handicap: 0,
+      avoid: buildAvoidIndex(players),
+      random: seededRandom(7),
+    });
+
+    assert.equal(result.exhaustive, false, "this squad is past the exhaustive budget");
+    assert.equal(result.options[0].conflicts, 0);
+  });
+
+  it("cannot separate a pair that was pinned to the same side", () => {
+    // A lock is a hard constraint and a preference is not, so the lock wins —
+    // and the split says so instead of quietly ignoring one of the two.
+    const players = evenSquad();
+    const [one, two] = players;
+    one.avoid = [two.id];
+
+    const result = findSplits({
+      players,
+      sizeA: 5,
+      sizeB: 5,
+      formationA: formation5,
+      formationB: formation5,
+      pins: { [one.id]: "A", [two.id]: "A" },
+      basis: "total",
+      handicap: 0,
+      avoid: buildAvoidIndex(players),
+    });
+    assert.equal(result.options[0].conflicts, 1);
+  });
+});
+
+/** A tiny deterministic PRNG, so the sampled search is reproducible. */
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 2 ** 32;
+  };
+}

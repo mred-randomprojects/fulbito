@@ -4,8 +4,11 @@ import {
   Check,
   ChevronDown,
   ClipboardPaste,
+  HeartCrack,
   Loader2,
+  Search,
   Trash2,
+  Trophy,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +29,16 @@ import { browserClock } from "@/lib/browserClock";
 import { pickImageType, pickPastedImage } from "@/lib/clipboard";
 import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
+import { listedBy } from "@/lib/avoid";
+import {
+  describeRecord,
+  describeStreak,
+  emptyStats,
+  winPercent,
+  OUTCOME_LABEL,
+  OUTCOME_LETTER,
+  type PlayerStats,
+} from "@/lib/stats";
 import {
   ATTRIBUTE_RUBRICS,
   OVERALL_SCALE,
@@ -40,9 +53,11 @@ import {
   clampRating,
   hasName,
   newPlayerId,
+  playerDisplayName,
   type AttributeKey,
   type Foot,
   type Player,
+  type PlayerId,
   type Role,
 } from "@/types";
 import { cn } from "@/lib/utils";
@@ -52,6 +67,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** Undefined when creating someone new. */
   player?: Player;
+  /** The rest of the plantel, for "no lo pongas con". */
+  roster: Player[];
+  /** Everybody's record, read from the matches. Missing means never played. */
+  statsById: ReadonlyMap<PlayerId, PlayerStats>;
   onSave: (player: Player) => void;
   onDelete?: (player: Player) => void;
 }
@@ -66,6 +85,7 @@ function blankPlayer(): Player {
     rating: 6,
     roleRatings: {},
     attributes: {},
+    avoid: [],
     notes: "",
     updatedAt: new Date().toISOString(),
   };
@@ -93,7 +113,15 @@ const FOOT_OPTIONS: { value: Foot; label: string }[] = [
  * detail is there for the two or three players you genuinely have an opinion
  * about.
  */
-export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Props) {
+export function PlayerForm({
+  open,
+  onOpenChange,
+  player,
+  roster,
+  statsById,
+  onSave,
+  onDelete,
+}: Props) {
   const [draft, setDraft] = useState<Player>(() => player ?? blankPlayer());
   const [showRoles, setShowRoles] = useState(
     () => Object.keys(player?.roleRatings ?? {}).length > 0,
@@ -101,6 +129,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
   const [showAttributes, setShowAttributes] = useState(
     () => Object.keys(player?.attributes ?? {}).length > 0,
   );
+  const [showAvoid, setShowAvoid] = useState(() => (player?.avoid.length ?? 0) > 0);
   const [uploading, setUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -159,6 +188,7 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
       setDraft(player ?? blankPlayer());
       setShowRoles(Object.keys(player?.roleRatings ?? {}).length > 0);
       setShowAttributes(Object.keys(player?.attributes ?? {}).length > 0);
+      setShowAvoid((player?.avoid.length ?? 0) > 0);
       setImageError(null);
       // Someone else is on screen now: drop anything still queued for the last
       // one, and remember whether this one is already in the roster.
@@ -283,8 +313,29 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
     onOpenChange(false);
   };
 
+  const toggleAvoid = (id: PlayerId) => {
+    setDraft((prev) => ({
+      ...prev,
+      avoid: prev.avoid.includes(id)
+        ? prev.avoid.filter((entry) => entry !== id)
+        : [...prev.avoid, id],
+    }));
+  };
+
   const roleCount = Object.keys(draft.roleRatings).length;
   const attributeCount = Object.keys(draft.attributes).length;
+
+  const others = roster.filter((p) => p.id !== draft.id);
+  // Read off the draft, not off the stored player: the count in the disclosure
+  // header has to move on the same tap that ticks the box. Entries pointing at
+  // somebody since deleted are left out of the count, because there is no box
+  // left on screen for them and a header promising a cruce nobody can find is
+  // worse than a header that is quietly one short.
+  const listedByOthers = listedBy(others, draft);
+  const inRoster = new Set(others.map((p) => p.id));
+  const avoidCount =
+    draft.avoid.filter((id) => inRoster.has(id)).length + listedByOthers.length;
+  const stats = statsById.get(draft.id) ?? emptyStats();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -434,6 +485,12 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
             <ScaleLegend />
           </div>
 
+          {/* What the numbers above predicted, against what actually happened.
+              Read-only, and absent until there is a single finished match to
+              read — an empty table of zeroes on a brand new player says
+              nothing and takes up the room the form needs. */}
+          {stats.played > 0 && <RecordPanel stats={stats} />}
+
           <Disclosure
             open={showRoles}
             onToggle={() => setShowRoles((v) => !v)}
@@ -496,6 +553,24 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
             </div>
           </Disclosure>
 
+          <Disclosure
+            open={showAvoid}
+            onToggle={() => setShowAvoid((v) => !v)}
+            title="Con quién no lo pongas"
+            summary={
+              avoidCount === 0
+                ? "Opcional — para los que no se bancan"
+                : `${avoidCount} cruce${avoidCount === 1 ? "" : "s"}`
+            }
+          >
+            <AvoidPicker
+              others={others}
+              selected={draft.avoid}
+              listedByOthers={listedByOthers}
+              onToggle={toggleAvoid}
+            />
+          </Disclosure>
+
           <div className="space-y-1.5">
             <Label htmlFor="notes">Notas</Label>
             <Input
@@ -556,6 +631,214 @@ function isTextField(target: EventTarget | null): boolean {
     return true;
   }
   return target instanceof HTMLElement && target.isContentEditable;
+}
+
+/**
+ * How it has actually gone for this player.
+ *
+ * Wins over matches played, and nothing cleverer. The temptation is to count a
+ * draw as half a win and quote a tidier "efectividad", but the question people
+ * ask out loud is how many he won out of how many he played, and answering a
+ * different question with the same-looking number is how a stat stops being
+ * trusted. The full G-E-P line is right there for anyone who wants the rest.
+ */
+function RecordPanel({ stats }: { stats: PlayerStats }) {
+  const streak = describeStreak(stats);
+
+  return (
+    <div className="rounded-lg border border-border bg-secondary/25 p-3">
+      <div className="flex items-center gap-3">
+        <Trophy className="h-4 w-4 shrink-0 text-primary/70" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">
+            Ganó {stats.won} de {stats.played}
+          </p>
+          <p className="text-xs text-muted-foreground">{describeRecord(stats)}</p>
+        </div>
+        <div className="flex flex-col items-end">
+          <span className="tabular text-lg font-semibold leading-none">
+            {winPercent(stats)}%
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            ganados
+          </span>
+        </div>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-4 gap-2 border-t border-border pt-2.5 text-center">
+        <Stat label="Ganados" value={stats.won} />
+        <Stat label="Empates" value={stats.drawn} />
+        <Stat label="Perdidos" value={stats.lost} />
+        <Stat
+          label="Dif. gol"
+          value={`${stats.goalDifference > 0 ? "+" : ""}${stats.goalDifference}`}
+        />
+      </dl>
+
+      <div className="mt-2.5 flex items-center gap-2 border-t border-border pt-2.5">
+        <span className="text-[11px] text-muted-foreground">Los últimos</span>
+        <span className="flex gap-1">
+          {stats.recent.map((outcome, index) => (
+            <span
+              key={index}
+              title={OUTCOME_LABEL[outcome]}
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold",
+                outcome === "win"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : outcome === "draw"
+                    ? "bg-secondary text-muted-foreground"
+                    : "bg-destructive/20 text-destructive",
+              )}
+            >
+              {OUTCOME_LETTER[outcome]}
+            </span>
+          ))}
+        </span>
+        {streak != null && (
+          <span className="ml-auto text-[11px] text-muted-foreground">{streak}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div>
+      <dd className="tabular text-base font-semibold leading-none">{value}</dd>
+      <dt className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+    </div>
+  );
+}
+
+/**
+ * The people this player would rather not be on a side with.
+ *
+ * Ticking somebody here is enough on its own: the split reads the relation in
+ * both directions, so nobody has to be told they were named, and the other
+ * profile is not edited behind their back. What the other profile *does* show
+ * is the bottom line here — who has named them — because being kept off
+ * somebody's team without ever being able to see why would be the one genuinely
+ * confusing way to build this.
+ */
+function AvoidPicker({
+  others,
+  selected,
+  listedByOthers,
+  onToggle,
+}: {
+  others: Player[];
+  selected: PlayerId[];
+  listedByOthers: PlayerId[];
+  onToggle: (id: PlayerId) => void;
+}) {
+  const [query, setQuery] = useState("");
+
+  if (others.length === 0) {
+    return (
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Todavía no hay nadie más en el plantel con quien pelearse.
+      </p>
+    );
+  }
+
+  const chosen = new Set(selected);
+  const needle = query.trim().toLowerCase();
+  const visible = others
+    .filter(
+      (p) =>
+        needle === "" ||
+        `${p.firstName} ${p.lastName} ${p.nickname}`.toLowerCase().includes(needle),
+    )
+    // Whoever is already ticked floats up, so the list stays readable as the
+    // plantel grows and you can undo a mistake without hunting for it.
+    .sort((a, b) => {
+      const inA = chosen.has(a.id) ? 0 : 1;
+      const inB = chosen.has(b.id) ? 0 : 1;
+      if (inA !== inB) return inA - inB;
+      return playerDisplayName(a).localeCompare(playerDisplayName(b));
+    });
+
+  const namesOf = (ids: PlayerId[]): string =>
+    ids
+      .map((id) => others.find((p) => p.id === id))
+      .filter((p): p is Player => p !== undefined)
+      .map(playerDisplayName)
+      .join(", ");
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Para los que no se pueden ver: se pelearon, son cuñados, o simplemente
+        juntos no funcionan. Marcalos acá y el reparto los va a mandar a equipos
+        distintos. Alcanza con que lo diga uno de los dos — no hace falta ir a
+        cargarlo del otro lado.
+      </p>
+
+      {others.length > 6 && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar en el plantel"
+            className="h-9 pl-9"
+          />
+        </div>
+      )}
+
+      <ul className="max-h-56 space-y-0.5 overflow-y-auto">
+        {visible.map((other) => {
+          const picked = chosen.has(other.id);
+          return (
+            <li key={other.id}>
+              <button
+                type="button"
+                onClick={() => onToggle(other.id)}
+                aria-pressed={picked}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors",
+                  picked ? "bg-destructive/10" : "hover:bg-accent/40",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                    picked
+                      ? "border-destructive bg-destructive text-destructive-foreground"
+                      : "border-border",
+                  )}
+                >
+                  {picked && <HeartCrack className="h-3 w-3" />}
+                </span>
+                <PlayerAvatar player={other} size={24} />
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {playerDisplayName(other)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+        {visible.length === 0 && (
+          <li className="py-3 text-center text-xs text-muted-foreground">
+            No hay nadie que se llame así.
+          </li>
+        )}
+      </ul>
+
+      {listedByOthers.length > 0 && (
+        <p className="rounded-lg border border-border bg-secondary/40 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          Además, {namesOf(listedByOthers)}{" "}
+          {listedByOthers.length === 1 ? "lo tiene" : "lo tienen"} anotado a él.
+          Cuenta igual, y se saca desde{" "}
+          {listedByOthers.length === 1 ? "ese perfil" : "esos perfiles"}.
+        </p>
+      )}
+    </div>
+  );
 }
 
 /** The 1-10 scale, spelled out, so everyone's 7 means roughly the same thing. */

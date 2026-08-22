@@ -82,6 +82,16 @@ export interface Player {
   /** Optional fine-grained attributes, 1..10. */
   attributes: Partial<Record<AttributeKey, number>>;
   foot?: Foot;
+  /**
+   * People this player would rather not share a side with.
+   *
+   * Stored one-directionally, on whoever said it, and read as symmetric: if
+   * either of two people has the other on their list, the pair is kept apart.
+   * Storing it both ways instead would mean one tap writing two records, and a
+   * backup merge could then resurrect half of a preference that was undone.
+   * See `lib/avoid.ts`, which is the only thing that reads this.
+   */
+  avoid: PlayerId[];
   notes: string;
   updatedAt: string;
 }
@@ -186,6 +196,12 @@ export interface Match {
   lineupA: (PlayerId | null)[];
   lineupB: (PlayerId | null)[];
   basis: BalanceBasis;
+  /**
+   * Whether the split honours `Player.avoid`. Per match rather than global:
+   * the two who are not speaking this week are usually fine by the next one,
+   * and a global switch would make that a settings trip instead of a tap.
+   */
+  respectAvoids: boolean;
   /**
    * Strength edge, in rating points per player, that team A is *meant* to have.
    * 0 is a fair game; nudge it to deliberately stack one side.
@@ -329,6 +345,24 @@ function normalizeAttributes(value: unknown): Partial<Record<AttributeKey, numbe
   return out;
 }
 
+/**
+ * A list of people to keep this player away from.
+ *
+ * Deduped, and stripped of the player themselves: an id pointing at its own
+ * record would make `lib/avoid.ts` report someone as an unavoidable conflict
+ * with themselves, which no split could ever resolve. Ids of players since
+ * deleted are kept — they cost nothing, they never appear in a squad, and
+ * dropping them here would make an import order-dependent.
+ */
+function normalizeAvoid(value: unknown, selfId: string): PlayerId[] {
+  const ids = new Set<string>();
+  for (const id of strArray(value)) {
+    if (id === "" || id === selfId) continue;
+    ids.add(id);
+  }
+  return [...ids] as PlayerId[];
+}
+
 function normalizeFoot(value: unknown): Foot | undefined {
   return value === "left" || value === "right" || value === "both" ? value : undefined;
 }
@@ -346,6 +380,7 @@ function normalizePlayer(raw: unknown): Player | null {
     rating: clampRating(num(raw.rating, 5)),
     roleRatings: normalizeRoleRatings(raw.roleRatings),
     attributes: normalizeAttributes(raw.attributes),
+    avoid: normalizeAvoid(raw.avoid, id),
     notes: str(raw.notes),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
@@ -431,6 +466,10 @@ function normalizeMatch(raw: unknown): Match | null {
     lineupA: normalizeLineup(raw.lineupA),
     lineupB: normalizeLineup(raw.lineupB),
     basis,
+    // Absent means an old match, saved before the setting existed. Those
+    // default to honouring the preference: someone who bothered to write down
+    // that two people do not mix meant it for every match, not just new ones.
+    respectAvoids: raw.respectAvoids !== false,
     handicap: Math.min(3, Math.max(-3, num(raw.handicap, 0))),
     result: normalizeResult(raw.result),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),

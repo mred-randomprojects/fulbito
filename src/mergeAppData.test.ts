@@ -13,6 +13,7 @@ function player(id: string, rating: number, updatedAt: string): Player {
     rating,
     roleRatings: {},
     attributes: {},
+    avoid: [],
     notes: "",
     updatedAt,
   };

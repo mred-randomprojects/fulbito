@@ -1,4 +1,4 @@
-import { Minus, Plus, Scale, TriangleAlert } from "lucide-react";
+import { HeartCrack, Minus, Plus, Scale, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formationsForSize, generateFormation, type Formation } from "@/lib/formations";
@@ -15,10 +15,20 @@ interface Props {
   handicap: number;
   formationA: Formation;
   formationB: Formation;
+  respectAvoids: boolean;
+  /** Pairs among tonight's squad that would rather not share a side. */
+  avoidPairsInSquad: number;
+  /**
+   * Whether anybody in the roster has recorded a preference at all. The switch
+   * hides itself until the first one exists — a control for a feature nobody in
+   * this group uses is just another thing to read past before kick-off.
+   */
+  anyAvoidsRecorded: boolean;
   onTeamChange: (team: "A" | "B", config: TeamConfig) => void;
   /** Each side is set on its own; the other one never moves behind your back. */
   onSizeChange: (team: "A" | "B", size: number) => void;
   onBasisChange: (basis: BalanceBasis) => void;
+  onRespectAvoidsChange: (respect: boolean) => void;
   onHandicapChange: (handicap: number) => void;
 }
 
@@ -34,9 +44,13 @@ export function MatchSetup({
   handicap,
   formationA,
   formationB,
+  respectAvoids,
+  avoidPairsInSquad,
+  anyAvoidsRecorded,
   onTeamChange,
   onSizeChange,
   onBasisChange,
+  onRespectAvoidsChange,
   onHandicapChange,
 }: Props) {
   const needed = sizeA + sizeB;
@@ -135,6 +149,32 @@ export function MatchSetup({
             : "Los dos promedian lo mismo. Si son disparejos en número, el que tiene más queda mejor en total."}
         </p>
       </div>
+
+      {anyAvoidsRecorded && (
+        <div>
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={respectAvoids}
+              onChange={(e) => onRespectAvoidsChange(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+            />
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                <HeartCrack className="h-3.5 w-3.5 shrink-0" />
+                Respetar las malas ondas
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                {avoidPairsInSquad === 0
+                  ? "Hoy no hay ningún cruce entre los que están anotados, así que no cambia nada."
+                  : respectAvoids
+                    ? `Hay ${avoidPairsInSquad} par${avoidPairsInSquad === 1 ? "" : "es"} que no se quieren cruzar. Se van a repartir en equipos distintos siempre que se pueda.`
+                    : `Hay ${avoidPairsInSquad} par${avoidPairsInSquad === 1 ? "" : "es"} que no se quieren cruzar, y los vas a repartir igual. Después no digas que no te avisamos.`}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       <div>
         <div className="mb-1.5 flex items-baseline justify-between gap-2">

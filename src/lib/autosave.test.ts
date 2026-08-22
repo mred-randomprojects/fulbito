@@ -168,6 +168,7 @@ function draft(fields: Partial<Player>): Player {
     rating: 6,
     roleRatings: {},
     attributes: {},
+    avoid: [],
     notes: "",
     updatedAt: "2026-08-22T00:00:00.000Z",
     ...fields,

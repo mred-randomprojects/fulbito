@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   CalendarDays,
   ChevronRight,
+  HeartCrack,
   Info,
   Lock,
   Share2,
@@ -23,6 +24,8 @@ import { ShareDialog } from "./ShareDialog";
 import { PlayerForm } from "./PlayerForm";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { evaluateLineup, findSplits, SplitError, type TeamEvaluation } from "@/lib/balance";
+import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
+import { computeStats } from "@/lib/stats";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import { formatMatchDate } from "@/lib/dates";
@@ -41,6 +44,8 @@ import { cn } from "@/lib/utils";
 interface Props {
   match: Match;
   players: Player[];
+  /** Every match, for the records shown on a player's profile. */
+  matches: Match[];
   onChange: (match: Match) => void;
   onDelete: () => void;
   onSavePlayer: (player: Player) => void;
@@ -56,6 +61,7 @@ type Selection =
 export function MatchBuilder({
   match,
   players,
+  matches,
   onChange,
   onDelete,
   onSavePlayer,
@@ -72,6 +78,21 @@ export function MatchBuilder({
 
   const playersById = useMemo(
     () => new Map(players.map((p) => [p.id, p])),
+    [players],
+  );
+
+  const statsById = useMemo(() => computeStats(matches), [matches]);
+
+  /**
+   * Who cannot share a side, closed symmetrically over the whole roster.
+   *
+   * Built from every player rather than only tonight's squad because it costs
+   * nothing and the squad changes with every tap; the search only ever looks up
+   * the people it is actually placing.
+   */
+  const avoidIndex = useMemo(() => buildAvoidIndex(players), [players]);
+  const anyAvoidsRecorded = useMemo(
+    () => players.some((p) => p.avoid.length > 0),
     [players],
   );
 
@@ -221,6 +242,7 @@ export function MatchBuilder({
         pins: match.pins,
         basis: match.basis,
         handicap: match.handicap,
+        avoid: match.respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
         optionCount: 6,
       });
       setOptions(result);
@@ -240,6 +262,8 @@ export function MatchBuilder({
     match.pins,
     match.basis,
     match.handicap,
+    match.respectAvoids,
+    avoidIndex,
     formationA,
     formationB,
     applyOption,
@@ -317,6 +341,38 @@ export function MatchBuilder({
     : null;
 
   const squadReady = match.squad.length >= 2;
+
+  const avoidPairsInSquad = useMemo(
+    () => conflictsWithin(avoidIndex, squadPlayers.map((p) => p.id)).length,
+    [avoidIndex, squadPlayers],
+  );
+
+  /**
+   * Pairs that ended up together anyway, read off the pitch rather than off the
+   * search result.
+   *
+   * Which is the point: the lineup can get here without a search — restored
+   * from storage, or hand-swapped afterwards — and a warning that only knew
+   * about the optimiser's output would stay quiet through exactly the edit that
+   * caused the problem.
+   */
+  const lineupConflicts = useMemo(() => {
+    if (!match.respectAvoids) return [];
+    const ids = (lineup: (Player | null)[]): PlayerId[] =>
+      lineup.filter((p): p is Player => p != null).map((p) => p.id);
+    return [
+      ...conflictsWithin(avoidIndex, ids(lineupA)),
+      ...conflictsWithin(avoidIndex, ids(lineupB)),
+    ];
+  }, [match.respectAvoids, avoidIndex, lineupA, lineupB]);
+
+  const nameOf = useCallback(
+    (id: PlayerId): string => {
+      const player = playersById.get(id);
+      return player === undefined ? "Alguien" : playerShortName(player);
+    },
+    [playersById],
+  );
 
   // With the two sides set independently they can stop adding up to the
   // headcount, which is fine while you are still fiddling — but the split
@@ -457,6 +513,24 @@ export function MatchBuilder({
               </p>
             )}
 
+            {/* Only ever appears when the split genuinely could not keep a pair
+                apart, or when someone put them together by hand. The optimiser
+                pays a hundred points a pair, so a solvable one never gets
+                here. */}
+            {lineupConflicts.length > 0 && (
+              <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                <HeartCrack className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  {/* Always plural: even one conflict is two people. */}
+                  {lineupConflicts
+                    .map(({ a, b }) => `${nameOf(a)} y ${nameOf(b)}`)
+                    .join(", ")}{" "}
+                  quedaron juntos, y no se bancan. Movelos a mano, o sacale el
+                  tilde a <em>respetar las malas ondas</em> si hoy da igual.
+                </span>
+              </p>
+            )}
+
             <Pitch
               tokens={tokens}
               labelB={
@@ -546,7 +620,11 @@ export function MatchBuilder({
                 patch(team === "A" ? { teamA: config } : { teamB: config })
               }
               onSizeChange={setSize}
+              respectAvoids={match.respectAvoids}
+              avoidPairsInSquad={avoidPairsInSquad}
+              anyAvoidsRecorded={anyAvoidsRecorded}
               onBasisChange={(basis) => patch({ basis })}
+              onRespectAvoidsChange={(respectAvoids) => patch({ respectAvoids })}
               onHandicapChange={(handicap) => patch({ handicap })}
             />
 
@@ -585,6 +663,8 @@ export function MatchBuilder({
       <PlayerForm
         open={addPlayerOpen}
         onOpenChange={setAddPlayerOpen}
+        roster={players}
+        statsById={statsById}
         onSave={(player) => {
           onSavePlayer(player);
           // The form saves itself as you type, so this runs on every edit and
