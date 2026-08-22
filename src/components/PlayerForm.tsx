@@ -87,15 +87,26 @@ export function PlayerForm({ open, onOpenChange, player, onSave, onDelete }: Pro
   const fileInput = useRef<HTMLInputElement>(null);
   const isNew = player === undefined;
 
-  // Re-seed whenever the dialog is opened for a different player.
-  const [seededFor, setSeededFor] = useState(player?.id ?? "new");
+  /**
+   * Re-seed every time the dialog opens, not only when it opens for a
+   * different player.
+   *
+   * The draft outlives the dialog, because the form stays mounted while
+   * closed. Keying the re-seed on the player alone meant "someone nuevo"
+   * twice in a row reused the first one's draft — same generated id and all —
+   * so the second save quietly edited the first player instead of adding a
+   * second one.
+   */
   const key = player?.id ?? "new";
-  if (open && seededFor !== key) {
-    setSeededFor(key);
-    setDraft(player ?? blankPlayer());
-    setShowRoles(Object.keys(player?.roleRatings ?? {}).length > 0);
-    setShowAttributes(Object.keys(player?.attributes ?? {}).length > 0);
-    setImageError(null);
+  const [seededFor, setSeededFor] = useState<string | null>(open ? key : null);
+  if (open ? seededFor !== key : seededFor !== null) {
+    setSeededFor(open ? key : null);
+    if (open) {
+      setDraft(player ?? blankPlayer());
+      setShowRoles(Object.keys(player?.roleRatings ?? {}).length > 0);
+      setShowAttributes(Object.keys(player?.attributes ?? {}).length > 0);
+      setImageError(null);
+    }
   }
 
   const update = (patch: Partial<Player>) => setDraft((prev) => ({ ...prev, ...patch }));
