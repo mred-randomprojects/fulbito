@@ -30,6 +30,22 @@ const SLIGHT = 0.15;
 const CLEAR = 0.45;
 const LOPSIDED = 0.9;
 
+/**
+ * The word for a gap of this size, in rating points per player.
+ *
+ * Split out from `summarise` so a game with more than two teams can use the
+ * same vocabulary: there the gap is the widest one between any two sides, and
+ * there is no "favoured" to report, but "parejísimo" has to mean the same
+ * thing on both screens or the two stop being comparable.
+ */
+export function verdictFor(deviation: number): Verdict {
+  const gap = Math.abs(deviation);
+  if (gap >= LOPSIDED) return "lopsided";
+  if (gap >= CLEAR) return "clear";
+  if (gap >= SLIGHT) return "slight";
+  return "even";
+}
+
 export function summarise(
   a: TeamEvaluation,
   b: TeamEvaluation,
@@ -41,14 +57,9 @@ export function summarise(
   // that lands on target reads as a success rather than as an imbalance.
   const deviation = Math.abs(edge - handicap);
 
-  let verdict: Verdict = "even";
-  if (deviation >= LOPSIDED) verdict = "lopsided";
-  else if (deviation >= CLEAR) verdict = "clear";
-  else if (deviation >= SLIGHT) verdict = "slight";
-
   return {
     edge,
-    verdict,
+    verdict: verdictFor(deviation),
     favoured: deviation < SLIGHT ? null : edge > handicap ? "A" : "B",
     fairness: Math.round(Math.max(0, 1 - deviation / LOPSIDED) * 100),
     confidence: (a.confidence + b.confidence) / 2,
@@ -252,4 +263,18 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   slight: "Leve ventaja",
   clear: "Ventaja clara",
   lopsided: "Está afanado",
+};
+
+/**
+ * The same verdicts, said about a whole split rather than about one side.
+ *
+ * "Leve ventaja" is exactly right above a scoreboard with two teams on it and
+ * meaningless above four — ventaja for whom? These talk about the gap instead
+ * of about a favourite, which is the only thing that survives past two teams.
+ */
+export const SPLIT_VERDICT_LABEL: Record<Verdict, string> = {
+  even: "Parejísimo",
+  slight: "Bastante parejo",
+  clear: "Hay uno más fuerte",
+  lopsided: "Quedó desparejo",
 };

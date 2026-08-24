@@ -43,7 +43,7 @@ function roleFit(player: Player, role: Role): number {
 }
 
 /** Rough operation count of assigning `k` players to `k` slots. */
-function assignmentCost(k: number): number {
+export function assignmentCost(k: number): number {
   if (k <= 1) return 1;
   return k > MAX_EXACT_ASSIGNMENT ? k * k * Math.log2(k) : k * 2 ** k;
 }
