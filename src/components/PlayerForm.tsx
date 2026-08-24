@@ -31,6 +31,15 @@ import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
 import { listedBy } from "@/lib/avoid";
 import {
+  addTag,
+  hasTag,
+  removeTag,
+  rosterTags,
+  MAX_TAGS,
+  MAX_TAG_LENGTH,
+  type TagCount,
+} from "@/lib/tags";
+import {
   describeRecord,
   describeStreak,
   emptyStats,
@@ -86,6 +95,7 @@ function blankPlayer(): Player {
     roleRatings: {},
     attributes: {},
     avoid: [],
+    tags: [],
     notes: "",
     updatedAt: new Date().toISOString(),
   };
@@ -322,6 +332,19 @@ export function PlayerForm({
     }));
   };
 
+  const addTagToDraft = (raw: string) =>
+    setDraft((prev) => ({ ...prev, tags: addTag(prev.tags, raw) }));
+
+  const removeTagFromDraft = (raw: string) =>
+    setDraft((prev) => ({ ...prev, tags: removeTag(prev.tags, raw) }));
+
+  // What the rest of the plantel already calls its groups, minus whatever this
+  // player carries already. Offering them first is the only thing keeping
+  // "Laburo" and "laburo" and "el laburo" from becoming three groups.
+  const tagSuggestions = rosterTags(roster).filter(
+    (tag) => !hasTag(draft.tags, tag.key),
+  );
+
   const roleCount = Object.keys(draft.roleRatings).length;
   const attributeCount = Object.keys(draft.attributes).length;
 
@@ -474,6 +497,13 @@ export function PlayerForm({
               </div>
             </div>
           </div>
+
+          <TagPicker
+            tags={draft.tags}
+            suggestions={tagSuggestions}
+            onAdd={addTagToDraft}
+            onRemove={removeTagFromDraft}
+          />
 
           <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
             <RatingControl
@@ -710,6 +740,116 @@ function Stat({ label, value }: { label: string; value: number | string }) {
       <dt className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
+    </div>
+  );
+}
+
+/**
+ * The groups a player belongs to.
+ *
+ * Inline rather than behind a disclosure like the puestos and the atributos,
+ * and for the opposite reason: those are for the two or three people you have
+ * a real opinion about, while a group only earns its keep once most of the
+ * plantel carries one. A tap saved thirty times over is worth the four lines
+ * of room.
+ */
+function TagPicker({
+  tags,
+  suggestions,
+  onAdd,
+  onRemove,
+}: {
+  tags: string[];
+  suggestions: TagCount[];
+  onAdd: (raw: string) => void;
+  onRemove: (raw: string) => void;
+}) {
+  const [entry, setEntry] = useState("");
+  const full = tags.length >= MAX_TAGS;
+
+  const commit = () => {
+    if (entry.trim() === "") return;
+    onAdd(entry);
+    setEntry("");
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="tag">Grupos</Label>
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 py-1 pl-2.5 pr-1 text-xs font-medium text-primary"
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={() => onRemove(tag)}
+                aria-label={`Sacarlo de ${tag}`}
+                className="rounded-full p-0.5 text-primary/70 transition-colors hover:bg-primary/20 hover:text-primary"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Input
+          id="tag"
+          value={entry}
+          maxLength={MAX_TAG_LENGTH}
+          disabled={full}
+          placeholder={
+            full ? "Ya tiene todos los que entran" : "Laburo, barrio, los del sábado…"
+          }
+          onChange={(e) => setEntry(e.target.value)}
+          // Enter in here means "agregá este", not "cerrá la ficha" — which is
+          // what it would mean the moment the event reached the form above.
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            commit();
+          }}
+          // And typing one, then reaching straight for Listo, means the same
+          // thing. Losing it because it was still in the box would be the kind
+          // of silent discard this app does not do anywhere else.
+          onBlur={commit}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={commit}
+          disabled={full || entry.trim() === ""}
+        >
+          Agregar
+        </Button>
+      </div>
+
+      {!full && suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground">Ya tenés:</span>
+          {suggestions.map((tag) => (
+            <button
+              key={tag.key}
+              type="button"
+              onClick={() => onAdd(tag.label)}
+              className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+            >
+              {tag.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Para partir el plantel: el laburo, el barrio, los del sábado. Después
+        filtrás por grupo y anotás a todos de una.
+      </p>
     </div>
   );
 }

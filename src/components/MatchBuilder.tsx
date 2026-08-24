@@ -29,6 +29,7 @@ import { computeStats } from "@/lib/stats";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import { formatMatchDate } from "@/lib/dates";
+import { useTagFilter } from "@/useTagFilter";
 import {
   KITS,
   ROLE_SHORT,
@@ -142,14 +143,31 @@ export function MatchBuilder({
     [match, onChange],
   );
 
-  const toggleSquad = useCallback(
-    (id: PlayerId) => {
-      const inSquad = match.squad.includes(id);
-      const squad = inSquad
-        ? match.squad.filter((entry) => entry !== id)
-        : [...match.squad, id];
+  const tagFilter = useTagFilter(players);
+
+  /**
+   * Anota, or desanota, a batch of players at once.
+   *
+   * One implementation rather than one for the tap and another for "Todos",
+   * because the fiddly part is not the squad list: it is everything that has
+   * to be let go of on the way out. Somebody taken off the list loses their
+   * pin and their slot on the pitch, and a version of this that forgot either
+   * would leave a lineup quietly holding a player who is not playing.
+   */
+  const setSquadMembership = useCallback(
+    (ids: readonly PlayerId[], playing: boolean) => {
+      const touched = new Set(ids);
+      const squad = playing
+        ? [...match.squad, ...ids.filter((id) => !match.squad.includes(id))]
+        : match.squad.filter((id) => !touched.has(id));
+
       const pins = { ...match.pins };
-      if (inSquad) delete pins[id];
+      if (!playing) for (const id of ids) delete pins[id];
+
+      const drop = (lineup: (PlayerId | null)[]) =>
+        playing
+          ? lineup
+          : lineup.map((entry) => (entry != null && touched.has(entry) ? null : entry));
 
       // Sizes always mirror the squad, splitting an odd number as evenly as
       // possible. The user can pull them apart afterwards.
@@ -161,12 +179,17 @@ export function MatchBuilder({
         pins,
         sizeA,
         sizeB,
-        lineupA: match.lineupA.map((entry) => (entry === id && inSquad ? null : entry)),
-        lineupB: match.lineupB.map((entry) => (entry === id && inSquad ? null : entry)),
+        lineupA: drop(match.lineupA),
+        lineupB: drop(match.lineupB),
       });
       setSelection(null);
     },
     [match, patch],
+  );
+
+  const toggleSquad = useCallback(
+    (id: PlayerId) => setSquadMembership([id], !match.squad.includes(id)),
+    [match.squad, setSquadMembership],
   );
 
   const cycleLock = useCallback(
@@ -210,6 +233,29 @@ export function MatchBuilder({
     [patch],
   );
 
+  const selectAll = useCallback(
+    (ids: PlayerId[]) => setSquadMembership(ids, true),
+    [setSquadMembership],
+  );
+
+  /**
+   * The ones on screen, plus anybody the roster no longer has.
+   *
+   * Deleting a player leaves their id in the squads of old matches on purpose
+   * — see `removePlayer` — and the list simply skips it. But it is still
+   * counted in "N anotados" and in the sizes the two teams are asked for, and
+   * there is no row to untick, so this is the only place it can ever be let
+   * go of. Anywhere else it would be an anotado nobody can get rid of.
+   */
+  const clearSquad = useCallback(
+    (ids: PlayerId[]) =>
+      setSquadMembership(
+        [...ids, ...match.squad.filter((id) => !playersById.has(id))],
+        false,
+      ),
+    [match.squad, playersById, setSquadMembership],
+  );
+
   /**
    * Runs the search synchronously.
    *
@@ -219,17 +265,6 @@ export function MatchBuilder({
    * failure mode that is much worse than a brief pause: a callback that never
    * fires because the browser backgrounded the tab, leaving the button dead.
    */
-  const selectAll = useCallback(() => {
-    const squad = players.map((p) => p.id);
-    const sizeA = Math.floor(squad.length / 2);
-    patch({ squad, sizeA, sizeB: squad.length - sizeA });
-  }, [players, patch]);
-
-  const clearSquad = useCallback(
-    () => patch({ squad: [], pins: {}, sizeA: 0, sizeB: 0, lineupA: [], lineupB: [] }),
-    [patch],
-  );
-
   const balance = useCallback(() => {
     setBalanceError(null);
     try {
@@ -450,6 +485,7 @@ export function MatchBuilder({
             onCycleLock={cycleLock}
             onSelectAll={selectAll}
             onClear={clearSquad}
+            tagFilter={tagFilter}
             onAddPlayer={() => setAddPlayerOpen(true)}
           />
         </div>
@@ -609,6 +645,7 @@ export function MatchBuilder({
               onCycleLock={cycleLock}
               onSelectAll={selectAll}
               onClear={clearSquad}
+              tagFilter={tagFilter}
               onAddPlayer={() => setAddPlayerOpen(true)}
             />
 

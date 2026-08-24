@@ -70,9 +70,13 @@ enters the app without going through `normalizeAppData` — a hand-edited
 
 - **`Player`** — name, nickname, avatar (a data URL, centre-cropped and
   re-encoded on upload), one required `rating`, optional `roleRatings` and
-  `attributes`, `avoid`, notes, `updatedAt`.
+  `attributes`, `avoid`, `tags`, notes, `updatedAt`.
 - **`Player.avoid`** — ids this player would rather not share a side with,
   stored only on whoever said it and read as symmetric. See `lib/avoid.ts`.
+- **`Player.tags`** — which crews this player belongs to: the laburo, the
+  barrio, the ones who only turn up in summer. Free text, at most eight, and
+  read by exactly one thing — the filter above the roster and above the squad
+  list. See `lib/tags.ts`.
 - **`Match`** — name, date, the two `TeamConfig`s, the squad, pins, sizes, the
   two lineups (slot → player), balance basis, `respectAvoids`, handicap,
   `result`, `updatedAt`.
@@ -94,6 +98,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
+| `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
 | `lib/insights.ts` | Turning two team evaluations into the sentences a person would say |
 | `lib/result.ts` | Reading a typed-in scoreline, and how lopsided the game was |
@@ -109,11 +114,17 @@ before each save, and a corrupt-blob stash that loading falls back through.
 Screens: `MatchesPage` (the list), `MatchBuilder` (the one big screen — squad,
 pitch, setup, insights, result), `SplitPage` (Repartir: one squad into up to
 eight teams), `PlayersPage` + `PlayerForm` (the roster, each player's record,
-and who they will not play with), `SettingsPage` (backup, storage use,
+which crews they belong to, and who they will not play with), `SettingsPage` (backup, storage use,
 rubrics). `SaveIndicator` floats over all of them. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.
+
+`TagFilter` is the row of crew chips above the roster and above the squad list;
+`useTagFilter` holds the ticks. The screen owns that state, not the list —
+`MatchBuilder` renders a different `SquadPicker` element once the squad reaches
+two, and a filter living inside the list would be thrown away on the second
+tap.
 
 ### Repartir, and why it is not a match
 
@@ -161,6 +172,17 @@ again tonight.
   still returns the least-bad answer when three people all avoid each other.
   A pin beats it: locks are the hard constraint, and the screen says so when a
   pair ends up together anyway.
+- **A filter is a view, never a fact.** Nothing about tags is stored beyond
+  the labels on the players. The ticked chips die with the screen, and a tick
+  pointing at a tag whose last carrier just lost it stops filtering rather than
+  emptying the list — `liveSelection` derives that on every render instead of
+  trying to clean the state up afterwards. An app that came back up hiding two
+  thirds of the plantel because of a tap three weeks ago would look broken, and
+  the switch would be somewhere nobody is looking.
+- **"Todos" means the ones you can see.** `SquadPicker` hands its parent the
+  visible ids, so a list narrowed to the eight from the laburo anota eight.
+  With nothing typed and no chip ticked the visible list *is* the plantel,
+  which is what the button always used to mean.
 - **English keys, Spanish screens.** `Role` keys and every stored field name
   are English because they are persisted and exported. Only what reaches a
   screen is translated, and it is translated inline.

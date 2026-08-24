@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
+import { useTagFilter } from "@/useTagFilter";
 import { SplitError } from "@/lib/balance";
 import {
   findGroupSplits,
@@ -80,6 +81,9 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const statsById = useMemo(() => computeStats(matches), [matches]);
   const avoidIndex = useMemo(() => buildAvoidIndex(players), [players]);
+  // Named for what it narrows, because `tags` down here is already the colours
+  // the teams wear.
+  const squadFilter = useTagFilter(players);
 
   const squadPlayers = useMemo(
     () =>
@@ -518,8 +522,19 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
             lockedTo={lockedTo}
             onToggle={toggleSquad}
             onCycleLock={cycleLock}
-            onSelectAll={() => reshape(players.map((p) => p.id), setup.teams)}
-            onClear={() => reshape([], setup.teams)}
+            onSelectAll={(ids) =>
+              reshape(
+                [...setup.squad, ...ids.filter((id) => !setup.squad.includes(id))],
+                setup.teams,
+              )
+            }
+            onClear={(ids) =>
+              reshape(
+                setup.squad.filter((id) => !ids.includes(id)),
+                setup.teams,
+              )
+            }
+            tagFilter={squadFilter}
             onAddPlayer={() => setAddPlayerOpen(true)}
           />
         </div>

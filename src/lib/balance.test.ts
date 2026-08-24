@@ -30,6 +30,7 @@ function player(
     roleRatings: {},
     attributes: {},
     avoid: [],
+    tags: [],
     notes: "",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...extras,

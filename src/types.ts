@@ -7,6 +7,8 @@
  * built to degrade gracefully as data thins out rather than to demand it.
  */
 
+import { normalizeTagList } from "./lib/tags.js";
+
 export type PlayerId = string & { readonly __brand: "PlayerId" };
 export type MatchId = string & { readonly __brand: "MatchId" };
 
@@ -92,6 +94,13 @@ export interface Player {
    * See `lib/avoid.ts`, which is the only thing that reads this.
    */
   avoid: PlayerId[];
+  /**
+   * Which crews this player belongs to: the laburo, the barrio, the ones who
+   * only turn up in summer. Free text, no fixed vocabulary, and read by
+   * exactly one thing — the filter on the roster and on the squad list. See
+   * `lib/tags.ts`.
+   */
+  tags: string[];
   notes: string;
   updatedAt: string;
 }
@@ -381,6 +390,7 @@ function normalizePlayer(raw: unknown): Player | null {
     roleRatings: normalizeRoleRatings(raw.roleRatings),
     attributes: normalizeAttributes(raw.attributes),
     avoid: normalizeAvoid(raw.avoid, id),
+    tags: normalizeTagList(strArray(raw.tags)),
     notes: str(raw.notes),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };

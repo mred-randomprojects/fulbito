@@ -46,6 +46,12 @@ Runs entirely in the browser. No account, no backend, nothing to sign up for.
   player's won/drawn/lost tally, their goal difference, their last five, and
   the run they are on. Nothing is stored on the player: it is read back off the
   matches every time, so fixing a scoreline fixes the record.
+- **Groups, for a plantel bigger than one game.** Tag a player with the crews
+  they belong to — the laburo, the barrio, the ones who only turn up in
+  summer — and the chips above the roster and above the squad list narrow it to
+  them. Ticking a group and hitting "Todos" anota that whole crew, and nothing
+  else. Two spellings of the same word are one group; the tilde is the
+  exception, because that one is a different letter.
 - **The two who cannot be on the same team.** Tick it once on either profile —
   it counts from both sides, so nobody has to be told they were named — and the
   split sends them to opposite teams. One checkbox on the match turns it off
@@ -103,7 +109,7 @@ and leaves the machine only when you export it.
 
 ```bash
 npm run build   # typecheck + production build
-npm test        # rating, balancing, avoid pairs, records, formations, merge, …
+npm test        # rating, balancing, avoid pairs, records, tags, formations, merge, …
 npm run lint
 ```
 

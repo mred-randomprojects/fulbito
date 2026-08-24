@@ -41,6 +41,8 @@
     "src/lib/avoid.test.ts",
     "src/lib/stats.ts",
     "src/lib/stats.test.ts",
+    "src/lib/tags.ts",
+    "src/lib/tags.test.ts",
     "src/types.test.ts"
   ]
 }

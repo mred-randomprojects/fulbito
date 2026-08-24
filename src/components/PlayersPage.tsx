@@ -4,8 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
+import { PlayerTags, TagFilter } from "./TagFilter";
 import { detailLevel, naturalRole } from "@/lib/rating";
 import { computeStats, emptyStats, winPercent, type PlayerStats } from "@/lib/stats";
+import { matchesTags } from "@/lib/tags";
+import { useTagFilter } from "@/useTagFilter";
 import {
   ROLE_SHORT,
   playerDisplayName,
@@ -28,6 +31,7 @@ type SortKey = "name" | "rating" | "record" | "detail";
 export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("name");
+  const tagFilter = useTagFilter(players);
   const [editing, setEditing] = useState<Player | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
 
@@ -35,14 +39,14 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered =
-      needle === ""
-        ? players
-        : players.filter((player) =>
-            `${player.firstName} ${player.lastName} ${player.nickname}`
-              .toLowerCase()
-              .includes(needle),
-          );
+    const filtered = players.filter(
+      (player) =>
+        matchesTags(player, tagFilter.selected) &&
+        (needle === "" ||
+          `${player.firstName} ${player.lastName} ${player.nickname}`
+            .toLowerCase()
+            .includes(needle)),
+    );
     const sorted = [...filtered];
     if (sort === "rating") sorted.sort((a, b) => b.rating - a.rating);
     else if (sort === "record") {
@@ -62,7 +66,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
       );
     }
     return sorted;
-  }, [players, query, sort, statsById]);
+  }, [players, query, sort, statsById, tagFilter.selected]);
 
   const openNew = () => {
     setEditing(undefined);
@@ -82,7 +86,9 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
           <p className="text-sm text-muted-foreground">
             {players.length === 0
               ? "Acá va tu plantel."
-              : `${players.length} en el plantel.`}
+              : visible.length === players.length
+                ? `${players.length} en el plantel.`
+                : `${visible.length} de ${players.length} en el plantel.`}
           </p>
         </div>
         <Button onClick={openNew}>
@@ -129,11 +135,22 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
         </div>
       )}
 
+      {players.length > 0 && (
+        <TagFilter
+          tags={tagFilter.tags}
+          selected={tagFilter.selected}
+          onToggle={tagFilter.toggle}
+          onClear={tagFilter.clear}
+        />
+      )}
+
       {players.length === 0 ? (
         <EmptyRoster onAdd={openNew} />
       ) : visible.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          No hay nadie que se llame así.
+          {tagFilter.selected.size > 0 && query.trim() === ""
+            ? "No hay nadie en ese grupo."
+            : "No hay nadie que se llame así."}
         </p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
@@ -210,6 +227,7 @@ function PlayerRow({
             </>
           )}
         </p>
+        <PlayerTags tags={player.tags} className="mt-1" />
       </div>
       <div className="flex flex-col items-end">
         <span className="tabular text-lg font-semibold leading-none">

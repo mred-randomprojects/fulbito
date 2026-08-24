@@ -3,6 +3,9 @@ import { Check, Lock, Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
+import { TagFilter } from "./TagFilter";
+import { matchesTags } from "@/lib/tags";
+import type { TagFilterState } from "@/useTagFilter";
 import { playerDisplayName, type Player, type PlayerId } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -29,8 +32,27 @@ interface Props {
   lockedTo: (id: PlayerId) => LockTarget | null;
   onToggle: (id: PlayerId) => void;
   onCycleLock: (id: PlayerId) => void;
-  onSelectAll: () => void;
-  onClear: () => void;
+  /**
+   * Anota, or desanota, everyone currently on screen.
+   *
+   * The visible ids rather than the whole plantel, because a filter that
+   * narrowed the list to the eight from the laburo and then a "Todos" that
+   * quietly anotó all twenty-four would be a trap. With nothing typed and no
+   * group ticked the visible list *is* the plantel, which is what it always
+   * used to mean.
+   */
+  onSelectAll: (ids: PlayerId[]) => void;
+  onClear: (ids: PlayerId[]) => void;
+  /**
+   * Which groups the list is narrowed to.
+   *
+   * Owned by the screen rather than by this list, because the match screen
+   * swaps one of these for another the moment the squad reaches two people —
+   * a different element in a different branch, so React remounts it. A filter
+   * that lived in here would be thrown away on the second tap, which is
+   * exactly halfway through anotando a group.
+   */
+  tagFilter: TagFilterState;
   onAddPlayer: () => void;
 }
 
@@ -49,6 +71,7 @@ export function SquadPicker({
   onCycleLock,
   onSelectAll,
   onClear,
+  tagFilter,
   onAddPlayer,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -56,14 +79,14 @@ export function SquadPicker({
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered =
-      needle === ""
-        ? players
-        : players.filter((player) =>
-            `${player.firstName} ${player.lastName} ${player.nickname}`
-              .toLowerCase()
-              .includes(needle),
-          );
+    const filtered = players.filter(
+      (player) =>
+        matchesTags(player, tagFilter.selected) &&
+        (needle === "" ||
+          `${player.firstName} ${player.lastName} ${player.nickname}`
+            .toLowerCase()
+            .includes(needle)),
+    );
     // Everyone playing floats to the top, so the list stays useful as it grows.
     return [...filtered].sort((a, b) => {
       const inA = squadSet.has(a.id) ? 0 : 1;
@@ -71,7 +94,19 @@ export function SquadPicker({
       if (inA !== inB) return inA - inB;
       return playerDisplayName(a).localeCompare(playerDisplayName(b));
     });
-  }, [players, query, squadSet]);
+  }, [players, query, squadSet, tagFilter.selected]);
+
+  /**
+   * Is the list showing less than the whole plantel?
+   *
+   * When it is, the two buttons carry the count of what they are about to do,
+   * because "Todos" over eight of twenty-four people is not the same promise
+   * as "Todos" over everybody, and the difference has to be readable without
+   * hovering anything.
+   */
+  const narrowed = visible.length !== players.length;
+  const visibleIds = useMemo(() => visible.map((player) => player.id), [visible]);
+  const visibleInSquad = visible.filter((player) => squadSet.has(player.id)).length;
 
   return (
     <div className="rounded-xl border border-border bg-card">
@@ -83,16 +118,26 @@ export function SquadPicker({
           </span>
         </h3>
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={onSelectAll}>
-            Todos
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onSelectAll(visibleIds)}
+            disabled={visible.length === 0}
+          >
+            {narrowed ? `Todos (${visible.length})` : "Todos"}
           </Button>
-          <Button variant="ghost" size="sm" onClick={onClear} disabled={squad.length === 0}>
-            Ninguno
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onClear(visibleIds)}
+            disabled={narrowed ? visibleInSquad === 0 : squad.length === 0}
+          >
+            {narrowed ? `Ninguno (${visibleInSquad})` : "Ninguno"}
           </Button>
         </div>
       </div>
 
-      <div className="border-b border-border p-3">
+      <div className="space-y-2.5 border-b border-border p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -102,6 +147,12 @@ export function SquadPicker({
             className="pl-9"
           />
         </div>
+        <TagFilter
+          tags={tagFilter.tags}
+          selected={tagFilter.selected}
+          onToggle={tagFilter.toggle}
+          onClear={tagFilter.clear}
+        />
       </div>
 
       <ul className="max-h-[420px] overflow-y-auto p-2">
@@ -174,7 +225,9 @@ export function SquadPicker({
           <li className="px-2 py-8 text-center text-sm text-muted-foreground">
             {players.length === 0
               ? "Todavía no hay nadie en el plantel."
-              : "No hay nadie que se llame así."}
+              : tagFilter.selected.size > 0 && query.trim() === ""
+                ? "No hay nadie en ese grupo."
+                : "No hay nadie que se llame así."}
           </li>
         )}
       </ul>

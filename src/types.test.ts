@@ -41,6 +41,39 @@ describe("normalizing avoid lists", () => {
   });
 });
 
+describe("normalizing tags", () => {
+  it("defaults to none", () => {
+    // A backup written before tags existed still loads, with nobody tagged.
+    assert.deepEqual(withPlayer({}).tags, []);
+  });
+
+  it("keeps the labels as they were typed", () => {
+    assert.deepEqual(withPlayer({ tags: ["Laburo", "Barrio"] }).tags, [
+      "Laburo",
+      "Barrio",
+    ]);
+  });
+
+  it("throws away anything that is not a label", () => {
+    assert.deepEqual(withPlayer({ tags: ["Laburo", 7, null, "  "] }).tags, ["Laburo"]);
+    assert.deepEqual(withPlayer({ tags: "Laburo" }).tags, []);
+  });
+
+  it("says the same tag once, however it was spelled", () => {
+    assert.deepEqual(withPlayer({ tags: ["Laburo", "LABURO"] }).tags, ["Laburo"]);
+  });
+
+  it("refuses a label long enough to break a row", () => {
+    const [tag] = withPlayer({ tags: ["x".repeat(400)] }).tags;
+    assert.equal(tag.length, 24);
+  });
+
+  it("refuses a hand-edited blob with a hundred tags on one player", () => {
+    const many = Array.from({ length: 100 }, (_, i) => `g${i}`);
+    assert.equal(withPlayer({ tags: many }).tags.length, 8);
+  });
+});
+
 describe("normalizing respectAvoids", () => {
   it("honours the preference on a match saved before the setting existed", () => {
     // Somebody who wrote down that two people do not mix meant it for every
