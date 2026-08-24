@@ -3,15 +3,30 @@ import { Check, Lock, Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
-import { KITS, playerDisplayName, type Player, type PlayerId, type TeamConfig, type TeamKey } from "@/types";
+import { playerDisplayName, type Player, type PlayerId } from "@/types";
 import { cn } from "@/lib/utils";
+
+/**
+ * The team a player is locked to, described rather than named.
+ *
+ * The picker deliberately knows nothing about *which* teams exist: on the match
+ * screen there are two of them wearing kits, on the Repartir screen there are
+ * up to eight wearing numbers. Handing it a colour and a label keeps one list
+ * serving both instead of teaching it to count.
+ */
+export interface LockTarget {
+  name: string;
+  /** Chip background. */
+  fill: string;
+  /** Text colour that reads on `fill`. */
+  text: string;
+}
 
 interface Props {
   players: Player[];
   squad: PlayerId[];
-  pins: Partial<Record<PlayerId, TeamKey>>;
-  teamA: TeamConfig;
-  teamB: TeamConfig;
+  /** Where a player is locked, or null when they are up for grabs. */
+  lockedTo: (id: PlayerId) => LockTarget | null;
   onToggle: (id: PlayerId) => void;
   onCycleLock: (id: PlayerId) => void;
   onSelectAll: () => void;
@@ -29,9 +44,7 @@ interface Props {
 export function SquadPicker({
   players,
   squad,
-  pins,
-  teamA,
-  teamB,
+  lockedTo,
   onToggle,
   onCycleLock,
   onSelectAll,
@@ -94,9 +107,7 @@ export function SquadPicker({
       <ul className="max-h-[420px] overflow-y-auto p-2">
         {visible.map((player) => {
           const playing = squadSet.has(player.id);
-          const pin = pins[player.id];
-          const pinKit = pin === "A" ? KITS[teamA.kit] : pin === "B" ? KITS[teamB.kit] : null;
-          const pinName = pin === "A" ? teamA.name : pin === "B" ? teamB.name : null;
+          const lock = lockedTo(player.id);
 
           return (
             <li key={player.id} className="flex items-center gap-1">
@@ -123,12 +134,12 @@ export function SquadPicker({
                   <span className="block truncate text-sm">
                     {playerDisplayName(player)}
                   </span>
-                  {pinName != null && (
+                  {lock != null && (
                     <span
                       className="block truncate text-[11px]"
-                      style={{ color: pinKit?.fill }}
+                      style={{ color: lock.fill }}
                     >
-                      fijado a {pinName}
+                      fijado a {lock.name}
                     </span>
                   )}
                 </span>
@@ -141,21 +152,17 @@ export function SquadPicker({
                 onClick={() => onCycleLock(player.id)}
                 disabled={!playing}
                 title={
-                  pin == null
+                  lock == null
                     ? "Fijarlo a un equipo"
-                    : `Fijado a ${pinName} — tocá para cambiar`
+                    : `Fijado a ${lock.name} — tocá para cambiar`
                 }
                 className={cn(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-25",
-                  pin == null
+                  lock == null
                     ? "border-border text-muted-foreground hover:bg-accent"
                     : "border-transparent",
                 )}
-                style={
-                  pinKit != null
-                    ? { background: pinKit.fill, color: pinKit.text }
-                    : undefined
-                }
+                style={lock != null ? { background: lock.fill, color: lock.text } : undefined}
               >
                 <Lock className="h-3.5 w-3.5" />
               </button>

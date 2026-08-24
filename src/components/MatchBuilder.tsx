@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Pitch, type PitchToken } from "./Pitch";
 import { MatchSetup } from "./MatchSetup";
 import { ResultPanel } from "./ResultPanel";
-import { SquadPicker } from "./SquadPicker";
+import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { TeamInsights } from "./TeamInsights";
 import { ShareDialog } from "./ShareDialog";
 import { PlayerForm } from "./PlayerForm";
@@ -366,6 +366,18 @@ export function MatchBuilder({
     ];
   }, [match.respectAvoids, avoidIndex, lineupA, lineupB]);
 
+  /** The kit of the side a player is pinned to, for the squad list to colour. */
+  const lockedTo = useCallback(
+    (id: PlayerId): LockTarget | null => {
+      const pin = match.pins[id];
+      if (pin == null) return null;
+      const config = pin === "A" ? match.teamA : match.teamB;
+      const kit = KITS[config.kit];
+      return { name: config.name, fill: kit.fill, text: kit.text };
+    },
+    [match.pins, match.teamA, match.teamB],
+  );
+
   const nameOf = useCallback(
     (id: PlayerId): string => {
       const player = playersById.get(id);
@@ -433,9 +445,7 @@ export function MatchBuilder({
           <SquadPicker
             players={players}
             squad={match.squad}
-            pins={match.pins}
-            teamA={match.teamA}
-            teamB={match.teamB}
+            lockedTo={lockedTo}
             onToggle={toggleSquad}
             onCycleLock={cycleLock}
             onSelectAll={selectAll}
@@ -564,9 +574,7 @@ export function MatchBuilder({
                 players={unassigned}
                 selection={selection}
                 onSelect={(id) => handleSelect({ where: "unassigned", id })}
-                pins={match.pins}
-                teamA={match.teamA}
-                teamB={match.teamB}
+                lockedTo={lockedTo}
               />
             )}
 
@@ -596,9 +604,7 @@ export function MatchBuilder({
             <SquadPicker
               players={players}
               squad={match.squad}
-              pins={match.pins}
-              teamA={match.teamA}
-              teamB={match.teamB}
+              lockedTo={lockedTo}
               onToggle={toggleSquad}
               onCycleLock={cycleLock}
               onSelectAll={selectAll}
@@ -833,16 +839,12 @@ function UnassignedStrip({
   players,
   selection,
   onSelect,
-  pins,
-  teamA,
-  teamB,
+  lockedTo,
 }: {
   players: Player[];
   selection: Selection | null;
   onSelect: (id: PlayerId) => void;
-  pins: Partial<Record<PlayerId, TeamKey>>;
-  teamA: TeamConfig;
-  teamB: TeamConfig;
+  lockedTo: (id: PlayerId) => LockTarget | null;
 }) {
   return (
     <div className="rounded-xl border border-dashed border-border bg-card/40 p-3">
@@ -854,8 +856,7 @@ function UnassignedStrip({
         {players.map((player) => {
           const selected =
             selection?.where === "unassigned" && selection.id === player.id;
-          const pin = pins[player.id];
-          const kit = pin === "A" ? KITS[teamA.kit] : pin === "B" ? KITS[teamB.kit] : null;
+          const lock = lockedTo(player.id);
           return (
             <li key={player.id}>
               <button
@@ -871,13 +872,13 @@ function UnassignedStrip({
                 <PlayerAvatar
                   player={player}
                   size={24}
-                  ring={kit?.fill}
+                  ring={lock?.fill}
                   ringWidth={2}
                 />
                 <span className="max-w-[110px] truncate">
                   {playerShortName(player)}
                 </span>
-                {pin != null && <Lock className="h-3 w-3 text-muted-foreground" />}
+                {lock != null && <Lock className="h-3 w-3 text-muted-foreground" />}
               </button>
             </li>
           );
