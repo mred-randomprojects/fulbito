@@ -14,7 +14,8 @@ is exactly the cost this file exists to remove.
 
 A team picker for pickup football. You rate your mates once, tick who turned
 up, and it works out the fairest split of the sides in the thirty seconds
-before kick-off. Then you record how it actually ended.
+before kick-off. Then you record how it actually ended. When more people turn
+up than two teams can hold, a second screen splits them into several.
 
 Three constraints shape every decision here:
 
@@ -89,7 +90,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | Module | What it decides |
 | --- | --- |
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
-| `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad |
+| `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
+| `lib/groups.ts` | The fairest way to cut a squad into three or more teams |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
@@ -105,9 +107,29 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 
 Screens: `MatchesPage` (the list), `MatchBuilder` (the one big screen — squad,
-pitch, setup, insights, result), `PlayersPage` + `PlayerForm` (the roster, each
-player's record, and who they will not play with), `SettingsPage` (backup,
-storage use, rubrics). `SaveIndicator` floats over all of them.
+pitch, setup, insights, result), `SplitPage` (Repartir: one squad into up to
+eight teams), `PlayersPage` + `PlayerForm` (the roster, each player's record,
+and who they will not play with), `SettingsPage` (backup, storage use,
+rubrics). `SaveIndicator` floats over all of them. `SquadPicker` is shared by
+the match screen and Repartir, and is deliberately ignorant of *which* teams
+exist: it is handed a colour and a label per lock (`LockTarget`) rather than
+`TeamKey`.
+
+### Repartir, and why it is not a match
+
+`SplitPage` is a tool, not a stored thing, and that is the whole design.
+
+A `Match` is a game: two sides, a pitch, one scoreline, and the records that
+come out of it. Twenty people sharing a pitch for two hours, rotating off on
+every goal, is none of that — there is no single result to write down, and no
+arrangement of four teams a pitch can draw. Forcing it into `Match` would mean
+a `result: {goalsA, goalsB}` that lies and a `lineupA`/`lineupB` pair with
+nowhere to put teams three and four.
+
+So it writes nothing to storage. What comes out is the message you paste into
+the group chat, which is where the teams were always going to end up. The one
+thing it reads is the last match's squad, as an opening guess at who is playing
+again tonight.
 
 ## Invariants worth not breaking
 
@@ -123,6 +145,16 @@ storage use, rubrics). `SaveIndicator` floats over all of them.
   a stored tally drifts the first time anybody fixes a scoreline, moves
   somebody between sides after the fact, or merges a backup this device never
   saw. Only lineups count, and only matches with a `result`.
+- **`groups.ts` shares the *judgement*, not the search.** It reuses
+  `effectiveRating`, `evaluateSquad` and `balanceCost` verbatim, so a gap of
+  0.3 per player means the same thing on both screens — `groupsCost` over two
+  teams *is* `balanceCost`, exactly. What it does not reuse is the search:
+  subsets versus set partitions, and no mirror symmetry to collapse. The one
+  symmetry it does break — same-size teams with nobody pinned are the same team
+  wearing a different number — is only sound when the run of such teams reaches
+  the last one, and breaking it anywhere else silently discards good splits
+  rather than failing. `groups.test.ts` checks the answer against a brute force
+  for exactly that reason.
 - **Avoiding somebody is a price, not a rule.** The split pays
   `AVOID_PENALTY` (100, far above any reachable balance cost) per pair it fails
   to separate, so it behaves as a hard rule whenever one is satisfiable and

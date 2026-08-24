@@ -2,7 +2,7 @@
 
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, let it work out the split, and write down how
-it ended.
+it ended. Twenty turned up? Cut them into four fives instead.
 
 `PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
@@ -32,6 +32,11 @@ Runs entirely in the browser. No account, no backend, nothing to sign up for.
   gap between the two best players, and a plain-English read on what it means.
 - **Uneven sides and deliberate handicaps.** 5 v 6 is normal. So is stacking one
   team on purpose.
+- **More than two teams.** Twenty people, two hours, one pitch: cut them into
+  four fives, or two sevens and a six, and rotate on every goal. Every pair of
+  teams gets played over a night like that, so the split is scored on how even
+  the *worst* matchup is, not just on the totals. Locks and the two who cannot
+  be on the same side work here too.
 - **Share without leaking ratings.** A PNG of the pitch, or a plain-text list
   for the group chat. Ratings are excluded from both unless you opt in.
 - **How it actually ended.** Write the score down on the match. It sits above
@@ -72,12 +77,19 @@ Splits are then ranked on total strength, per-line gaps, top-heaviness, and the
 gap between each side's best player. Below roughly 8-a-side every combination is
 enumerated; above that it falls back to multi-start local search and says so.
 
+Splitting into **three or more teams** scores every pair of teams and averages
+it — over two teams that is exactly the same number, so a gap of 0.3 a player
+means the same thing on both screens. Twelve into three fours is enumerated
+whole; twenty into four fives is half a billion partitions after symmetry, so
+that falls back to local search and says so.
+
 Two people who would rather not share a side cost the split a hundred points a
 pair — far more than any imbalance two teams can produce — so it reads as a hard
 rule wherever one is satisfiable, and as "the least bad of a bad set" when three
 people all avoid each other. A lock still beats it: pins are the hard constraint.
 
-See `src/lib/rating.ts` and `src/lib/balance.ts` — both are covered by tests.
+See `src/lib/rating.ts`, `src/lib/balance.ts` and `src/lib/groups.ts` — all
+three are covered by tests.
 
 ## Running it
 

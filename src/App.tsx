@@ -5,6 +5,7 @@ import { NavBar } from "./components/NavBar";
 import { PlayersPage } from "./components/PlayersPage";
 import { MatchesPage } from "./components/MatchesPage";
 import { MatchBuilder } from "./components/MatchBuilder";
+import { SplitPage } from "./components/SplitPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { SaveIndicator } from "./components/SaveIndicator";
 import {
@@ -73,6 +74,17 @@ export default function App() {
             }
           />
           <Route path="/matches/:id" element={<MatchRoute app={app} />} />
+          <Route
+            path="/split"
+            element={
+              <SplitPage
+                players={app.players}
+                matches={app.matches}
+                onSavePlayer={app.savePlayer}
+                onDeletePlayer={app.deletePlayer}
+              />
+            }
+          />
           <Route
             path="/players"
             element={
