@@ -15,7 +15,9 @@ English.
 
 Live at **https://mred-randomprojects.github.io/fulbito/**
 
-Runs entirely in the browser. No account, no backend, nothing to sign up for.
+Runs entirely in the browser. No account needed and nothing to sign up for —
+sign-in exists, but only as an optional extra that syncs your own data between
+your own devices.
 
 ## What it does
 
@@ -111,8 +113,11 @@ npm install
 npm run dev
 ```
 
-No configuration, no accounts, no backend. Everything lives in `localStorage`
-and leaves the machine only when you export it.
+Works with no configuration at all: everything lives in `localStorage` and
+leaves the machine only when you export it. To develop the optional sync,
+`cp .env.example .env` and fill in a Firebase project — see
+[FIREBASE_SETUP.md](./FIREBASE_SETUP.md). Without it the app simply never
+offers to sync, which is a supported state and not a broken build.
 
 ```bash
 npm run build   # typecheck + production build
@@ -127,8 +132,17 @@ The whole app state — players, photos, matches, ratings — is one JSON blob i
 *merges* on per-record timestamps rather than replacing, so restoring an older
 file cannot wipe players added since (`src/mergeAppData.ts`).
 
+**Sync is optional.** Sign in with Google from "Tus datos" — after a consent
+dialog that says plainly what gets uploaded — and the same roster follows you
+to your phone: set the match up on the laptop, mark who paid at the cancha.
+The cloud copy is one Firestore document per player and per match under your
+own account, which nobody else can read; `localStorage` stays the copy the app
+actually reads, so nothing breaks when the signal does. Signed out, or in a
+build with no Firebase keys, the SDK is never even downloaded.
+
 Photos are centre-cropped and re-encoded on upload: a 1.7 MB camera photo lands
-at roughly 3 KB, which is what makes storing them inline viable at all. They can
+at a 256px square, usually 10–25 KB and never more than 60, which is what makes
+storing them inline viable at all. They can
 be pasted straight in with Ctrl/⌘+V — most of them start as a screenshot or
 something someone just sent — so nothing has to go via the filesystem first.
 
@@ -148,9 +162,9 @@ no secrets.
 
 - **Free placement on the pitch.** Positions currently come from a formation;
   dragging a player anywhere on the grass is the obvious next step.
-- **Sync between devices.** Deliberately absent: the export/import file is the
-  portability story. If it ever becomes a nuisance, the merge logic that would
-  back a real sync already exists and is tested.
+- **Sharing a roster with somebody else.** Sync copies your data between *your*
+  devices. Two people cannot edit one plantel: there is no invite and no shared
+  team, and each account is walled off from every other by design.
 - **Head-to-head history.** Each player has a record; pairs do not. "Wins 80% of
   the time he is on your side" is the obvious next thing to read off the same
   matches.

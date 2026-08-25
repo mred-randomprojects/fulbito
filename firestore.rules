@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// Fulbito — Firestore security rules.
+//
+// Paste these into Firebase Console > Firestore Database > Rules and Publish.
+// They are the real gate. `VITE_ALLOWED_EMAILS` in the app is only a UX gate:
+// it decides whether the app offers to sync, and anybody can edit it out of
+// their own copy of the JavaScript. These rules cannot be edited by anybody.
+//
+// Two things are enforced here:
+//
+//   1. You can only ever touch documents under your own uid. That is what
+//      makes an open sign-up safe: every account is an island.
+//   2. Optionally, an email allowlist. Leave `allowedEmails()` empty to let
+//      anybody with a Google account sync their own roster — the default, and
+//      what Fulbito is deployed as. Fill it in to make the app invitational,
+//      and keep it in step with the VITE_ALLOWED_EMAILS secret.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Keep in sync with the VITE_ALLOWED_EMAILS GitHub secret.
+    // Empty list = anybody signed in may sync their own data.
+    function allowedEmails() {
+      return [];
+    }
+
+    function isAllowedUser() {
+      return request.auth != null
+        && (allowedEmails().size() == 0
+            || request.auth.token.email in allowedEmails());
+    }
+
+    // One document per record, under the owner's uid:
+    //   users/{uid}/players/{playerId}
+    //   users/{uid}/matches/{matchId}
+    //   users/{uid}/meta/tombstones
+    match /users/{userId}/{document=**} {
+      allow read, write: if isAllowedUser() && request.auth.uid == userId;
+    }
+
+    // Everything else is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -47,6 +47,12 @@
     "src/lib/court.test.ts",
     "src/lib/datePicker.ts",
     "src/lib/datePicker.test.ts",
-    "src/types.test.ts"
+    "src/types.test.ts",
+    "src/lib/syncPlan.ts",
+    "src/lib/syncPlan.test.ts",
+    "src/lib/allowlist.ts",
+    "src/lib/allowlist.test.ts",
+    "src/lib/authErrors.ts",
+    "src/lib/authErrors.test.ts"
   ]
 }

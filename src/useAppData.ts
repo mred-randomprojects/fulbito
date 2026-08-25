@@ -5,6 +5,7 @@ import { loadAppData, saveAppData, StorageQuotaError } from "./storage";
 import { mergeAppData } from "./mergeAppData";
 import { browserClock } from "./lib/browserClock";
 import { createSaveNotifier, type SaveStatus } from "./lib/saveStatus";
+import { sameVersions } from "./lib/syncPlan";
 import {
   removeMatch,
   removePlayer,
@@ -32,6 +33,23 @@ export interface AppDataApi {
   getPlayer: (id: PlayerId) => Player | undefined;
   getMatch: (id: MatchId) => Match | undefined;
   importData: (data: AppData) => void;
+  /**
+   * The current data, readable synchronously.
+   *
+   * The sync layer needs the newest state at the moment a debounced upload
+   * finally fires, which is exactly the moment a render's copy of it is most
+   * likely to be stale.
+   */
+  getData: () => AppData;
+  /**
+   * Fold a copy that arrived from the cloud into what is here.
+   *
+   * Same merge as an imported backup, from the other direction. It goes
+   * through `persist` like everything else, so a change pulled down from
+   * another device is confirmed on screen the same way as one typed here — and
+   * lands in `localStorage`, which stays the copy the app actually reads.
+   */
+  mergeRemote: (incoming: AppData) => void;
 }
 
 /**
@@ -70,6 +88,11 @@ export function useAppData(): AppDataApi {
 
   const persist = useCallback((mutate: (current: AppData) => AppData) => {
     const next = mutate(latest.current);
+    // A mutation that hands back the very same object changed nothing, and
+    // saying "Guardado" over it would be a lie. This is the ordinary case once
+    // sync is on: every write echoes back down from Firestore as a snapshot,
+    // and every one of those echoes merges to exactly what is already here.
+    if (next === latest.current) return;
     latest.current = next;
     setData(next);
     try {
@@ -120,6 +143,25 @@ export function useAppData(): AppDataApi {
     [persist],
   );
 
+  const getData = useCallback(() => latest.current, []);
+
+  /**
+   * A snapshot from another device, merged in.
+   *
+   * `sameVersions` is what keeps this quiet. Firestore echoes this device's
+   * own writes straight back as snapshots, so most of what arrives here is
+   * something we just sent; without the check, each of those would rewrite
+   * `localStorage` and flash a save confirmation at somebody who did nothing.
+   */
+  const mergeRemote = useCallback(
+    (incoming: AppData) =>
+      persist((current) => {
+        const merged = mergeAppData(current, normalizeAppData(incoming));
+        return sameVersions(merged, current) ? current : merged;
+      }),
+    [persist],
+  );
+
   const playersById = useMemo(
     () => new Map(data.players.map((p) => [p.id, p])),
     [data.players],
@@ -147,6 +189,8 @@ export function useAppData(): AppDataApi {
     getPlayer,
     getMatch,
     importData,
+    getData,
+    mergeRemote,
   };
 }
 

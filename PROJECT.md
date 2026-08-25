@@ -20,9 +20,13 @@ screen splits them into several.
 
 Three constraints shape every decision here:
 
-- **No backend, no account, nothing to sign up for.** Everything lives in this
-  browser's `localStorage`, and the only way data leaves the machine is the
-  export file you carry yourself.
+- **Local first, and local is enough.** Everything lives in this browser's
+  `localStorage` and the app is complete without an account: no sign-up wall,
+  no "create a workspace", nothing to lose when the servers go away. Signing in
+  is one optional extra — a second copy in Firestore so the roster you built on
+  the laptop is on the phone at the cancha — and it is offered once, in Tus
+  datos, behind a consent dialog. The export file is still the portability
+  story for anybody who would rather not. See "Sync" below.
 - **Missing data never punishes anybody.** One overall rating is a complete
   player. Positions and attributes are for the two or three people you actually
   have an opinion about, and the model degrades gracefully as the data thins.
@@ -56,12 +60,23 @@ Data flows in one loop:
 localStorage ──loadAppData──▶ useAppData ──props──▶ pages/components
      ▲                            ▲                        │
      └────saveAppData──── persist ─┴──── savePlayer/saveMatch/… ◀─┘
+                                  ▲
+                       mergeRemote │ getData
+                                  ▼
+                            useCloudSync ──planSync──▶ Firestore
 ```
 
 `useAppData` (`src/useAppData.ts`) is the only writer. Every mutation goes
 through `persist`, which computes the next state from a ref (never from a
 render's stale copy), writes it synchronously, and reports the outcome to the
-save notifier.
+save notifier. `persist` ignores a mutation that hands back the object it was
+given, which is what lets a cloud snapshot that changed nothing pass through
+without rewriting storage or claiming a save.
+
+`useCloudSync` hangs off the side of that loop rather than sitting inside it.
+It never becomes the source of truth: it reads with `getData`, writes back with
+`mergeRemote`, and if it is switched off — no account, no config, no signal —
+the loop above is exactly the app that existed before it.
 
 ## The data
 
@@ -111,19 +126,26 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/autosave.ts` | When a self-saving form writes, and when it holds back |
 | `lib/saveStatus.ts` | When "Guardado" appears and when it clears |
 | `lib/clipboard.ts` | Which image, if any, a paste actually meant |
-| `lib/image.ts` | Turning a camera photo into a ~3 KB square avatar |
+| `lib/image.ts` | Turning a camera photo into a square avatar of at most 60 KB |
 | `lib/lineupImage.ts` | Drawing the shareable PNG on a canvas |
 | `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number means |
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
+| `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
+| `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
+| `lib/authErrors.ts` | Reading a Firebase error code; which ones are somebody changing their mind |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
+| `cloud/firebase.ts` | Whether this build has a cloud at all, and loading the SDK if so |
+| `cloud/auth.tsx` | Who is signed in; `cloud/prefs.ts` remembers that they agreed |
+| `cloud/firestore.ts` | Documents in, documents out; `useCloudSync.ts` decides when |
 
 Screens: `MatchesPage` (the list, with what is still owed on each row),
 `MatchBuilder` (the one big screen — squad, pitch, setup, insights, result,
 cancha), `SplitPage` (Repartir: one squad into up to eight teams),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
-they belong to, and who they will not play with), `SettingsPage` (backup,
-storage use, rubrics). `SaveIndicator` floats over all of them. `SquadPicker` is shared by
+they belong to, and who they will not play with), `SettingsPage` (sync, backup,
+storage use, rubrics — `CloudPanel` is the sync section and owns the consent
+dialog). `SaveIndicator` floats over all of them. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.
@@ -149,6 +171,41 @@ So it writes nothing to storage. What comes out is the message you paste into
 the group chat, which is where the teams were always going to end up. The one
 thing it reads is the last match's squad, as an opening guess at who is playing
 again tonight.
+
+### Sync, and why it is a side car
+
+Signing in is optional, and everything about the design follows from that.
+
+The cloud copy is **one document per record** — `users/{uid}/players/{id}`,
+`users/{uid}/matches/{id}`, and `users/{uid}/meta/tombstones` — not the single
+`appData` blob the sibling projects (`cuentas`, `candito-tool`, `nutriapp`,
+`dineros`) use. Two reasons, both structural. A Firestore document is capped at
+1 MiB and a player carries their photo inline as a data URL, so one blob would
+stop saving somewhere around forty or fifty players with photos. And marking
+who paid, on phone data at the cancha, has to send a few hundred bytes rather
+than re-uploading every photo in the roster.
+
+The engine is two triggers and one pure function, `planSync`:
+
+```
+local edit ─────┐
+                ├──▶ planSync(merged, cloud) ──▶ writes, or nothing
+cloud snapshot ─┘
+```
+
+Almost every run returns nothing, and that is the case worth protecting: two
+devices that answer each other's snapshots write forever. The snapshot trigger
+is not an optimisation — Firestore writes are blind overwrites, so a device on
+a stale view can put an old copy of a player over a newer one, and planning on
+every snapshot is what makes whoever holds the newer copy put it back. It is
+what buys correctness without a transaction per record.
+
+`localStorage` stays the copy the app reads. Firestore is a second home for the
+same data, never the source of truth, so no network at the cancha costs
+nothing, and neither does deleting the account.
+
+Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
+[`firestore.rules`](./firestore.rules) is the gate that actually enforces it.
 
 ## Invariants worth not breaking
 
@@ -206,6 +263,30 @@ again tonight.
   are English because they are persisted and exported. Only what reaches a
   screen is translated, and it is translated inline.
 - **`normalizeAppData` is the only door in** — imports, loads, everything.
+- **Sync is never load-bearing.** Every screen works signed out, offline, and
+  in a build with no Firebase keys at all — `cloudConfigured` is false, the SDK
+  is never downloaded, and the sync section does not render. That is not a
+  fallback path, it is the main one; the cloud is the extra. A change that
+  makes a feature *need* an account has broken the app for most of the people
+  who open it.
+- **Nothing leaves the device without an explicit yes.** The consent dialog in
+  `CloudPanel` is the only door out, it is shown before the first sign-in, and
+  signing out clears the consent so the next time asks again. Adding a code
+  path that uploads before that dialog would make every promise on the settings
+  screen false.
+- **`planSync` is given the *merged* data, never the raw local data.** It is
+  what makes "in the cloud but not here" mean "deleted here" rather than "not
+  pulled down yet" — which is the difference between removing a record on
+  purpose and losing it. `useCloudSync` merges the snapshot before it plans.
+- **An exact timestamp tie is a stalemate, not a fight.** `planSync` writes
+  only on a strict `>`, so two devices that wrote one record in the same
+  millisecond keep their own copies and neither writes. Loosening it to `>=`
+  would have them overwrite each other forever.
+- **Firestore refuses `undefined`, and this app produces it.** Unsetting a
+  player's foot writes `foot: undefined`, which every other part of the
+  codebase reads as "not set". `ignoreUndefinedProperties` on the Firestore
+  instance is what keeps that from throwing mid-sync, and it is what makes the
+  next optional field safe to add without thinking about it.
 - **New test files must be added to `tsconfig.test.json`.** The `include` list
   is explicit; a file missing from it silently never runs.
 
@@ -218,8 +299,9 @@ out why, and what to do when the change is a visual one.
 
 ## Deliberately not built
 
-- **Sync between devices.** The export/import file is the portability story.
-  The merge logic a real sync would need already exists and is tested.
+- **Sharing a roster with somebody else.** Sync copies your data between *your*
+  devices. Two people cannot edit one plantel: there is no invite, no shared
+  team, and `users/{uid}` is a wall, not a default.
 - **Free placement on the pitch.** Positions come from a formation; dragging a
   player anywhere on the grass is the obvious next step.
 - **Head-to-head history.** A player's own record exists, but "wins 80% of the

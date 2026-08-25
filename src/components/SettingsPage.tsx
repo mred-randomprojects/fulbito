@@ -5,13 +5,16 @@ import { getStorageUsage } from "@/storage";
 import { normalizeAppData, type AppData } from "@/types";
 import { allRubrics } from "@/lib/scales";
 import { todayIso } from "@/lib/dates";
+import { CloudPanel } from "./CloudPanel";
+import type { CloudState } from "@/useCloudSync";
 
 interface Props {
   data: AppData;
   onImport: (data: AppData) => void;
+  cloud: CloudState;
 }
 
-export function SettingsPage({ data, onImport }: Props) {
+export function SettingsPage({ data, onImport, cloud }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,9 +57,11 @@ export function SettingsPage({ data, onImport }: Props) {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Tus datos</h1>
         <p className="text-sm text-muted-foreground">
-          Todo vive en este navegador y no sale de acá.
+          Todo vive en este navegador.
         </p>
       </header>
+
+      <CloudPanel state={cloud} />
 
       <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
         <h2 className="mb-1 text-base font-medium">Backup</h2>
