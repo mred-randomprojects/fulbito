@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -31,6 +31,7 @@ import { nextPaymentState } from "@/lib/court";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import { formatMatchDate } from "@/lib/dates";
+import { openDatePicker } from "@/lib/datePicker";
 import { useTagFilter } from "@/useTagFilter";
 import {
   KITS,
@@ -852,9 +853,17 @@ function buildTokens(
  * The date, written out, with the browser's own picker behind it.
  *
  * A native date input renders as `25/08/2026`, which is ambiguous to half the
- * world and tells you nothing about which day of the week the game is. The
- * visible label spells it out in Spanish; the real input sits on top of it,
- * invisible, so tapping still opens the picker everyone already knows.
+ * world and tells you nothing about which day of the week the game is. So the
+ * visible text spells it out in Spanish and the real input lies invisibly on
+ * top, which keeps the date a normal, typeable, focusable form control.
+ *
+ * The one thing that does not come for free is opening the calendar. A phone
+ * pops its picker the moment the field takes focus, but a desktop browser
+ * waits for a click on the indicator icon it draws inside the field — and
+ * that icon is invisible here, so every click that missed it looked like a
+ * field that had stopped working. The field asks for the picker itself now
+ * (`lib/datePicker.ts`), and `.date-overlay` takes the invisible icon out so
+ * there is exactly one way in rather than two that can cancel each other.
  */
 function DateField({
   value,
@@ -863,18 +872,33 @@ function DateField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const input = useRef<HTMLInputElement>(null);
+  const open = () => openDatePicker(input.current);
   return (
-    <label className="relative flex h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-input px-3 text-sm">
+    <div className="relative flex h-10 items-center gap-1.5 rounded-lg border border-input px-3 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
       <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="whitespace-nowrap">{formatMatchDate(value)}</span>
+      {/* A date can be cleared from inside the picker, and a chip showing
+          nothing at all is the same thing this whole control looked like when
+          it was broken. Say the field is empty instead. */}
+      <span className="whitespace-nowrap">{formatMatchDate(value) || "Sin fecha"}</span>
       <input
+        ref={input}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onClick={open}
+        // Typing the digits works without this; it is here so somebody who
+        // arrived by tab has the same way in as somebody who arrived by mouse.
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            open();
+          }
+        }}
         aria-label="Fecha del partido"
-        className="absolute inset-0 cursor-pointer opacity-0"
+        className="date-overlay absolute inset-0 cursor-pointer opacity-0"
       />
-    </label>
+    </div>
   );
 }
 

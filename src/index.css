@@ -67,6 +67,16 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* The match date's real input lies invisible over the date written out in
+   words, so Chrome's own calendar button is invisible along with it. A click
+   that happened to land on it would open the picker, and `openDatePicker`
+   would then be asked to open one that is already open. Take the button out:
+   the field asks for its picker itself, and that is the only way in. */
+.date-overlay::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+
 @layer components {
   /* The pitch. Drawn in CSS so it scales to any viewport without an image
      request and stays crisp on a phone held up at the side of a real one. */

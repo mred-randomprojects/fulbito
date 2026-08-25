@@ -114,6 +114,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/image.ts` | Turning a camera photo into a ~3 KB square avatar |
 | `lib/lineupImage.ts` | Drawing the shareable PNG on a canvas |
 | `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number means |
+| `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 

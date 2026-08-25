@@ -45,6 +45,8 @@
     "src/lib/tags.test.ts",
     "src/lib/court.ts",
     "src/lib/court.test.ts",
+    "src/lib/datePicker.ts",
+    "src/lib/datePicker.test.ts",
     "src/types.test.ts"
   ]
 }
