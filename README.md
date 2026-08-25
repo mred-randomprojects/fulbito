@@ -1,8 +1,9 @@
 # Fulbito ⚽
 
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
-kick-off. Rate your mates once, let it work out the split, and write down how
-it ended. Twenty turned up? Cut them into four fives instead.
+kick-off. Rate your mates once, let it work out the split, write down how it
+ended, and keep track of who still owes you for the cancha. Twenty turned up?
+Cut them into four fives instead.
 
 `PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
@@ -42,6 +43,12 @@ Runs entirely in the browser. No account, no backend, nothing to sign up for.
 - **How it actually ended.** Write the score down on the match. It sits above
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.
+- **Who paid the cancha, and who is still owing.** Put in what the pitch cost
+  and it works out what each one puts. Bancar somebody is one extra tap: they
+  come out of the reparto and the rest cover it, so a fútbol 5 with one on the
+  house divides between nine, not ten. The match list says how much is still
+  out without opening anything, and the message for the group chat carries the
+  amount and the names.
 - **A record that keeps itself.** Every scoreline you write down becomes each
   player's won/drawn/lost tally, their goal difference, their last five, and
   the run they are on. Nothing is stored on the player: it is read back off the
@@ -109,7 +116,7 @@ and leaves the machine only when you export it.
 
 ```bash
 npm run build   # typecheck + production build
-npm test        # rating, balancing, avoid pairs, records, tags, formations, merge, …
+npm test        # rating, balancing, avoid pairs, records, tags, the cancha, merge, …
 npm run lint
 ```
 
@@ -147,6 +154,8 @@ no secrets.
 - **Head-to-head history.** Each player has a record; pairs do not. "Wins 80% of
   the time he is on your side" is the obvious next thing to read off the same
   matches.
+- **Anything that moves money.** No alias, no QR, no payment link. The app says
+  who owes what; the transfer happens where it always happened.
 - **Ratings that learn from results.** The 1-10 numbers stay hand-entered.
   Moving them automatically would turn one bad night into a downgrade, and
   nobody asked the app to have opinions.

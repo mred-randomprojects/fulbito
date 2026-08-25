@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pitch, type PitchToken } from "./Pitch";
 import { MatchSetup } from "./MatchSetup";
+import { CourtPanel } from "./CourtPanel";
 import { ResultPanel } from "./ResultPanel";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { TeamInsights } from "./TeamInsights";
@@ -26,6 +27,7 @@ import { PlayerAvatar } from "./PlayerAvatar";
 import { evaluateLineup, findSplits, SplitError, type TeamEvaluation } from "@/lib/balance";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
 import { computeStats } from "@/lib/stats";
+import { nextPaymentState } from "@/lib/court";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import { formatMatchDate } from "@/lib/dates";
@@ -162,7 +164,16 @@ export function MatchBuilder({
         : match.squad.filter((id) => !touched.has(id));
 
       const pins = { ...match.pins };
-      if (!playing) for (const id of ids) delete pins[id];
+      const payments = { ...match.payments };
+      // Same reason the pin goes: somebody desanotado is not owing anything
+      // tonight, and a record left behind would quietly come back marked paid
+      // if they were anotado again.
+      if (!playing) {
+        for (const id of ids) {
+          delete pins[id];
+          delete payments[id];
+        }
+      }
 
       const drop = (lineup: (PlayerId | null)[]) =>
         playing
@@ -177,6 +188,7 @@ export function MatchBuilder({
       patch({
         squad,
         pins,
+        payments,
         sizeA,
         sizeB,
         lineupA: drop(match.lineupA),
@@ -202,6 +214,18 @@ export function MatchBuilder({
       patch({ pins });
     },
     [match, patch],
+  );
+
+  /** debe → pagó → bancado → debe. See `lib/court.ts`. */
+  const cyclePayment = useCallback(
+    (id: PlayerId) => {
+      const payments = { ...match.payments };
+      const next = nextPaymentState(payments[id]);
+      if (next === undefined) delete payments[id];
+      else payments[id] = next;
+      patch({ payments });
+    },
+    [match.payments, patch],
   );
 
   /**
@@ -671,6 +695,14 @@ export function MatchBuilder({
               onHandicapChange={(handicap) => patch({ handicap })}
             />
 
+            <CourtPanel
+              cost={match.courtCost}
+              squad={squadPlayers}
+              payments={match.payments}
+              onCostChange={(courtCost) => patch({ courtCost })}
+              onCyclePayment={cyclePayment}
+            />
+
             {hasLineup && (
               <div className="hidden lg:block">
                 <TeamInsights
@@ -697,6 +729,7 @@ export function MatchBuilder({
         open={shareOpen}
         onOpenChange={setShareOpen}
         match={match}
+        squad={squadPlayers}
         evalA={evalA}
         evalB={evalB}
         formationA={formationA}

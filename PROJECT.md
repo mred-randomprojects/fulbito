@@ -14,8 +14,9 @@ is exactly the cost this file exists to remove.
 
 A team picker for pickup football. You rate your mates once, tick who turned
 up, and it works out the fairest split of the sides in the thirty seconds
-before kick-off. Then you record how it actually ended. When more people turn
-up than two teams can hold, a second screen splits them into several.
+before kick-off. Then you record how it actually ended, and who still owes you
+for the cancha. When more people turn up than two teams can hold, a second
+screen splits them into several.
 
 Three constraints shape every decision here:
 
@@ -79,10 +80,14 @@ enters the app without going through `normalizeAppData` — a hand-edited
   list. See `lib/tags.ts`.
 - **`Match`** — name, date, the two `TeamConfig`s, the squad, pins, sizes, the
   two lineups (slot → player), balance basis, `respectAvoids`, handicap,
-  `result`, `updatedAt`.
+  `result`, `courtCost`, `payments`, `updatedAt`.
 - **`MatchResult`** — `{ goalsA, goalsB }`, or `null`. `null` and 0-0 are
   different states on purpose: one is a game nobody wrote down, the other is a
   game that finished goalless.
+- **`Match.courtCost` / `Match.payments`** — what the pitch cost in whole
+  pesos, and one record per person: absent means they owe, `"paid"` means they
+  put it in, `"comped"` means we bancamos them. Per match rather than global —
+  the Tuesday cancha and the Saturday one are two prices. See `lib/court.ts`.
 - **`AppData`** — players, matches, and tombstones for both, so a delete
   survives a merge with an older backup.
 
@@ -98,6 +103,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
+| `lib/court.ts` | What the cancha costs each of them, and how much is still out |
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
 | `lib/insights.ts` | Turning two team evaluations into the sentences a person would say |
@@ -111,11 +117,12 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 
-Screens: `MatchesPage` (the list), `MatchBuilder` (the one big screen — squad,
-pitch, setup, insights, result), `SplitPage` (Repartir: one squad into up to
-eight teams), `PlayersPage` + `PlayerForm` (the roster, each player's record,
-which crews they belong to, and who they will not play with), `SettingsPage` (backup, storage use,
-rubrics). `SaveIndicator` floats over all of them. `SquadPicker` is shared by
+Screens: `MatchesPage` (the list, with what is still owed on each row),
+`MatchBuilder` (the one big screen — squad, pitch, setup, insights, result,
+cancha), `SplitPage` (Repartir: one squad into up to eight teams),
+`PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
+they belong to, and who they will not play with), `SettingsPage` (backup,
+storage use, rubrics). `SaveIndicator` floats over all of them. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.
@@ -172,6 +179,17 @@ again tonight.
   still returns the least-bad answer when three people all avoid each other.
   A pin beats it: locks are the hard constraint, and the screen says so when a
   pair ends up together anyway.
+- **Bancar somebody shrinks the divisor, not the bill.** The cancha costs what
+  it costs; letting one off means the other nine cover it. So the share is the
+  cost over the *payers*, rounded **up** to the peso — 30.000 between 9 is
+  3.333,33, and charging 3.333 leaves whoever fronted the pitch short of their
+  own money. Overshooting by a peso a head is the cheaper mistake.
+- **The money is split between the people you can see.** `splitCourt` reads
+  only the ids handed to it, once each, and both screens hand it the squad
+  resolved against the roster. A payment record for somebody not playing, or a
+  duplicated id, cannot move the totals — and a player deleted from the roster
+  (whose id survives in old squads, with no row to tap) cannot leave a match
+  that can never be marked cobrada.
 - **A filter is a view, never a fact.** Nothing about tags is stored beyond
   the labels on the players. The ticked chips die with the screen, and a tick
   pointing at a tag whose last carrier just lost it stops filtering rather than
@@ -206,6 +224,8 @@ out why, and what to do when the change is a visual one.
 - **Head-to-head history.** A player's own record exists, but "wins 80% of the
   time he is on your side" — and the pair-level stats behind it — does not. It
   is the obvious next thing to read off the same matches.
+- **Anything that moves money.** No alias, no QR, no payment link: the app
+  says who owes what, and the transfer happens where it always happened.
 - **Rating people from their results.** The 1-10 numbers are still entirely
   hand-entered. Nudging them from the record would quietly turn one bad night
   into a downgrade, and nobody asked the app to have opinions.

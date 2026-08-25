@@ -7,6 +7,7 @@
  * built to degrade gracefully as data thins out rather than to demand it.
  */
 
+import { clampCourtCost, type PaymentBook } from "./lib/court.js";
 import { normalizeTagList } from "./lib/tags.js";
 
 export type PlayerId = string & { readonly __brand: "PlayerId" };
@@ -218,6 +219,21 @@ export interface Match {
   handicap: number;
   /** The scoreline, once it is known. See `MatchResult`. */
   result: MatchResult | null;
+  /**
+   * What the pitch cost, in whole pesos. 0 until somebody says.
+   *
+   * Per match rather than a setting, because it is per match: the cancha of
+   * the Tuesday game and the one with lights on Saturday are two prices, and
+   * both of them went up last month.
+   */
+  courtCost: number;
+  /**
+   * Who has already put their part in, and who got bancado.
+   *
+   * Same shape as `pins`, and read only for the people in `squad` — see
+   * `lib/court.ts`, which is the only thing that reads this.
+   */
+  payments: PaymentBook;
   updatedAt: string;
 }
 
@@ -426,6 +442,23 @@ function normalizePins(value: unknown): Partial<Record<PlayerId, TeamKey>> {
   return out;
 }
 
+/**
+ * Stored payment records.
+ *
+ * Anything that is not one of the two states is dropped rather than guessed
+ * at: an unrecognised value means "they owe", which is the state somebody
+ * lands in by doing nothing, so a blob from a future version can only ever
+ * ask for the money again.
+ */
+function normalizePayments(value: unknown): PaymentBook {
+  const out: PaymentBook = {};
+  if (!isRecord(value)) return out;
+  for (const [key, state] of Object.entries(value)) {
+    if (state === "paid" || state === "comped") out[key as PlayerId] = state;
+  }
+  return out;
+}
+
 export const DEFAULT_TEAM_A: TeamConfig = {
   name: "Claros",
   kit: "light",
@@ -482,6 +515,10 @@ function normalizeMatch(raw: unknown): Match | null {
     respectAvoids: raw.respectAvoids !== false,
     handicap: Math.min(3, Math.max(-3, num(raw.handicap, 0))),
     result: normalizeResult(raw.result),
+    // Absent on any match saved before the cancha had a price on it, which is
+    // the same state as a match nobody has put one on yet.
+    courtCost: clampCourtCost(num(raw.courtCost, 0)),
+    payments: normalizePayments(raw.payments),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
 }

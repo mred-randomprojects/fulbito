@@ -50,6 +50,8 @@ function match(id: string, overrides: Partial<Match> = {}): Match {
     respectAvoids: true,
     handicap: 0,
     result: null,
+    courtCost: 0,
+    payments: {},
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };

@@ -13,12 +13,21 @@ import type { TeamEvaluation } from "@/lib/balance";
 import type { Formation } from "@/lib/formations";
 import { renderLineupImage } from "@/lib/lineupImage";
 import { formatMatchDate } from "@/lib/dates";
-import { KIT_EMOJI, playerDisplayName, type Match } from "@/types";
+import { formatMoney, splitCourt } from "@/lib/court";
+import {
+  KIT_EMOJI,
+  playerDisplayName,
+  playerShortName,
+  type Match,
+  type Player,
+} from "@/types";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   match: Match;
+  /** Everyone anotado, for the line that says what the cancha cost each. */
+  squad: Player[];
   evalA: TeamEvaluation;
   evalB: TeamEvaluation;
   formationA: Formation;
@@ -36,6 +45,7 @@ export function ShareDialog({
   open,
   onOpenChange,
   match,
+  squad,
   evalA,
   evalB,
   formationA,
@@ -46,7 +56,7 @@ export function ShareDialog({
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const text = buildText(match, evalA, evalB, formationA, formationB, includeRatings);
+  const text = buildText(match, squad, evalA, evalB, formationA, formationB, includeRatings);
 
   const copy = async () => {
     setError(null);
@@ -166,6 +176,7 @@ export function ShareDialog({
 /** Plain text, formatted for a group chat rather than for a spreadsheet. */
 function buildText(
   match: Match,
+  squad: Player[],
   evalA: TeamEvaluation,
   evalB: TeamEvaluation,
   formationA: Formation,
@@ -206,7 +217,40 @@ function buildText(
     lines.push("");
   }
 
+  lines.push(...courtLines(match, squad));
+
   return lines.join("\n").trimEnd();
+}
+
+/**
+ * What the cancha cost, and who still has not put it in.
+ *
+ * The chat is where the game was organised and it is where the money gets
+ * chased, so the reminder rides along with the teams instead of being a
+ * message somebody has to remember to write. Nothing at all until a price is
+ * typed in, and the list of names only when it is shorter than the squad: a
+ * "faltan" naming every single person is the line above it said twice.
+ */
+function courtLines(match: Match, squad: Player[]): string[] {
+  if (match.courtCost <= 0) return [];
+
+  const split = splitCourt({
+    cost: match.courtCost,
+    squad: squad.map((p) => p.id),
+    payments: match.payments,
+  });
+  if (split.share === 0) return [];
+
+  const lines = [
+    `💸 Cancha ${formatMoney(match.courtCost)} — ${formatMoney(split.share)} cada uno`,
+  ];
+
+  const owing = squad.filter((p) => match.payments[p.id] === undefined);
+  if (owing.length > 0 && owing.length < split.head) {
+    lines.push(`  Faltan: ${owing.map(playerShortName).join(", ")}`);
+  }
+
+  return lines;
 }
 
 /** Filename-safe version of the match name. */

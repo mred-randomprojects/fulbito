@@ -39,6 +39,8 @@ export default function App() {
       respectAvoids: true,
       handicap: 0,
       result: null,
+      courtCost: 0,
+      payments: {},
       updatedAt: new Date().toISOString(),
     };
     app.saveMatch(match);

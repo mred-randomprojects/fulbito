@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { CalendarDays, ChevronRight, Plus, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { KITS, type Match, type Player } from "@/types";
+import { formatMoney, splitCourt } from "@/lib/court";
+import { KITS, type Match, type Player, type PlayerId } from "@/types";
 import { formatLongDate } from "@/lib/dates";
 
 interface Props {
@@ -11,6 +13,17 @@ interface Props {
 }
 
 export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
+  /**
+   * Who still exists, so the money on a row is split between the same people
+   * the match screen splits it between. A player deleted from the roster stays
+   * in old squads and has no row to be marked paid on — counting one here
+   * would leave a match that can never say it is cobrada.
+   */
+  const rosterIds = useMemo(
+    () => new Set(players.map((p) => p.id)),
+    [players],
+  );
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -72,6 +85,7 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
                   <p className="text-xs text-muted-foreground">
                     {formatDate(match.date)} · {match.sizeA} v {match.sizeB} ·{" "}
                     {match.squad.length} anotado{match.squad.length === 1 ? "" : "s"}
+                    <CourtNote match={match} rosterIds={rosterIds} />
                   </p>
                 </div>
                 {/* Reads left to right in the same order as the two shirts on
@@ -89,6 +103,41 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * What is still owed for the cancha, on the row you already come here to read.
+ *
+ * The whole reason to open the app on a Wednesday is to see whether anybody
+ * still owes you, and making that a screen you have to walk into first would
+ * bury it. Silent on a match with no price on it, which is most of them.
+ */
+function CourtNote({
+  match,
+  rosterIds,
+}: {
+  match: Match;
+  rosterIds: ReadonlySet<PlayerId>;
+}) {
+  if (match.courtCost <= 0) return null;
+
+  const split = splitCourt({
+    cost: match.courtCost,
+    squad: match.squad.filter((id) => rosterIds.has(id)),
+    payments: match.payments,
+  });
+
+  if (split.settled) {
+    return <span className="text-emerald-400"> · cancha cobrada</span>;
+  }
+  if (split.outstanding <= 0) return null;
+
+  return (
+    <span className="text-amber-400">
+      {" "}
+      · faltan {formatMoney(split.outstanding)}
+    </span>
   );
 }
 

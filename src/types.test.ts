@@ -90,6 +90,35 @@ describe("normalizing respectAvoids", () => {
   });
 });
 
+describe("normalizing the cancha", () => {
+  it("has no price and owes nobody on a match saved before it existed", () => {
+    assert.equal(withMatch({}).courtCost, 0);
+    assert.deepEqual(withMatch({}).payments, {});
+  });
+
+  it("keeps a price whole and inside the cap", () => {
+    assert.equal(withMatch({ courtCost: 30000 }).courtCost, 30000);
+    assert.equal(withMatch({ courtCost: -5 }).courtCost, 0);
+    assert.equal(withMatch({ courtCost: 1500.9 }).courtCost, 1500);
+    assert.equal(withMatch({ courtCost: "30000" }).courtCost, 0);
+  });
+
+  it("keeps the two states it knows and drops the rest", () => {
+    // Anything unrecognised reads as "they owe", which is where somebody
+    // lands by doing nothing — so a blob from a future version can only ever
+    // ask for the money again, never forgive a debt nobody forgave.
+    const payments = withMatch({
+      payments: { p1: "paid", p2: "comped", p3: "settled", p4: 1, p5: null },
+    }).payments;
+    assert.deepEqual(payments, { p1: "paid", p2: "comped" });
+  });
+
+  it("survives a payments field that is not a record", () => {
+    assert.deepEqual(withMatch({ payments: ["p1"] }).payments, {});
+    assert.deepEqual(withMatch({ payments: "p1" }).payments, {});
+  });
+});
+
 describe("normalizing a lineup", () => {
   it("keeps the player ids and the holes, which the record reads off", () => {
     const match = withMatch({ lineupA: ["p1", null, "", 3] });
