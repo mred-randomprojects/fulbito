@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
+  ArrowLeftRight,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -23,7 +24,9 @@ import { SplitError } from "@/lib/balance";
 import {
   findGroupSplits,
   MAX_TEAMS,
+  scoreGrouping,
   splitSizes,
+  swapPlayers,
   type GroupSplitOption,
   type GroupSplitResult,
   type GroupTeam,
@@ -96,6 +99,11 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
 
   const [result, setResult] = useState<GroupSplitResult | null>(null);
   const [optionIndex, setOptionIndex] = useState(0);
+  /** Whoever is being held, waiting for somebody on another team to tap. */
+  const [picked, setPicked] = useState<PlayerId | null>(null);
+  /** Which options have been moved around by hand, so the app stops claiming
+      they are what the search picked. */
+  const [handMade, setHandMade] = useState<ReadonlySet<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
@@ -153,6 +161,8 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   const invalidate = useCallback(() => {
     setResult(null);
     setError(null);
+    setPicked(null);
+    setHandMade(new Set());
   }, []);
 
   const reshape = useCallback((squad: PlayerId[], teams: number) => {
@@ -264,6 +274,10 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
       });
       setResult(found);
       setOptionIndex(0);
+      // A fresh search replaces every option, so an edit remembered against
+      // option 2 would now be a claim about a split nobody has seen.
+      setPicked(null);
+      setHandMade(new Set());
     } catch (e) {
       console.error("[repartir] failed:", e);
       setError(
@@ -278,11 +292,69 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
       setOptionIndex(
         (current) => (current + delta + result.options.length) % result.options.length,
       );
+      setPicked(null);
     },
     [result],
   );
 
   const option: GroupSplitOption | null = result?.options[optionIndex] ?? null;
+
+  /**
+   * Tap somebody, tap somebody on another team, they change shirts.
+   *
+   * The same gesture the match screen uses, and here it earns its keep twice
+   * over: it fixes the one the app got wrong, and — starting from any split and
+   * moving people until the teams match the ones already picked at the cancha —
+   * it is how you get the numbers for teams the app never chose. Everything
+   * re-scores off `scoreGrouping`, so the totals, the worst cruce and the
+   * verdict stay true to whatever is actually on screen.
+   */
+  const tapPlayer = useCallback(
+    (team: number, id: PlayerId) => {
+      if (option == null) return;
+      if (picked == null) {
+        setPicked(id);
+        return;
+      }
+      if (picked === id) {
+        setPicked(null);
+        return;
+      }
+      // Two on the same team would only reorder a list nobody sees the order
+      // of, so read it as changing your mind about who you picked up.
+      if (option.teams[team].players.some((player) => player.id === picked)) {
+        setPicked(id);
+        return;
+      }
+
+      const rescored = scoreGrouping({
+        teams: swapPlayers(
+          option.teams.map((entry) => entry.players),
+          picked,
+          id,
+        ),
+        formations,
+        basis,
+        avoid: respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
+      });
+
+      setResult((current) =>
+        current == null
+          ? current
+          : {
+              ...current,
+              options: current.options.map((entry, index) =>
+                index === optionIndex ? rescored : entry,
+              ),
+            },
+      );
+      setHandMade((current) => new Set(current).add(optionIndex));
+      setPicked(null);
+    },
+    [option, picked, optionIndex, formations, basis, respectAvoids, avoidIndex],
+  );
+
+  const edited = handMade.has(optionIndex);
 
   const conflicts = useMemo(() => {
     if (option == null || !respectAvoids) return [];
@@ -555,7 +627,11 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
             </div>
           ) : (
             <>
-              <FairnessBar option={option} exhaustive={result?.exhaustive ?? false} />
+              <FairnessBar
+                option={option}
+                exhaustive={result?.exhaustive ?? false}
+                edited={edited}
+              />
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {option.teams.map((team, index) => (
@@ -568,9 +644,20 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                     onRename={(value) =>
                       setNames((current) => ({ ...current, [index]: value }))
                     }
+                    picked={picked}
+                    onPick={(id) => tapPlayer(index, id)}
                   />
                 ))}
               </div>
+
+              <p className="flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
+                <ArrowLeftRight className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {picked == null
+                    ? "¿No te convence? Tocá a uno y después a otro de otro equipo y se cambian de camiseta. Los números se recalculan solos — sirve también para cargar los equipos que ya armaron a mano y ver qué tan parejos quedaron."
+                    : `${nameOf(picked)} está esperando. Tocá a alguien de otro equipo para hacer el cambio, o tocalo de nuevo para soltarlo.`}
+                </span>
+              </p>
 
               <div className="space-y-3 rounded-xl border border-border bg-card p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -832,9 +919,12 @@ function Stepper({
 function FairnessBar({
   option,
   exhaustive,
+  edited,
 }: {
   option: GroupSplitOption;
   exhaustive: boolean;
+  /** True once this option has been moved around by hand. */
+  edited: boolean;
 }) {
   const verdict = verdictFor(option.worstGap);
   return (
@@ -848,10 +938,14 @@ function FairnessBar({
         por jugador.
       </span>
       <span className="flex-1" />
+      {/* Once somebody has moved a player, the line about what the search
+          managed to prove is about a split that is no longer on screen. */}
       <span className="text-[11px] text-muted-foreground">
-        {exhaustive
-          ? "Se probaron todos los repartos posibles."
-          : "Son demasiados repartos para probarlos todos; éste es el mejor que apareció."}
+        {edited
+          ? "Estos equipos los acomodaste vos."
+          : exhaustive
+            ? "Se probaron todos los repartos posibles."
+            : "Son demasiados repartos para probarlos todos; éste es el mejor que apareció."}
       </span>
     </div>
   );
@@ -978,6 +1072,8 @@ function TeamCard({
   formation,
   name,
   onRename,
+  picked,
+  onPick,
 }: {
   tag: TeamTag;
   team: GroupTeam;
@@ -985,6 +1081,9 @@ function TeamCard({
   /** Whatever the user typed, raw — empty means "still called Equipo 3". */
   name: string;
   onRename: (name: string) => void;
+  /** Who is being held, anywhere on the screen. */
+  picked: PlayerId | null;
+  onPick: (id: PlayerId) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border" style={{ borderColor: `${tag.fill}44` }}>
@@ -1012,17 +1111,34 @@ function TeamCard({
       <ul className="divide-y divide-border/60 bg-card">
         {team.evaluation.lineup.map((player, slot) =>
           player == null ? null : (
-            <li key={player.id} className="flex items-center gap-2 px-2.5 py-1.5">
-              <PlayerAvatar player={player} size={26} ring={tag.fill} ringWidth={2} />
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {playerShortName(player)}
-              </span>
-              <span className="rounded bg-secondary px-1 py-0.5 text-[10px] text-muted-foreground">
-                {ROLE_SHORT[formation.slots[slot].role]}
-              </span>
-              <span className="tabular w-7 text-right text-xs font-medium text-muted-foreground">
-                {team.evaluation.slotRatings[slot].toFixed(1)}
-              </span>
+            <li key={player.id}>
+              <button
+                type="button"
+                onClick={() => onPick(player.id)}
+                aria-pressed={picked === player.id}
+                className={cn(
+                  "flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/50",
+                  picked === player.id && "bg-accent",
+                )}
+              >
+                <PlayerAvatar
+                  player={player}
+                  size={26}
+                  // The team colour normally, and something that reads against
+                  // every one of the eight while held.
+                  ring={picked === player.id ? "hsl(var(--foreground))" : tag.fill}
+                  ringWidth={picked === player.id ? 3 : 2}
+                />
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {playerShortName(player)}
+                </span>
+                <span className="rounded bg-secondary px-1 py-0.5 text-[10px] text-muted-foreground">
+                  {ROLE_SHORT[formation.slots[slot].role]}
+                </span>
+                <span className="tabular w-7 text-right text-xs font-medium text-muted-foreground">
+                  {team.evaluation.slotRatings[slot].toFixed(1)}
+                </span>
+              </button>
             </li>
           ),
         )}

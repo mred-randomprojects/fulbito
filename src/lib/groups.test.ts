@@ -10,7 +10,9 @@ import {
   groupsCost,
   MAX_TEAMS,
   movedCount,
+  scoreGrouping,
   splitSizes,
+  swapPlayers,
   worstGap,
   type GroupSplitOption,
 } from "./groups.js";
@@ -535,3 +537,110 @@ function bruteForceBestCost(squad: readonly Player[], sizes: readonly number[]):
   place(0);
   return best;
 }
+
+describe("scoreGrouping", () => {
+  it("agrees with the search on a split the search itself produced", () => {
+    const squad = ladder(12);
+    const found = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      random: seeded(7),
+    });
+    const option = found.options[0];
+
+    const rescored = scoreGrouping({
+      teams: option.teams.map((team) => team.players),
+      basis: "total",
+    });
+
+    // The whole point of the function: two ways of scoring one arrangement,
+    // which drift apart the moment somebody edits one of them.
+    assert.equal(rescored.cost, option.cost);
+    assert.equal(rescored.worstGap, option.worstGap);
+    assert.equal(rescored.conflicts, option.conflicts);
+  });
+
+  it("charges for a pair it was handed together", () => {
+    const a = player(6);
+    const b = player(6, { avoid: [a.id] });
+    const filler = ladder(6);
+    const avoid = buildAvoidIndex([a, b, ...filler]);
+
+    const apart = scoreGrouping({
+      teams: [[a, filler[0], filler[1], filler[2]], [b, filler[3], filler[4], filler[5]]],
+      basis: "total",
+      avoid,
+    });
+    const together = scoreGrouping({
+      teams: [[a, b, filler[0], filler[1]], [filler[2], filler[3], filler[4], filler[5]]],
+      basis: "total",
+      avoid,
+    });
+
+    assert.equal(apart.conflicts, 0);
+    assert.equal(together.conflicts, 1);
+    assert.ok(together.cost > apart.cost + 50, "an unseparated pair has to hurt");
+  });
+
+  it("reads a squad nobody balanced as the lopsided thing it is", () => {
+    // Deliberately arbitrary teams, which is the case this exists for.
+    const strong = [player(10), player(10), player(9), player(9)];
+    const weak = [player(2), player(2), player(3), player(3)];
+    const scored = scoreGrouping({ teams: [strong, weak], basis: "total" });
+    assert.ok(scored.worstGap > 5, `expected a wide gap, got ${scored.worstGap}`);
+  });
+});
+
+describe("swapPlayers", () => {
+  const a = player(5);
+  const b = player(5);
+  const c = player(5);
+  const d = player(5);
+
+  const ids = (teams: readonly (readonly Player[])[]) =>
+    teams.map((team) => team.map((p) => p.id));
+
+  it("moves the two players onto each other's teams", () => {
+    assert.deepEqual(ids(swapPlayers([[a, b], [c, d]], b.id, c.id)), [
+      [a.id, c.id],
+      [b.id, d.id],
+    ]);
+  });
+
+  it("leaves the teams alone when an id is on nobody's team", () => {
+    const teams = [[a, b], [c, d]];
+    const stranger = player(5);
+    assert.deepEqual(ids(swapPlayers(teams, a.id, stranger.id)), ids(teams));
+    assert.deepEqual(ids(swapPlayers(teams, stranger.id, d.id)), ids(teams));
+  });
+
+  it("does not mutate what it was given", () => {
+    const teams = [[a, b], [c, d]];
+    swapPlayers(teams, a.id, d.id);
+    assert.deepEqual(ids(teams), [
+      [a.id, b.id],
+      [c.id, d.id],
+    ]);
+  });
+
+  it("reorders one team, and moves no number, when both ids are on it", () => {
+    const teams = [[a, b], [c, d]];
+    const swapped = swapPlayers(teams, a.id, b.id);
+    assert.deepEqual(ids(swapped), [
+      [b.id, a.id],
+      [c.id, d.id],
+    ]);
+    // The order changed; the verdict did not, because a team is always scored
+    // at its own best arrangement.
+    assert.equal(
+      scoreGrouping({ teams: swapped, basis: "total" }).cost,
+      scoreGrouping({ teams, basis: "total" }).cost,
+    );
+  });
+
+  it("is a no-op when both ids are the same player", () => {
+    const teams = [[a, b], [c, d]];
+    assert.deepEqual(ids(swapPlayers(teams, a.id, a.id)), ids(teams));
+  });
+});

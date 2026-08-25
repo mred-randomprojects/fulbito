@@ -1,5 +1,10 @@
 import type { BalanceBasis, Player, PlayerId } from "../types.js";
-import { EMPTY_AVOID_INDEX, keepApart, type AvoidIndex } from "./avoid.js";
+import {
+  conflictsWithin,
+  EMPTY_AVOID_INDEX,
+  keepApart,
+  type AvoidIndex,
+} from "./avoid.js";
 import {
   assignmentCost,
   AVOID_PENALTY,
@@ -158,6 +163,105 @@ export function worstGap(
     }
   }
   return worst;
+}
+
+export interface GroupingRequest {
+  /** The teams as they stand. Sizes are whatever they are. */
+  teams: readonly (readonly Player[])[];
+  /** One per team. Defaults to the best preset shape for each size. */
+  formations?: readonly Formation[];
+  basis: BalanceBasis;
+  avoid?: AvoidIndex;
+  weights?: CostWeights;
+}
+
+/**
+ * What a set of teams somebody already has is worth.
+ *
+ * The other half of `findGroupSplits`. That one searches for an arrangement;
+ * this one is handed an arrangement and says what it costs — which is the only
+ * way to answer "we already picked the teams at the cancha, how bad is it?" and
+ * the only way a hand-swapped split can keep showing honest numbers.
+ *
+ * It computes the same three figures `findGroupSplits` puts on every option,
+ * from the same functions, so a `worstGap` of 0.3 means what it has always
+ * meant. `groups.test.ts` checks the two agree on a split the search itself
+ * produced, because two ways of scoring the same thing is exactly the sort of
+ * pair that drifts apart quietly.
+ */
+export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
+  const { teams, basis, avoid = EMPTY_AVOID_INDEX, weights } = request;
+  const formations =
+    request.formations ?? teams.map((team) => defaultFormation(team.length));
+
+  const evaluations = teams.map((team, index) =>
+    evaluateSquad(team, formations[index] ?? defaultFormation(team.length)),
+  );
+  const conflicts = teams.reduce(
+    (sum, team) =>
+      sum + conflictsWithin(avoid, team.map((player) => player.id)).length,
+    0,
+  );
+
+  return {
+    teams: teams.map((team, index) => ({
+      players: [...team],
+      evaluation: evaluations[index],
+    })),
+    // The same folding `findGroupSplits` does, for the same reason: `cost` is
+    // the one number these are compared on, so a penalty left outside it would
+    // be honoured by one code path and ignored by the other.
+    cost: groupsCost(evaluations, basis, weights) + AVOID_PENALTY * conflicts,
+    worstGap: worstGap(evaluations, basis),
+    conflicts,
+  };
+}
+
+/**
+ * The same teams with two players changing shirts.
+ *
+ * By id rather than by position, because the card on screen lists a team in
+ * *formation slot* order — the shape `evaluateSquad` settled on — which is not
+ * the order the team is stored in. Resolving a tap to an index in the component
+ * would mean the two orders having to agree, and they do not.
+ *
+ * An id that is on nobody's team leaves everything alone rather than writing an
+ * `undefined` into a side: the caller is a tap on a screen that may have
+ * re-rendered underneath it, and losing a player to a stale tap is a far worse
+ * outcome than a tap that does nothing.
+ *
+ * Two ids on the same team reorder that team's list and change nothing else.
+ * `evaluateSquad` arranges every team into its own best shape, so who is listed
+ * first moves no number anybody can see — which is why the screen reads a
+ * second tap on the same team as changing your mind about who you picked up,
+ * rather than as a swap that appears to do nothing.
+ */
+export function swapPlayers(
+  teams: readonly (readonly Player[])[],
+  a: PlayerId,
+  b: PlayerId,
+): Player[][] {
+  const copies = teams.map((team) => [...team]);
+  if (a === b) return copies;
+
+  const find = (id: PlayerId): [number, number] | null => {
+    for (let team = 0; team < copies.length; team++) {
+      const index = copies[team].findIndex((player) => player.id === id);
+      if (index >= 0) return [team, index];
+    }
+    return null;
+  };
+
+  const at = find(a);
+  const to = find(b);
+  if (at == null || to == null) return copies;
+
+  const [atTeam, atIndex] = at;
+  const [toTeam, toIndex] = to;
+  const held = copies[atTeam][atIndex];
+  copies[atTeam][atIndex] = copies[toTeam][toIndex];
+  copies[toTeam][toIndex] = held;
+  return copies;
 }
 
 /**

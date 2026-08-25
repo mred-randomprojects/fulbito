@@ -116,7 +116,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | --- | --- |
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
-| `lib/groups.ts` | The fairest way to cut a squad into three or more teams |
+| `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
@@ -235,6 +235,20 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   a stored tally drifts the first time anybody fixes a scoreline, moves
   somebody between sides after the fact, or merges a backup this device never
   saw. Only lineups count, and only matches with a `result`.
+- **A hand-moved split has to keep telling the truth.** Tapping two players
+  swaps them and re-scores through `scoreGrouping`, so the totals, the worst
+  cruce and the verdict are always about what is on screen. The one line that
+  cannot survive it is the search's own claim — "se probaron todos los repartos
+  posibles" is about a split that is no longer being shown — so an edited
+  option says who arranged it instead. That is also the answer to "we picked
+  the teams at the cancha, how bad are they?": move people until the screen
+  matches the real teams, and every number is about those.
+- **`scoreGrouping` and the search must not drift.** They are two ways of
+  scoring one arrangement, which is the shape of bug that goes unnoticed for
+  months. `findGroupSplits` keeps its own index-based, cached version because
+  it runs in the hot loop; `groups.test.ts` re-scores an option the search
+  itself produced and asserts the cost, worst gap and conflicts all match. That
+  test is the whole reason the duplication is allowed to exist.
 - **A fixture is not a result, and `winner-stays` proves it.**
   `tournament.ts` returns two different shapes rather than one shape with
   holes in it. Todos contra todos can be written out in full before a ball is

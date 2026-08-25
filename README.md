@@ -40,6 +40,12 @@ your own devices.
   teams gets played over a night like that, so the split is scored on how even
   the *worst* matchup is, not just on the totals. Locks and the two who cannot
   be on the same side work here too.
+- **Move anybody, and watch the numbers move.** Tap a player, tap somebody on
+  another team, they change shirts and every total, the worst cruce and the
+  verdict recompute. It fixes the split the app got wrong — and it is how you
+  score teams the app never picked: start anywhere, move people until the
+  screen matches the sides already chosen at the cancha, and read off how
+  parejos they actually are.
 - **A torneito, drawn.** Once the teams exist, name them and pick how the night
   runs: todos contra todos, where every pairing is known before a ball is
   kicked and comes out as fechas; or el que gana se queda, where all that can
