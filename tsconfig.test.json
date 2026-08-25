@@ -53,6 +53,8 @@
     "src/lib/allowlist.ts",
     "src/lib/allowlist.test.ts",
     "src/lib/authErrors.ts",
-    "src/lib/authErrors.test.ts"
+    "src/lib/authErrors.test.ts",
+    "src/lib/tournament.ts",
+    "src/lib/tournament.test.ts"
   ]
 }

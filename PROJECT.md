@@ -16,7 +16,8 @@ A team picker for pickup football. You rate your mates once, tick who turned
 up, and it works out the fairest split of the sides in the thirty seconds
 before kick-off. Then you record how it actually ended, and who still owes you
 for the cancha. When more people turn up than two teams can hold, a second
-screen splits them into several.
+screen splits them into several, lets you name them, and draws the torneito
+they are about to play.
 
 Three constraints shape every decision here:
 
@@ -116,6 +117,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams |
+| `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
@@ -127,7 +129,9 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/saveStatus.ts` | When "Guardado" appears and when it clears |
 | `lib/clipboard.ts` | Which image, if any, a paste actually meant |
 | `lib/image.ts` | Turning a camera photo into a square avatar of at most 60 KB |
-| `lib/lineupImage.ts` | Drawing the shareable PNG on a canvas |
+| `lib/lineupImage.ts` | Drawing the shareable PNG of the pitch on a canvas |
+| `lib/tournamentImage.ts` | Drawing the shareable PNG of the whole torneito |
+| `lib/canvas.ts` | The canvas drawing both of those share: photos, chips, corners |
 | `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number means |
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
@@ -141,7 +145,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 
 Screens: `MatchesPage` (the list, with what is still owed on each row),
 `MatchBuilder` (the one big screen — squad, pitch, setup, insights, result,
-cancha), `SplitPage` (Repartir: one squad into up to eight teams),
+cancha), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
+they play),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
@@ -168,9 +173,18 @@ a `result: {goalsA, goalsB}` that lies and a `lineupA`/`lineupB` pair with
 nowhere to put teams three and four.
 
 So it writes nothing to storage. What comes out is the message you paste into
-the group chat, which is where the teams were always going to end up. The one
-thing it reads is the last match's squad, as an opening guess at who is playing
-again tonight.
+the group chat — and a PNG of the whole thing — which is where the teams were
+always going to end up. The one thing it reads is the last match's squad, as an
+opening guess at who is playing again tonight.
+
+**The torneito on the bottom of that screen follows the same rule.** Team
+names, the format and the "cada partido" line are screen state that dies with
+the tab, because a torneito with no stored result is a *plan*, and a plan that
+has been sent to the group chat has already done its job. Storing it would mean
+a new record type, a place in the sync engine and a list screen to find them
+again, for something whose whole lifetime is the ten seconds between hitting
+Repartir and hitting share. Standings, and the stored thing they would need,
+are in "Deliberately not built" below.
 
 ### Sync, and why it is a side car
 
@@ -221,6 +235,19 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   a stored tally drifts the first time anybody fixes a scoreline, moves
   somebody between sides after the fact, or merges a backup this device never
   saw. Only lineups count, and only matches with a `result`.
+- **A fixture is not a result, and `winner-stays` proves it.**
+  `tournament.ts` returns two different shapes rather than one shape with
+  holes in it. Todos contra todos can be written out in full before a ball is
+  kicked; el que gana se queda cannot, because every pairing after the first
+  depends on a result nobody has yet. Flattening both into one list of matches
+  would mean printing a schedule that is wrong from minute one — so the union
+  makes the screen, the image and the pasted text each say the honest thing for
+  the format they were handed.
+- **Three renderers, one answer.** `FixtureBoard`, `renderTournamentImage` and
+  `fixtureLines` all read the same `Fixture` and none of them works the
+  pairings out again. What somebody checks on screen has to be exactly what
+  lands in the group chat, and that is only true while there is one answer
+  being drawn three ways.
 - **`groups.ts` shares the *judgement*, not the search.** It reuses
   `effectiveRating`, `evaluateSquad` and `balanceCost` verbatim, so a gap of
   0.3 per player means the same thing on both screens — `groupsCost` over two
@@ -298,6 +325,11 @@ the missing coverage with unit tests over `src/lib/` instead. `AGENTS.md` spells
 out why, and what to do when the change is a visual one.
 
 ## Deliberately not built
+
+- **A torneito that keeps score.** The fixture is a plan you send and then
+  live by; there is no standings table, and nowhere to type in that Equipo 3
+  beat Equipo 1. That needs a stored record — a new type, a sync path, a list
+  screen — and the whole of Repartir is built on storing nothing.
 
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
   devices. Two people cannot edit one plantel: there is no invite, no shared

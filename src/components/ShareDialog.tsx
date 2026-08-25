@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import type { TeamEvaluation } from "@/lib/balance";
 import type { Formation } from "@/lib/formations";
 import { renderLineupImage } from "@/lib/lineupImage";
+import { slugify } from "@/lib/canvas";
 import { formatMatchDate } from "@/lib/dates";
 import { formatMoney, splitCourt } from "@/lib/court";
 import {
@@ -88,7 +89,7 @@ export function ShareDialog({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${slug(match.name)}.png`;
+      link.download = `${slugify(match.name)}.png`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -251,15 +252,4 @@ function courtLines(match: Match, squad: Player[]): string[] {
   }
 
   return lines;
-}
-
-/** Filename-safe version of the match name. */
-function slug(name: string): string {
-  const cleaned = name
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-  return cleaned === "" ? "fulbito" : cleaned;
 }

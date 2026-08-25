@@ -1,5 +1,5 @@
 import { KITS, playerShortName, type Match, type Player } from "../types";
-import { initialsColor } from "./image";
+import { drawAvatar, loadPhotos, roundRect, toPng } from "./canvas";
 import type { Formation } from "./formations";
 import { formatMatchDate } from "./dates";
 
@@ -93,13 +93,7 @@ export async function renderLineupImage(
 
   drawFooter(ctx);
 
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) =>
-        blob == null ? reject(new Error("No se pudo generar la imagen.")) : resolve(blob),
-      "image/png",
-    );
-  });
+  return await toPng(canvas);
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D): void {
@@ -241,27 +235,6 @@ function drawPitch(ctx: CanvasRenderingContext2D, r: Rect): void {
   }
 }
 
-async function loadPhotos(
-  players: readonly Player[],
-): Promise<Map<string, HTMLImageElement>> {
-  const entries = await Promise.all(
-    players
-      .filter((p) => p.avatar !== "")
-      .map(
-        (p) =>
-          new Promise<[string, HTMLImageElement] | null>((resolve) => {
-            const img = new Image();
-            img.onload = () => resolve([p.id, img]);
-            // A photo that will not decode should cost a monogram, not the
-            // whole image.
-            img.onerror = () => resolve(null);
-            img.src = p.avatar;
-          }),
-      ),
-  );
-  return new Map(entries.filter((e): e is [string, HTMLImageElement] => e != null));
-}
-
 function drawTeam(
   ctx: CanvasRenderingContext2D,
   r: Rect,
@@ -319,67 +292,8 @@ function drawTeam(
   });
 }
 
-function drawAvatar(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  radius: number,
-  player: Player,
-  photo: HTMLImageElement | undefined,
-  ring: string,
-): void {
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.clip();
-
-  if (photo != null) {
-    ctx.drawImage(photo, cx - radius, cy - radius, radius * 2, radius * 2);
-  } else {
-    ctx.fillStyle = initialsColor(player.id);
-    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.font = `700 ${Math.round(radius * 0.76)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillText(initialsOf(player), cx, cy + 1);
-  }
-  ctx.restore();
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = ring;
-  ctx.lineWidth = 5;
-  ctx.stroke();
-}
-
-function initialsOf(player: Player): string {
-  const first = player.firstName.trim();
-  const last = player.lastName.trim();
-  if (first !== "" || last !== "") {
-    return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase() || "?";
-  }
-  return player.nickname.trim().slice(0, 2).toUpperCase() || "?";
-}
-
 function drawFooter(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = "rgba(242,247,244,0.4)";
   ctx.font = "400 24px ui-sans-serif, system-ui, -apple-system, sans-serif";
   ctx.fillText("armado con Fulbito", WIDTH / 2, HEIGHT - 32);
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-): void {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + width, y, x + width, y + height, radius);
-  ctx.arcTo(x + width, y + height, x, y + height, radius);
-  ctx.arcTo(x, y + height, x, y, radius);
-  ctx.arcTo(x, y, x + width, y, radius);
-  ctx.closePath();
 }

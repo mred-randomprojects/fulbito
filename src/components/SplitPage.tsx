@@ -1,14 +1,17 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
   HeartCrack,
+  ImageDown,
+  Loader2,
   Minus,
   Plus,
   Scale,
   Shuffle,
+  Trophy,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +30,15 @@ import {
 } from "@/lib/groups";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
 import { defaultFormation, type Formation } from "@/lib/formations";
+import {
+  buildFixture,
+  fixtureLines,
+  summariseShape,
+  type Fixture,
+  type TournamentFormat,
+} from "@/lib/tournament";
+import { renderTournamentImage } from "@/lib/tournamentImage";
+import { todayIso } from "@/lib/dates";
 import { SPLIT_VERDICT_LABEL, verdictFor } from "@/lib/insights";
 import { computeStats } from "@/lib/stats";
 import {
@@ -72,6 +84,16 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   const [respectAvoids, setRespectAvoids] = useState(true);
   const [includeRatings, setIncludeRatings] = useState(false);
 
+  // The torneito. It hangs off the split rather than living on its own screen:
+  // the fixture depends on nothing but how many teams there are, so flipping
+  // the format costs nothing, and re-rolling the split leaves it alone.
+  const [format, setFormat] = useState<TournamentFormat>("round-robin");
+  const [rule, setRule] = useState("");
+  // Kept even for teams that stop existing, so going 4 → 3 → 4 brings the
+  // names back rather than making somebody retype them.
+  const [names, setNames] = useState<Record<number, string>>({});
+  const [rendering, setRendering] = useState(false);
+
   const [result, setResult] = useState<GroupSplitResult | null>(null);
   const [optionIndex, setOptionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +121,22 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   );
 
   const tags = useMemo(() => TEAM_TAGS.slice(0, setup.teams), [setup.teams]);
+
+  /**
+   * The colours, wearing whatever the user called them.
+   *
+   * A name that is blank or nothing but spaces falls back to "Equipo 3" rather
+   * than printing an empty chip: the point of the label is telling one five
+   * from another, and a nameless one does not.
+   */
+  const teamLabels = useMemo(
+    () =>
+      tags.map((tag, index) => {
+        const given = (names[index] ?? "").trim();
+        return { ...tag, name: given === "" ? tag.name : given };
+      }),
+    [tags, names],
+  );
 
   /* ---------------------------------------------------------------- */
   /* Setup                                                             */
@@ -264,10 +302,53 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
     [playersById],
   );
 
-  const text = useMemo(
-    () => (option == null ? "" : buildText(option, tags, formations, includeRatings)),
-    [option, tags, formations, includeRatings],
+  const fixture = useMemo(
+    () => buildFixture(format, option?.teams.length ?? setup.teams),
+    [format, option, setup.teams],
   );
+
+  const text = useMemo(
+    () =>
+      option == null
+        ? ""
+        : buildText(option, teamLabels, formations, includeRatings, fixture, rule),
+    [option, teamLabels, formations, includeRatings, fixture, rule],
+  );
+
+  const downloadImage = useCallback(async () => {
+    if (option == null) return;
+    setRendering(true);
+    setError(null);
+    try {
+      const blob = await renderTournamentImage({
+        date: todayIso(),
+        shape: summariseShape(option.teams.map((team) => team.players.length)),
+        rule: rule.trim(),
+        teams: option.teams.map((team, index) => ({
+          name: teamLabels[index].name,
+          fill: teamLabels[index].fill,
+          text: teamLabels[index].text,
+          // The lineup rather than `team.players`: the order the formation
+          // settled on is the order the card on screen shows, and the picture
+          // has to agree with the screen it was taken from.
+          players: team.evaluation.lineup.filter((p): p is Player => p != null),
+          total: includeRatings ? team.evaluation.total : null,
+        })),
+        fixture,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "torneito.png";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("[torneito] image failed:", e);
+      setError("No se pudo armar la imagen. Probá de nuevo.");
+    } finally {
+      setRendering(false);
+    }
+  }, [option, teamLabels, includeRatings, fixture, rule]);
 
   const copy = useCallback(async () => {
     // `navigator.clipboard` is simply absent outside a secure context, so
@@ -295,7 +376,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
         <h1 className="text-lg font-semibold tracking-tight">Repartir</h1>
         <p className="text-sm text-muted-foreground">
           Cuando son un montón y con dos equipos no alcanza. Elegí en cuántos los
-          partís y se reparten parejos, todos contra todos.
+          partís, se reparten parejos, y te arma el torneito para mandar al grupo.
         </p>
       </header>
 
@@ -467,6 +548,10 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                 den parecido: rota todo el mundo contra todo el mundo, así que el
                 peor cruce de la noche es el que importa.
               </p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                Después les ponés nombre a los equipos y sale el fixture, con la
+                imagen lista para tirar en el grupo.
+              </p>
             </div>
           ) : (
             <>
@@ -479,8 +564,53 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                     tag={tags[index]}
                     team={team}
                     formation={formations[index]}
+                    name={names[index] ?? ""}
+                    onRename={(value) =>
+                      setNames((current) => ({ ...current, [index]: value }))
+                    }
                   />
                 ))}
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-border bg-card p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                    <Trophy className="h-4 w-4" />
+                    El torneito
+                  </span>
+                  <div className="flex rounded-lg border border-border p-0.5 text-xs">
+                    {FORMATS.map((entry) => (
+                      <button
+                        key={entry.key}
+                        type="button"
+                        onClick={() => setFormat(entry.key)}
+                        className={cn(
+                          "rounded-md px-2 py-1 transition-colors",
+                          format === entry.key
+                            ? "bg-secondary font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {entry.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2">
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    Cada partido
+                  </span>
+                  <input
+                    value={rule}
+                    onChange={(e) => setRule(e.target.value)}
+                    placeholder="a 2 goles, o 7 minutos"
+                    maxLength={40}
+                    className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground/60 focus:border-ring"
+                  />
+                </label>
+
+                <FixtureBoard fixture={fixture} tags={teamLabels} />
               </div>
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-3">
@@ -498,6 +628,18 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                     </span>
                   </span>
                 </label>
+                <Button
+                  className="w-full"
+                  onClick={() => void downloadImage()}
+                  disabled={rendering}
+                >
+                  {rendering ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageDown className="mr-1.5 h-4 w-4" />
+                  )}
+                  {rendering ? "Dibujando…" : "Bajar la imagen del torneito"}
+                </Button>
                 <Button variant="secondary" className="w-full" onClick={() => void copy()}>
                   {copied ? (
                     <Check className="mr-1.5 h-4 w-4" />
@@ -597,6 +739,18 @@ const TEAM_TAGS: TeamTag[] = [
   { name: "Equipo 6", emoji: "🟠", fill: "#ef9a4f", text: "#1c0f03" },
   { name: "Equipo 7", emoji: "⚪", fill: "#e8ecf2", text: "#0b1220" },
   { name: "Equipo 8", emoji: "🟤", fill: "#b07f57", text: "#180f07" },
+];
+
+/**
+ * The two ways a shared cancha actually gets run.
+ *
+ * Neither is a special case of the other: one can be written out in full before
+ * a ball is kicked, and the other cannot, because after the first match every
+ * pairing depends on a result nobody has yet.
+ */
+const FORMATS: { key: TournamentFormat; label: string }[] = [
+  { key: "round-robin", label: "Todos contra todos" },
+  { key: "winner-stays", label: "El que gana se queda" },
 ];
 
 /**
@@ -703,14 +857,134 @@ function FairnessBar({
   );
 }
 
+/**
+ * The fixture, on screen.
+ *
+ * Deliberately the same two shapes the image and the pasted text draw, from the
+ * same `Fixture`: what somebody checks here is exactly what lands in the group
+ * chat, and three renderers agreeing is only worth anything if they are reading
+ * one answer rather than each working it out again.
+ */
+function FixtureBoard({
+  fixture,
+  tags,
+}: {
+  fixture: Fixture;
+  tags: readonly TeamTag[];
+}) {
+  if (fixture.format === "winner-stays") {
+    return (
+      <div className="space-y-2">
+        <SectionLabel>Arrancan</SectionLabel>
+        <MatchRow tags={tags} home={fixture.opener.home} away={fixture.opener.away} />
+        {fixture.queue.length > 0 && (
+          <>
+            <SectionLabel>Y van entrando</SectionLabel>
+            <ol className="space-y-1">
+              {fixture.queue.map((index, position) => (
+                <li key={index} className="flex items-center gap-2 text-sm">
+                  <span className="tabular w-4 text-xs text-muted-foreground">
+                    {position + 1}.
+                  </span>
+                  <TeamChip tag={tags[index]} index={index} />
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          El que gana se queda. El que pierde va al final de la fila.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {fixture.rounds.map((round, index) => (
+        <div key={index} className="space-y-1.5">
+          <SectionLabel>Fecha {index + 1}</SectionLabel>
+          {round.matches.map((match) => (
+            <MatchRow
+              key={`${match.home}-${match.away}`}
+              tags={tags}
+              home={match.home}
+              away={match.away}
+            />
+          ))}
+          {round.bye != null && (
+            <p className="text-[11px] text-muted-foreground">
+              {tags[round.bye]?.name ?? `Equipo ${round.bye + 1}`} descansa.
+            </p>
+          )}
+        </div>
+      ))}
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        {fixture.total} {fixture.total === 1 ? "partido" : "partidos"} en total,{" "}
+        {fixture.each} para cada equipo. Se juegan en este orden, uno atrás del
+        otro.
+      </p>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function TeamChip({ tag, index }: { tag: TeamTag | undefined; index: number }) {
+  return (
+    <span
+      className="truncate rounded-full px-2.5 py-1 text-xs font-semibold"
+      style={{
+        background: tag?.fill ?? "hsl(var(--secondary))",
+        color: tag?.text ?? "hsl(var(--foreground))",
+      }}
+    >
+      {tag?.name ?? `Equipo ${index + 1}`}
+    </span>
+  );
+}
+
+function MatchRow({
+  tags,
+  home,
+  away,
+}: {
+  tags: readonly TeamTag[];
+  home: number;
+  away: number;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex min-w-0 flex-1 justify-end">
+        <TeamChip tag={tags[home]} index={home} />
+      </span>
+      <span className="shrink-0 text-[11px] text-muted-foreground">vs</span>
+      <span className="flex min-w-0 flex-1 justify-start">
+        <TeamChip tag={tags[away]} index={away} />
+      </span>
+    </div>
+  );
+}
+
 function TeamCard({
   tag,
   team,
   formation,
+  name,
+  onRename,
 }: {
   tag: TeamTag;
   team: GroupTeam;
   formation: Formation;
+  /** Whatever the user typed, raw — empty means "still called Equipo 3". */
+  name: string;
+  onRename: (name: string) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border" style={{ borderColor: `${tag.fill}44` }}>
@@ -718,8 +992,18 @@ function TeamCard({
         className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold"
         style={{ background: tag.fill, color: tag.text }}
       >
-        <span className="truncate">{tag.name}</span>
-        <span className="flex-1" />
+        {/* Naming the teams is the whole difference between a reparto and a
+            torneito, so it is an input sitting where the name already was
+            rather than a form somewhere else. */}
+        <input
+          value={name}
+          onChange={(e) => onRename(e.target.value)}
+          placeholder={tag.name}
+          maxLength={22}
+          aria-label={`Nombre de ${tag.name}`}
+          className="min-w-0 flex-1 bg-transparent font-semibold outline-none placeholder:text-current placeholder:opacity-70"
+          style={{ color: tag.text }}
+        />
         <span className="tabular opacity-70">{team.players.length}</span>
         <span className="tabular rounded-full bg-black/15 px-1.5 py-0.5">
           {team.evaluation.total.toFixed(1)}
@@ -753,9 +1037,13 @@ function buildText(
   tags: readonly TeamTag[],
   formations: readonly Formation[],
   includeRatings: boolean,
+  fixture: Fixture,
+  rule: string,
 ): string {
-  const total = option.teams.reduce((sum, team) => sum + team.players.length, 0);
-  const lines: string[] = [`⚽ ${total} en ${option.teams.length} equipos`, ""];
+  const lines: string[] = [
+    `⚽ ${summariseShape(option.teams.map((team) => team.players.length))}`,
+    "",
+  ];
 
   option.teams.forEach((team, index) => {
     lines.push(
@@ -775,6 +1063,17 @@ function buildText(
     });
     lines.push("");
   });
+
+  lines.push(
+    `🏆 El torneito — ${
+      fixture.format === "round-robin"
+        ? "todos contra todos"
+        : "el que gana se queda"
+    }`,
+  );
+  if (rule.trim() !== "") lines.push(`⏱️ Cada partido: ${rule.trim()}`);
+  lines.push("");
+  lines.push(...fixtureLines(fixture, tags));
 
   return lines.join("\n").trimEnd();
 }

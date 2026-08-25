@@ -3,7 +3,7 @@
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, let it work out the split, write down how it
 ended, and keep track of who still owes you for the cancha. Twenty turned up?
-Cut them into four fives instead.
+Cut them into four fives, name them, and send the group the torneito.
 
 `PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
@@ -40,8 +40,16 @@ your own devices.
   teams gets played over a night like that, so the split is scored on how even
   the *worst* matchup is, not just on the totals. Locks and the two who cannot
   be on the same side work here too.
-- **Share without leaking ratings.** A PNG of the pitch, or a plain-text list
-  for the group chat. Ratings are excluded from both unless you opt in.
+- **A torneito, drawn.** Once the teams exist, name them and pick how the night
+  runs: todos contra todos, where every pairing is known before a ball is
+  kicked and comes out as fechas; or el que gana se queda, where all that can
+  honestly be written down is who starts and what the queue is, because every
+  pairing after the first depends on a result nobody has yet. Either way it
+  comes out as one PNG — the teams, the faces and the fixture — for the group
+  chat. Nothing is stored: the message you send is the record.
+- **Share without leaking ratings.** A PNG of the pitch, a PNG of the torneito,
+  or a plain-text list for the group chat. Ratings are excluded from all of
+  them unless you opt in.
 - **How it actually ended.** Write the score down on the match. It sits above
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.
@@ -121,7 +129,7 @@ offers to sync, which is a supported state and not a broken build.
 
 ```bash
 npm run build   # typecheck + production build
-npm test        # rating, balancing, avoid pairs, records, tags, the cancha, merge, …
+npm test        # rating, balancing, fixtures, avoid pairs, records, the cancha, merge, …
 npm run lint
 ```
 
@@ -147,8 +155,10 @@ be pasted straight in with Ctrl/⌘+V — most of them start as a screenshot or
 something someone just sent — so nothing has to go via the filesystem first.
 
 Sharing produces a PNG of the pitch, drawn on a canvas from the same geometry
-the on-screen pitch uses (`src/lib/lineupImage.ts`), plus a plain-text list for
-the group chat. Neither needs a server.
+the on-screen pitch uses (`src/lib/lineupImage.ts`), or a PNG of the whole
+torneito — teams, faces and fixture — sized to whatever the night turned out to
+be (`src/lib/tournamentImage.ts`), plus a plain-text list for the group chat.
+None of it needs a server.
 
 ## Deploying
 
@@ -160,6 +170,10 @@ no secrets.
 
 ## Not built yet
 
+- **A torneito that keeps score.** The fixture is a plan you send and then live
+  by. There is no standings table and nowhere to record that Equipo 3 beat
+  Equipo 1 — that needs a stored record, and Repartir is built on storing
+  nothing.
 - **Free placement on the pitch.** Positions currently come from a formation;
   dragging a player anywhere on the grass is the obvious next step.
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
