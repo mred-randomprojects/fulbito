@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { Database, Shield, Shuffle, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,10 +14,16 @@ export function NavBar() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-4 py-2">
-        <span className="mr-2 flex items-center gap-1.5 font-semibold tracking-tight">
+        {/* The logo is the way back to the start, because every site has
+            trained everybody to expect that it is. */}
+        <Link
+          to="/"
+          className="mr-2 flex items-center gap-1.5 rounded-lg px-1 py-2 font-semibold tracking-tight transition-colors hover:text-foreground/80"
+        >
           <span aria-hidden>⚽</span>
           <span className="hidden sm:inline">Fulbito</span>
-        </span>
+          <span className="sr-only sm:hidden">Fulbito</span>
+        </Link>
         <nav className="flex flex-1 gap-1">
           {LINKS.map((link) => (
             <NavLink
