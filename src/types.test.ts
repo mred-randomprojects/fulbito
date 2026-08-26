@@ -125,3 +125,58 @@ describe("normalizing a lineup", () => {
     assert.deepEqual(match.lineupA, ["p1" as PlayerId, null, null, null]);
   });
 });
+
+describe("normalizing teams", () => {
+  const withTeam = (fields: Record<string, unknown>) =>
+    normalizeAppData({ teams: [{ id: "t1", ...fields }] }).teams[0];
+
+  it("defaults to nothing at all on a blob written before teams existed", () => {
+    assert.deepEqual(normalizeAppData({ players: [] }).teams, []);
+    assert.deepEqual(normalizeAppData({ players: [] }).deletedTeams, []);
+  });
+
+  it("keeps a team with no name, because the screen names it", () => {
+    assert.equal(withTeam({}).name, "");
+    assert.deepEqual(withTeam({}).players, []);
+  });
+
+  it("refuses a team with no id at all", () => {
+    assert.deepEqual(normalizeAppData({ teams: [{ name: "Los Pibes" }] }).teams, []);
+  });
+
+  it("drops a duplicated player rather than fielding them twice", () => {
+    assert.deepEqual(withTeam({ players: ["a", "b", "a"] }), {
+      id: "t1",
+      name: "",
+      players: ["a", "b"],
+      updatedAt: new Date(0).toISOString(),
+    });
+  });
+
+  it("throws away entries that are not ids", () => {
+    assert.deepEqual(withTeam({ players: ["a", 7, null, ""] }).players, ["a"]);
+  });
+
+  it("keeps ids of players since deleted, so an import is not order-dependent", () => {
+    const data = normalizeAppData({
+      players: [],
+      teams: [{ id: "t1", players: ["gone"] }],
+      deletedPlayers: [{ id: "gone", deletedAt: "2026-01-01T00:00:00.000Z" }],
+    });
+    assert.deepEqual(data.teams[0].players, ["gone"]);
+  });
+
+  it("honours a tombstone for the team itself", () => {
+    const data = normalizeAppData({
+      teams: [{ id: "t1", name: "Los Pibes" }],
+      deletedTeams: [{ id: "t1", deletedAt: "2026-01-01T00:00:00.000Z" }],
+    });
+    assert.deepEqual(data.teams, []);
+    assert.equal(data.deletedTeams.length, 1);
+  });
+
+  it("survives teams that are not a list", () => {
+    assert.deepEqual(normalizeAppData({ teams: "nope" }).teams, []);
+    assert.deepEqual(normalizeAppData({ teams: [null, 3] }).teams, []);
+  });
+});

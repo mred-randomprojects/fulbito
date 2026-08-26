@@ -127,7 +127,8 @@ export function CloudPanel({ state }: { state: CloudState }) {
           <ul className="space-y-2 text-sm leading-relaxed text-muted-foreground">
             <li>
               Se sube tu plantel entero: nombres, apodos, fotos, los niveles que
-              les pusiste y los partidos con la guita de la cancha.
+              les pusiste, los equipos que guardaste y los partidos con la guita
+              de la cancha.
             </li>
             <li>
               Queda en un Firebase mío, atado a tu cuenta de Google. Nadie más

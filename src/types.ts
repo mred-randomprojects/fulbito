@@ -12,6 +12,7 @@ import { normalizeTagList } from "./lib/tags.js";
 
 export type PlayerId = string & { readonly __brand: "PlayerId" };
 export type MatchId = string & { readonly __brand: "MatchId" };
+export type TeamId = string & { readonly __brand: "TeamId" };
 
 /** Coarse pitch role. Slots on the pitch and role ratings share this vocabulary. */
 export const ROLES = ["GK", "DEF", "MID", "FWD"] as const;
@@ -237,6 +238,34 @@ export interface Match {
   updatedAt: string;
 }
 
+/**
+ * A side that exists between games.
+ *
+ * Not a `TeamConfig`, and the difference is the whole reason this type exists.
+ * A `TeamConfig` is one side of *one match*: what they were called that night,
+ * which bibs they got, what shape they played. A `Team` is the group of people
+ * — Los Pibes, the ones from the laburo, the Thursday side — who turn up week
+ * after week and are still the same team next Thursday.
+ *
+ * Deliberately just a name and a list of people:
+ *
+ * - **No kit.** Light against dark is a fact about a game, not about a team;
+ *   two saved teams both remembering "we wear light" would put two identical
+ *   sides on one pitch. Loading a team into a match sets its *name* and leaves
+ *   the bibs to the night.
+ * - **No formation.** The shape depends on how many turned up, which is a
+ *   question a saved team cannot answer.
+ * - **No rating, no record.** Both are read off the players and the matches,
+ *   the same way a player's record is. See the invariant in `PROJECT.md`.
+ */
+export interface Team {
+  id: TeamId;
+  name: string;
+  /** Who is in it. Ids of players since deleted are kept; see `normalizeTeam`. */
+  players: PlayerId[];
+  updatedAt: string;
+}
+
 export interface DeletedEntry {
   id: string;
   deletedAt: string;
@@ -245,15 +274,19 @@ export interface DeletedEntry {
 export interface AppData {
   players: Player[];
   matches: Match[];
+  teams: Team[];
   deletedPlayers: DeletedEntry[];
   deletedMatches: DeletedEntry[];
+  deletedTeams: DeletedEntry[];
 }
 
 export const EMPTY_APP_DATA: AppData = {
   players: [],
   matches: [],
+  teams: [],
   deletedPlayers: [],
   deletedMatches: [],
+  deletedTeams: [],
 };
 
 /* ------------------------------------------------------------------ */
@@ -273,6 +306,18 @@ export function newPlayerId(): PlayerId {
 
 export function newMatchId(): MatchId {
   return generateId() as MatchId;
+}
+
+export function newTeamId(): TeamId {
+  return generateId() as TeamId;
+}
+
+/** The name a nameless team is shown and shared under. */
+export const UNNAMED_TEAM = "Equipo sin nombre";
+
+export function teamDisplayName(team: Team): string {
+  const name = team.name.trim();
+  return name === "" ? UNNAMED_TEAM : name;
 }
 
 /**
@@ -523,6 +568,28 @@ function normalizeMatch(raw: unknown): Match | null {
   };
 }
 
+/**
+ * A stored team.
+ *
+ * Ids are deduped — the same person twice on one side is not a thing a pitch
+ * can hold — but ids of players since deleted are kept, for the same reason
+ * `normalizeAvoid` keeps them: they cost nothing, every screen resolves them
+ * against the roster and skips what it cannot find, and dropping them here
+ * would make importing a backup depend on the order the two halves arrive in.
+ */
+function normalizeTeam(raw: unknown): Team | null {
+  if (!isRecord(raw)) return null;
+  const id = str(raw.id);
+  if (id === "") return null;
+  const players = new Set(strArray(raw.players).filter((entry) => entry !== ""));
+  return {
+    id: id as TeamId,
+    name: str(raw.name),
+    players: [...players] as PlayerId[],
+    updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
+  };
+}
+
 function normalizeDeletedEntries(value: unknown): DeletedEntry[] {
   if (!Array.isArray(value)) return [];
   const out: DeletedEntry[] = [];
@@ -540,8 +607,10 @@ export function normalizeAppData(raw: unknown): AppData {
 
   const deletedPlayers = normalizeDeletedEntries(raw.deletedPlayers);
   const deletedMatches = normalizeDeletedEntries(raw.deletedMatches);
+  const deletedTeams = normalizeDeletedEntries(raw.deletedTeams);
   const deletedPlayerIds = new Set(deletedPlayers.map((entry) => entry.id));
   const deletedMatchIds = new Set(deletedMatches.map((entry) => entry.id));
+  const deletedTeamIds = new Set(deletedTeams.map((entry) => entry.id));
 
   const players = (Array.isArray(raw.players) ? raw.players : [])
     .map(normalizePlayer)
@@ -551,5 +620,11 @@ export function normalizeAppData(raw: unknown): AppData {
     .map(normalizeMatch)
     .filter((m): m is Match => m != null && !deletedMatchIds.has(m.id));
 
-  return { players, matches, deletedPlayers, deletedMatches };
+  // Absent on every blob written before teams existed, which is the same state
+  // as an account that has not made one yet.
+  const teams = (Array.isArray(raw.teams) ? raw.teams : [])
+    .map(normalizeTeam)
+    .filter((t): t is Team => t != null && !deletedTeamIds.has(t.id));
+
+  return { players, matches, teams, deletedPlayers, deletedMatches, deletedTeams };
 }

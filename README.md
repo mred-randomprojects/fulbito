@@ -3,7 +3,8 @@
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, let it work out the split, write down how it
 ended, and keep track of who still owes you for the cancha. Twenty turned up?
-Cut them into four fives, name them, and send the group the torneito.
+Cut them into four fives, name them, and send the group the torneito. Same two
+sides every week? Save them once and bring both into a match in a tap.
 
 `PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
@@ -29,6 +30,14 @@ your own devices.
 - **Balanced teams, worked out properly.** For the squad sizes this is built
   for, *every* legal split is checked and scored — not shuffled until it looks
   close. Six genuinely different options, none of them a mirror of another.
+- **Teams that live between games.** Los Pibes against the ones from the
+  laburo, week after week. Save each side once and the match screen brings both
+  in at a tap: it anota the two planteles, sizes the sides, picks a shape that
+  fits each, pins everybody to their own team and fills in both lineups. No
+  balancing, because there is nothing to balance — the sides *are* the input.
+  Somebody in both teams plays for the first and the app says whose name it
+  moved. A match keeps a copy of who played, so renaming a team, changing who
+  is in it, or deleting it never rewrites a game that already happened.
 - **A lineup you can argue with.** Drag nobody: tap a player, tap another, they
   swap, and every number updates.
 - **Insight, not just a total.** Line-by-line comparisons, top-heaviness, the
@@ -135,22 +144,22 @@ offers to sync, which is a supported state and not a broken build.
 
 ```bash
 npm run build   # typecheck + production build
-npm test        # rating, balancing, fixtures, avoid pairs, records, the cancha, merge, …
+npm test        # rating, balancing, fixtures, saved teams, records, the cancha, sync, …
 npm run lint
 ```
 
 ## Data
 
-The whole app state — players, photos, matches, ratings — is one JSON blob in
-`localStorage`, exported and imported from the "Tus datos" screen. Import
+The whole app state — players, photos, matches, teams, ratings — is one JSON
+blob in `localStorage`, exported and imported from the "Tus datos" screen. Import
 *merges* on per-record timestamps rather than replacing, so restoring an older
 file cannot wipe players added since (`src/mergeAppData.ts`).
 
 **Sync is optional.** Sign in with Google from "Tus datos" — after a consent
 dialog that says plainly what gets uploaded — and the same roster follows you
 to your phone: set the match up on the laptop, mark who paid at the cancha.
-The cloud copy is one Firestore document per player and per match under your
-own account, which nobody else can read; `localStorage` stays the copy the app
+The cloud copy is one Firestore document per player, per match and per team
+under your own account, which nobody else can read; `localStorage` stays the copy the app
 actually reads, so nothing breaks when the signal does. Signed out, or in a
 build with no Firebase keys, the SDK is never even downloaded.
 
@@ -176,6 +185,9 @@ no secrets.
 
 ## Not built yet
 
+- **A team's own record.** Saved teams have no won/lost tally and no rating.
+  Both would be stored copies of something derivable, and a match records the
+  *names* the two sides wore that night rather than which saved teams played.
 - **A torneito that keeps score.** The fixture is a plan you send and then live
   by. There is no standings table and nowhere to record that Equipo 3 beat
   Equipo 1 — that needs a stored record, and Repartir is built on storing

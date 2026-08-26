@@ -23,11 +23,32 @@ export interface LockTarget {
   fill: string;
   /** Text colour that reads on `fill`. */
   text: string;
+  /**
+   * Colour for the "fijado a X" line under the name.
+   *
+   * A separate colour because that line sits on the card, not on `fill`, and
+   * the two are not the same problem. Repartir's eight tags are all bright
+   * enough to read either way; the match screen's dark kit is `#161c2b`, which
+   * as a text colour on a dark card is invisible. Defaults to `fill`, so only
+   * the caller with a dark shirt has to think about it.
+   */
+  caption?: string;
 }
 
 interface Props {
   players: Player[];
   squad: PlayerId[];
+  /**
+   * What this list is a list of.
+   *
+   * Three screens use it now and only two of them are about tonight: the match
+   * and Repartir ask who turned up, and Equipos asks who is in a side that
+   * exists between games. "5 anotados" is the wrong word for the third, and a
+   * list that calls itself the wrong thing is how somebody ends up editing the
+   * roster of Los Pibes thinking they are picking a squad.
+   */
+  title?: string;
+  countLabel?: (count: number) => string;
   /** Where a player is locked, or null when they are up for grabs. */
   lockedTo: (id: PlayerId) => LockTarget | null;
   onToggle: (id: PlayerId) => void;
@@ -54,6 +75,14 @@ interface Props {
    */
   tagFilter: TagFilterState;
   onAddPlayer: () => void;
+  /**
+   * Whether the lock column is shown at all.
+   *
+   * Off where there are no sides to lock to. A row of buttons that never do
+   * anything is worse than no buttons: it reads as something broken rather
+   * than as something absent.
+   */
+  showLocks?: boolean;
 }
 
 /**
@@ -66,6 +95,8 @@ interface Props {
 export function SquadPicker({
   players,
   squad,
+  title = "Los que juegan",
+  countLabel = (count) => `${count} anotado${count === 1 ? "" : "s"}`,
   lockedTo,
   onToggle,
   onCycleLock,
@@ -73,6 +104,7 @@ export function SquadPicker({
   onClear,
   tagFilter,
   onAddPlayer,
+  showLocks = true,
 }: Props) {
   const [query, setQuery] = useState("");
   const squadSet = useMemo(() => new Set(squad), [squad]);
@@ -112,9 +144,9 @@ export function SquadPicker({
     <div className="rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between gap-2 border-b border-border p-3">
         <h3 className="text-sm font-medium">
-          Los que juegan
+          {title}
           <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {squad.length} anotado{squad.length === 1 ? "" : "s"}
+            {countLabel(squad.length)}
           </span>
         </h3>
         <div className="flex gap-1">
@@ -188,7 +220,7 @@ export function SquadPicker({
                   {lock != null && (
                     <span
                       className="block truncate text-[11px]"
-                      style={{ color: lock.fill }}
+                      style={{ color: lock.caption ?? lock.fill }}
                     >
                       fijado a {lock.name}
                     </span>
@@ -198,6 +230,7 @@ export function SquadPicker({
                   {player.rating.toFixed(0)}
                 </span>
               </button>
+              {showLocks && (
               <button
                 type="button"
                 onClick={() => onCycleLock(player.id)}
@@ -217,6 +250,7 @@ export function SquadPicker({
               >
                 <Lock className="h-3.5 w-3.5" />
               </button>
+              )}
             </li>
           );
         })}

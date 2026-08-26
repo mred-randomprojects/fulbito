@@ -1,4 +1,4 @@
-import type { AppData, DeletedEntry, Match, Player } from "../types.js";
+import type { AppData, DeletedEntry, Match, Player, Team } from "../types.js";
 
 /**
  * What the cloud is missing, as a list of writes.
@@ -25,15 +25,18 @@ import type { AppData, DeletedEntry, Match, Player } from "../types.js";
 export interface TombstoneBook {
   deletedPlayers: DeletedEntry[];
   deletedMatches: DeletedEntry[];
+  deletedTeams: DeletedEntry[];
 }
 
 export interface SyncPlan {
   /** Records to write, because the cloud has an older copy or none at all. */
   putPlayers: Player[];
   putMatches: Match[];
+  putTeams: Team[];
   /** Ids to delete, because they were deleted here. */
   dropPlayers: string[];
   dropMatches: string[];
+  dropTeams: string[];
   /** The tombstone lists to write, or `null` when the cloud copy is right. */
   tombstones: TombstoneBook | null;
 }
@@ -90,7 +93,8 @@ function tombstoneKey(entries: readonly DeletedEntry[]): string {
 function tombstonesDiffer(local: AppData, remote: AppData): boolean {
   return (
     tombstoneKey(local.deletedPlayers) !== tombstoneKey(remote.deletedPlayers) ||
-    tombstoneKey(local.deletedMatches) !== tombstoneKey(remote.deletedMatches)
+    tombstoneKey(local.deletedMatches) !== tombstoneKey(remote.deletedMatches) ||
+    tombstoneKey(local.deletedTeams) !== tombstoneKey(remote.deletedTeams)
   );
 }
 
@@ -98,12 +102,15 @@ export function planSync(local: AppData, remote: AppData): SyncPlan {
   return {
     putPlayers: outdatedInCloud(local.players, remote.players),
     putMatches: outdatedInCloud(local.matches, remote.matches),
+    putTeams: outdatedInCloud(local.teams, remote.teams),
     dropPlayers: droppedHere(local.players, remote.players),
     dropMatches: droppedHere(local.matches, remote.matches),
+    dropTeams: droppedHere(local.teams, remote.teams),
     tombstones: tombstonesDiffer(local, remote)
       ? {
           deletedPlayers: local.deletedPlayers,
           deletedMatches: local.deletedMatches,
+          deletedTeams: local.deletedTeams,
         }
       : null,
   };
@@ -132,8 +139,10 @@ export function sameVersions(a: AppData, b: AppData): boolean {
   return (
     sameStamps(a.players, b.players) &&
     sameStamps(a.matches, b.matches) &&
+    sameStamps(a.teams, b.teams) &&
     tombstoneKey(a.deletedPlayers) === tombstoneKey(b.deletedPlayers) &&
-    tombstoneKey(a.deletedMatches) === tombstoneKey(b.deletedMatches)
+    tombstoneKey(a.deletedMatches) === tombstoneKey(b.deletedMatches) &&
+    tombstoneKey(a.deletedTeams) === tombstoneKey(b.deletedTeams)
   );
 }
 
@@ -152,8 +161,10 @@ export function planSize(plan: SyncPlan): number {
   return (
     plan.putPlayers.length +
     plan.putMatches.length +
+    plan.putTeams.length +
     plan.dropPlayers.length +
     plan.dropMatches.length +
+    plan.dropTeams.length +
     (plan.tombstones === null ? 0 : 1)
   );
 }

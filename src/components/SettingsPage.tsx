@@ -43,7 +43,7 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
       const before = data.players.length;
       onImport(parsed);
       setMessage(
-        `Listo. Vinieron ${parsed.players.length} jugador${parsed.players.length === 1 ? "" : "es"} y ${parsed.matches.length} partido${parsed.matches.length === 1 ? "" : "s"}. Antes tenías ${before}.`,
+        `Listo. Vinieron ${parsed.players.length} jugador${parsed.players.length === 1 ? "" : "es"}, ${parsed.matches.length} partido${parsed.matches.length === 1 ? "" : "s"} y ${parsed.teams.length} equipo${parsed.teams.length === 1 ? "" : "s"}. Antes tenías ${before}.`,
       );
     } catch {
       setError("Ese archivo no se entiende. ¿Seguro que es un backup de Fulbito?");
@@ -66,7 +66,8 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
       <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
         <h2 className="mb-1 text-base font-medium">Backup</h2>
         <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-          Bajate todo en un archivo: jugadores, fotos, partidos y niveles. Ese
+          Bajate todo en un archivo: jugadores, fotos, equipos, partidos y
+          niveles. Ese
           mismo archivo lo subís en otra compu, en el celu, o acá mismo si
           alguna vez se borra el navegador. Al subirlo se junta con lo que ya
           tengas en vez de pisarlo, así que no se pierde nada.

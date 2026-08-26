@@ -1,4 +1,4 @@
-import type { AppData, DeletedEntry, Match, Player } from "./types.js";
+import type { AppData, DeletedEntry, Match, Player, Team } from "./types.js";
 
 /**
  * Last-write-wins merge on `updatedAt`, with tombstones.
@@ -73,11 +73,13 @@ export function mergeAppData(
 
   const deletedPlayers = mergeDeleted(local.deletedPlayers, remote.deletedPlayers);
   const deletedMatches = mergeDeleted(local.deletedMatches, remote.deletedMatches);
+  const deletedTeams = mergeDeleted(local.deletedTeams, remote.deletedTeams);
 
   // A delete only sticks if it happened *after* the version being merged in;
   // an edit made later than the delete resurrects the record on purpose.
   const playerTombstones = new Map(deletedPlayers.map((e) => [e.id, e.deletedAt]));
   const matchTombstones = new Map(deletedMatches.map((e) => [e.id, e.deletedAt]));
+  const teamTombstones = new Map(deletedTeams.map((e) => [e.id, e.deletedAt]));
 
   const players = mergeById<Player>(
     local.players,
@@ -99,17 +101,34 @@ export function mergeAppData(
     conflictWinner,
   );
 
+  const teams = mergeById<Team>(
+    local.teams,
+    remote.teams,
+    (id, at) => {
+      const deletedAt = teamTombstones.get(id);
+      return deletedAt !== undefined && deletedAt >= at;
+    },
+    conflictWinner,
+  );
+
   // Drop tombstones for records that came back to life, so the list cannot
   // grow without bound across years of use.
   const livePlayerIds = new Set(players.map((p) => p.id));
   const liveMatchIds = new Set(matches.map((m) => m.id));
+  const liveTeamIds = new Set(teams.map((t) => t.id));
 
   return {
     players: players.sort(byName),
     matches: matches.sort((a, b) => b.date.localeCompare(a.date)),
+    teams: teams.sort(byTeamName),
     deletedPlayers: deletedPlayers.filter((e) => !livePlayerIds.has(e.id as Player["id"])),
     deletedMatches: deletedMatches.filter((e) => !liveMatchIds.has(e.id as Match["id"])),
+    deletedTeams: deletedTeams.filter((e) => !liveTeamIds.has(e.id as Team["id"])),
   };
+}
+
+function byTeamName(a: Team, b: Team): number {
+  return a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase());
 }
 
 function byName(a: Player, b: Player): number {

@@ -8,12 +8,16 @@ import {
   type MatchId,
   type Player,
   type PlayerId,
+  type Team,
+  type TeamId,
 } from "./types.js";
 import {
   removeMatch,
   removePlayer,
+  removeTeam,
   upsertMatch,
   upsertPlayer,
+  upsertTeam,
 } from "./appDataOps.js";
 
 function player(id: string, firstName = id): Player {
@@ -60,8 +64,10 @@ function match(id: string, overrides: Partial<Match> = {}): Match {
 const EMPTY: AppData = {
   players: [],
   matches: [],
+  teams: [],
   deletedPlayers: [],
   deletedMatches: [],
+  deletedTeams: [],
 };
 
 const NOW = "2026-06-01T12:00:00.000Z";
@@ -172,5 +178,53 @@ describe("two changes from the same click", () => {
 
     assert.deepEqual(data.players, []);
     assert.equal(data.deletedPlayers.length, 1);
+  });
+});
+
+function team(id: string, name: string, players: string[] = []): Team {
+  return {
+    id: id as TeamId,
+    name,
+    players: players as PlayerId[],
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+describe("upsertTeam", () => {
+  it("adds one, stamped with the time of the write", () => {
+    const next = upsertTeam(EMPTY, team("t1", "Los Pibes"), NOW);
+    assert.equal(next.teams.length, 1);
+    assert.equal(next.teams[0].updatedAt, NOW);
+  });
+
+  it("replaces rather than duplicating", () => {
+    const first = upsertTeam(EMPTY, team("t1", "Los Pibes"), NOW);
+    const second = upsertTeam(first, team("t1", "Los Pibes FC", ["a"]), NOW);
+    assert.equal(second.teams.length, 1);
+    assert.equal(second.teams[0].name, "Los Pibes FC");
+    assert.deepEqual(second.teams[0].players, ["a"]);
+  });
+
+  it("keeps the list in a stable order somebody can scan", () => {
+    let data = upsertTeam(EMPTY, team("t1", "Zurdos"), NOW);
+    data = upsertTeam(data, team("t2", "Aguante"), NOW);
+    assert.deepEqual(data.teams.map((t) => t.name), ["Aguante", "Zurdos"]);
+  });
+});
+
+describe("removeTeam", () => {
+  it("leaves a tombstone, so a merge cannot resurrect it", () => {
+    const data = upsertTeam(EMPTY, team("t1", "Los Pibes"), NOW);
+    const next = removeTeam(data, "t1" as TeamId, NOW);
+    assert.deepEqual(next.teams, []);
+    assert.deepEqual(next.deletedTeams, [{ id: "t1", deletedAt: NOW }]);
+  });
+
+  it("does not touch the matches that used it", () => {
+    let data = upsertTeam(EMPTY, team("t1", "Los Pibes", ["a", "b"]), NOW);
+    data = upsertMatch(data, match("m1", { squad: ["a", "b"] as PlayerId[] }), NOW);
+    const next = removeTeam(data, "t1" as TeamId, NOW);
+    assert.equal(next.matches.length, 1);
+    assert.deepEqual(next.matches[0].squad, ["a", "b"]);
   });
 });

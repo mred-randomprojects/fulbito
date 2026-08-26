@@ -17,7 +17,8 @@ up, and it works out the fairest split of the sides in the thirty seconds
 before kick-off. Then you record how it actually ended, and who still owes you
 for the cancha. When more people turn up than two teams can hold, a second
 screen splits them into several, lets you name them, and draws the torneito
-they are about to play.
+they are about to play. And when it is the same two sides every week, you save
+them once and bring them both into a match in a tap.
 
 Three constraints shape every decision here:
 
@@ -100,12 +101,19 @@ enters the app without going through `normalizeAppData` — a hand-edited
 - **`MatchResult`** — `{ goalsA, goalsB }`, or `null`. `null` and 0-0 are
   different states on purpose: one is a game nobody wrote down, the other is a
   game that finished goalless.
+- **`Team`** — a name and a list of players, and nothing else: the side that
+  exists *between* games. Not a `TeamConfig`, which is one side of one match
+  (what they were called that night, which bibs, what shape). No kit, because
+  light against dark is a fact about a game; no formation, because the shape
+  depends on how many turned up; no rating and no record, because both are read
+  off the players and the matches. See `lib/teamMatch.ts` for what happens when
+  two of them meet.
 - **`Match.courtCost` / `Match.payments`** — what the pitch cost in whole
   pesos, and one record per person: absent means they owe, `"paid"` means they
   put it in, `"comped"` means we bancamos them. Per match rather than global —
   the Tuesday cancha and the Saturday one are two prices. See `lib/court.ts`.
-- **`AppData`** — players, matches, and tombstones for both, so a delete
-  survives a merge with an older backup.
+- **`AppData`** — players, matches, teams, and tombstones for all three, so a
+  delete survives a merge with an older backup.
 
 Storage lives in `src/storage.ts`: one primary key, a rolling backup written
 before each save, and a corrupt-blob stash that loading falls back through.
@@ -118,6 +126,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
+| `lib/teamMatch.ts` | What a match looks like when the two sides are the input, not the answer |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
@@ -146,7 +155,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 Screens: `MatchesPage` (the list, with what is still owed on each row),
 `MatchBuilder` (the one big screen — squad, pitch, setup, insights, result,
 cancha), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
-they play),
+they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
@@ -191,7 +200,8 @@ are in "Deliberately not built" below.
 Signing in is optional, and everything about the design follows from that.
 
 The cloud copy is **one document per record** — `users/{uid}/players/{id}`,
-`users/{uid}/matches/{id}`, and `users/{uid}/meta/tombstones` — not the single
+`users/{uid}/matches/{id}`, `users/{uid}/teams/{id}`, and
+`users/{uid}/meta/tombstones` — not the single
 `appData` blob the sibling projects (`cuentas`, `candito-tool`, `nutriapp`,
 `dineros`) use. Two reasons, both structural. A Firestore document is capped at
 1 MiB and a player carries their photo inline as a data URL, so one blob would
@@ -235,6 +245,24 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   a stored tally drifts the first time anybody fixes a scoreline, moves
   somebody between sides after the fact, or merges a backup this device never
   saw. Only lineups count, and only matches with a `result`.
+- **A saved team is a shortcut, never a source of truth for a match.** Bringing
+  two teams in *copies* the squad and both lineups onto the match. Nothing
+  about last Thursday's game points back at the team record, so renaming Los
+  Pibes, changing who is in them, or deleting them outright cannot rewrite the
+  history of who played whom. It is the same bargain `stats.ts` makes from the
+  other direction: a record is read off what happened, not off what things are
+  called now.
+- **Bringing in two teams pins everybody.** `planTeamMatch` writes a pin for
+  every player, using the app's existing word for "this one is on this side,
+  do not move them". It costs nothing while the teams stand, and it is what
+  makes the Rearmar button sitting next to them safe: pressing it out of habit
+  holds both sides instead of tearing up a decision somebody made deliberately,
+  and it still places a substitute anotado afterwards. `teamMatch.test.ts`
+  covers both.
+- **Nobody plays both sides.** A player in both saved teams is put on A, comes
+  out of B, and is reported back so the screen can say whose name it moved.
+  Refusing to load anything over one shared player would leave somebody doing
+  twenty taps by hand.
 - **A hand-moved split has to keep telling the truth.** Tapping two players
   swaps them and re-scores through `scoreGrouping`, so the totals, the worst
   cruce and the verdict are always about what is on screen. The one line that
@@ -304,6 +332,16 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   are English because they are persisted and exported. Only what reaches a
   screen is translated, and it is translated inline.
 - **`normalizeAppData` is the only door in** — imports, loads, everything.
+- **A new record type is four places, not one.** `Team` had to land in
+  `types.ts` (the shape and its normalisation), `appDataOps.ts` (upsert and a
+  tombstoning delete), `mergeAppData.ts` (the timestamp merge and its
+  tombstones) and `lib/syncPlan.ts` (`putTeams`, `dropTeams`, the tombstone
+  book, `sameVersions` and `planSize`) before it was safe to sync — plus a
+  fourth listener in `cloud/firestore.ts` that `emit` waits for. Missing any
+  one of them fails quietly and loses data: a `sameVersions` that ignores teams
+  means edits from another device never land, and a `tombstonesDiffer` that
+  ignores them means a delete never propagates. Both are covered in
+  `syncPlan.test.ts` for exactly that reason.
 - **Sync is never load-bearing.** Every screen works signed out, offline, and
   in a build with no Firebase keys at all — `cloudConfigured` is false, the SDK
   is never downloaded, and the sync section does not render. That is not a
@@ -340,6 +378,10 @@ out why, and what to do when the change is a visual one.
 
 ## Deliberately not built
 
+- **A team's own record.** A saved team has no won/lost tally and no rating.
+  Both would be stored copies of something derivable, and the matches do not
+  currently record *which* saved teams played — only the names they wore that
+  night, which somebody can rename.
 - **A torneito that keeps score.** The fixture is a plan you send and then
   live by; there is no standings table, and nowhere to type in that Equipo 3
   beat Equipo 1. That needs a stored record — a new type, a sync path, a list

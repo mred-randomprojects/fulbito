@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { Database, Shuffle, Trophy, Users } from "lucide-react";
+import { Database, Shield, Shuffle, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { to: "/matches", label: "Partidos", icon: Trophy },
   { to: "/split", label: "Repartir", icon: Shuffle },
+  { to: "/teams", label: "Equipos", icon: Shield },
   { to: "/players", label: "Jugadores", icon: Users },
   { to: "/settings", label: "Tus datos", icon: Database },
 ];

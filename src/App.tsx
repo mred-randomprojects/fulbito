@@ -7,6 +7,7 @@ import { PlayersPage } from "./components/PlayersPage";
 import { MatchesPage } from "./components/MatchesPage";
 import { MatchBuilder } from "./components/MatchBuilder";
 import { SplitPage } from "./components/SplitPage";
+import { TeamsPage } from "./components/TeamsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { SaveIndicator } from "./components/SaveIndicator";
 import {
@@ -102,6 +103,20 @@ export default function App() {
             }
           />
           <Route
+            path="/teams"
+            element={
+              <TeamsPage
+                teams={app.teams}
+                players={app.players}
+                matches={app.matches}
+                onSave={app.saveTeam}
+                onDelete={app.deleteTeam}
+                onSavePlayer={app.savePlayer}
+                onDeletePlayer={app.deletePlayer}
+              />
+            }
+          />
+          <Route
             path="/players"
             element={
               <PlayersPage
@@ -143,6 +158,7 @@ function MatchRoute({ app }: { app: ReturnType<typeof useAppData> }) {
       match={match}
       players={app.players}
       matches={app.matches}
+      teams={app.teams}
       onChange={app.saveMatch}
       onDelete={() => {
         app.deleteMatch(match.id);

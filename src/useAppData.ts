@@ -1,5 +1,13 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import type { AppData, Match, MatchId, Player, PlayerId } from "./types";
+import type {
+  AppData,
+  Match,
+  MatchId,
+  Player,
+  PlayerId,
+  Team,
+  TeamId,
+} from "./types";
 import { normalizeAppData } from "./types";
 import { loadAppData, saveAppData, StorageQuotaError } from "./storage";
 import { mergeAppData } from "./mergeAppData";
@@ -9,8 +17,10 @@ import { sameVersions } from "./lib/syncPlan";
 import {
   removeMatch,
   removePlayer,
+  removeTeam,
   upsertMatch,
   upsertPlayer,
+  upsertTeam,
 } from "./appDataOps";
 
 /**
@@ -24,12 +34,15 @@ export interface AppDataApi {
   data: AppData;
   players: Player[];
   matches: Match[];
+  teams: Team[];
   /** Whether the last write landed, for the confirmation the whole app shares. */
   saveStatus: SaveStatus;
   savePlayer: (player: Player) => void;
   deletePlayer: (id: PlayerId) => void;
   saveMatch: (match: Match) => void;
   deleteMatch: (id: MatchId) => void;
+  saveTeam: (team: Team) => void;
+  deleteTeam: (id: TeamId) => void;
   getPlayer: (id: PlayerId) => Player | undefined;
   getMatch: (id: MatchId) => Match | undefined;
   importData: (data: AppData) => void;
@@ -132,6 +145,16 @@ export function useAppData(): AppDataApi {
     [persist],
   );
 
+  const saveTeam = useCallback(
+    (team: Team) => persist((current) => upsertTeam(current, team, now())),
+    [persist],
+  );
+
+  const deleteTeam = useCallback(
+    (id: TeamId) => persist((current) => removeTeam(current, id, now())),
+    [persist],
+  );
+
   /**
    * Merges a backup into what is already here rather than replacing it, so
    * importing an older file cannot wipe players added since. Same timestamp
@@ -181,11 +204,14 @@ export function useAppData(): AppDataApi {
     data,
     players: data.players,
     matches: data.matches,
+    teams: data.teams,
     saveStatus,
     savePlayer,
     deletePlayer,
     saveMatch,
     deleteMatch,
+    saveTeam,
+    deleteTeam,
     getPlayer,
     getMatch,
     importData,

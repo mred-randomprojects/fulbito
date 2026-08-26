@@ -55,6 +55,8 @@
     "src/lib/authErrors.ts",
     "src/lib/authErrors.test.ts",
     "src/lib/tournament.ts",
-    "src/lib/tournament.test.ts"
+    "src/lib/tournament.test.ts",
+    "src/lib/teamMatch.ts",
+    "src/lib/teamMatch.test.ts"
   ]
 }

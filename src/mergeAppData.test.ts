@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { AppData, Player, PlayerId } from "./types.js";
+import type { AppData, Player, PlayerId, Team, TeamId } from "./types.js";
 import { mergeAppData } from "./mergeAppData.js";
 
 function player(id: string, rating: number, updatedAt: string): Player {
@@ -24,8 +24,10 @@ function appData(overrides: Partial<AppData> = {}): AppData {
   return {
     players: [],
     matches: [],
+    teams: [],
     deletedPlayers: [],
     deletedMatches: [],
+    deletedTeams: [],
     ...overrides,
   };
 }
@@ -95,5 +97,60 @@ describe("mergeAppData", () => {
       one.players.map((p) => p.id).sort(),
       other.players.map((p) => p.id).sort(),
     );
+  });
+});
+
+function team(id: string, name: string, updatedAt: string): Team {
+  return {
+    id: id as TeamId,
+    name,
+    players: [],
+    updatedAt,
+  };
+}
+
+describe("merging teams", () => {
+  it("keeps a team only one side has", () => {
+    const local = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    const remote = appData({ teams: [team("t2", "Los del laburo", "2026-01-01T00:00:00Z")] });
+    const merged = mergeAppData(local, remote);
+    assert.deepEqual(new Set(merged.teams.map((t) => t.id)), new Set(["t1", "t2"]));
+  });
+
+  it("comes back in name order, whichever side each one arrived from", () => {
+    const local = appData({ teams: [team("t1", "Zurdos", "2026-01-01T00:00:00Z")] });
+    const remote = appData({ teams: [team("t2", "Aguante", "2026-01-01T00:00:00Z")] });
+    assert.deepEqual(
+      mergeAppData(local, remote).teams.map((t) => t.name),
+      ["Aguante", "Zurdos"],
+    );
+  });
+
+  it("lets the newer edit of one team win", () => {
+    const local = appData({ teams: [team("t1", "viejo", "2026-01-01T00:00:00Z")] });
+    const remote = appData({ teams: [team("t1", "nuevo", "2026-02-01T00:00:00Z")] });
+    assert.equal(mergeAppData(local, remote).teams[0].name, "nuevo");
+    assert.equal(mergeAppData(remote, local).teams[0].name, "nuevo");
+  });
+
+  it("honours a delete that happened after the copy being merged in", () => {
+    const local = appData({
+      deletedTeams: [{ id: "t1", deletedAt: "2026-02-01T00:00:00Z" }],
+    });
+    const remote = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    const merged = mergeAppData(local, remote);
+    assert.deepEqual(merged.teams, []);
+    assert.equal(merged.deletedTeams.length, 1);
+  });
+
+  it("brings a team back when it was edited after the delete", () => {
+    const local = appData({
+      deletedTeams: [{ id: "t1", deletedAt: "2026-01-01T00:00:00Z" }],
+    });
+    const remote = appData({ teams: [team("t1", "Los Pibes", "2026-03-01T00:00:00Z")] });
+    const merged = mergeAppData(local, remote);
+    assert.equal(merged.teams.length, 1);
+    // And the tombstone is dropped, so the list cannot grow without bound.
+    assert.deepEqual(merged.deletedTeams, []);
   });
 });

@@ -20,6 +20,7 @@ import { MatchSetup } from "./MatchSetup";
 import { CourtPanel } from "./CourtPanel";
 import { ResultPanel } from "./ResultPanel";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
+import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { TeamInsights } from "./TeamInsights";
 import { ShareDialog } from "./ShareDialog";
 import { PlayerForm } from "./PlayerForm";
@@ -30,6 +31,7 @@ import { computeStats } from "@/lib/stats";
 import { nextPaymentState } from "@/lib/court";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
+import type { TeamMatchPlan } from "@/lib/teamMatch";
 import { formatMatchDate } from "@/lib/dates";
 import { openDatePicker } from "@/lib/datePicker";
 import { useTagFilter } from "@/useTagFilter";
@@ -40,6 +42,7 @@ import {
   type Match,
   type Player,
   type PlayerId,
+  type Team,
   type TeamConfig,
   type TeamKey,
 } from "@/types";
@@ -50,6 +53,8 @@ interface Props {
   players: Player[];
   /** Every match, for the records shown on a player's profile. */
   matches: Match[];
+  /** The saved sides, for bringing two of them in at once. */
+  teams: Team[];
   onChange: (match: Match) => void;
   onDelete: () => void;
   onSavePlayer: (player: Player) => void;
@@ -66,6 +71,7 @@ export function MatchBuilder({
   match,
   players,
   matches,
+  teams,
   onChange,
   onDelete,
   onSavePlayer,
@@ -245,6 +251,48 @@ export function MatchBuilder({
   );
 
   const [options, setOptions] = useState<ReturnType<typeof findSplits> | null>(null);
+
+  /**
+   * Two saved teams, brought in whole.
+   *
+   * The one place in this screen where the sides are an input rather than an
+   * answer, so it writes over everything the search would have produced: the
+   * squad, both sizes, both shapes, the pins and both lineups. Anything left
+   * from whoever was anotado before would be a player on a pitch nobody put
+   * there.
+   */
+  const loadSavedTeams = useCallback(
+    (plan: TeamMatchPlan, names: { a: string; b: string }) => {
+      const playing = new Set(plan.squad);
+      // Same reason `setSquadMembership` drops them: a payment record for
+      // somebody who is no longer anotado would quietly come back marked paid
+      // the next time they are.
+      const payments = Object.fromEntries(
+        Object.entries(match.payments).filter(([id]) => playing.has(id as PlayerId)),
+      );
+
+      patch({
+        squad: plan.squad,
+        pins: plan.pins,
+        sizeA: plan.sizeA,
+        sizeB: plan.sizeB,
+        lineupA: plan.lineupA,
+        lineupB: plan.lineupB,
+        // The team keeps its name; the bibs stay whatever tonight's are. Light
+        // against dark is a fact about a game, not about a team.
+        teamA: { ...match.teamA, name: names.a, formationId: plan.formationIdA },
+        teamB: { ...match.teamB, name: names.b, formationId: plan.formationIdB },
+        payments,
+      });
+
+      // The options on screen are answers to a question that has been replaced.
+      setOptions(null);
+      setSelection(null);
+      setEdited(false);
+      setBalanceError(null);
+    },
+    [match.payments, match.teamA, match.teamB, patch],
+  );
 
   const applyOption = useCallback(
     (result: ReturnType<typeof findSplits>, index: number) => {
@@ -433,7 +481,10 @@ export function MatchBuilder({
       if (pin == null) return null;
       const config = pin === "A" ? match.teamA : match.teamB;
       const kit = KITS[config.kit];
-      return { name: config.name, fill: kit.fill, text: kit.text };
+      // `ring` rather than `fill` for the caption: it is the kit colour picked
+      // to read against the grass, which is the same problem as reading against
+      // a dark card. The dark shirt's fill is very nearly the background.
+      return { name: config.name, fill: kit.fill, text: kit.text, caption: kit.ring };
     },
     [match.pins, match.teamA, match.teamB],
   );
@@ -501,18 +552,31 @@ export function MatchBuilder({
               El candadito al lado del nombre fija a alguien a un equipo antes
               de repartir. Ideal para los que no se pueden separar.
             </p>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              ¿Siempre juegan los mismos contra los mismos? Guardá los dos
+              equipos en Equipos y traelos de una: te deja el partido armado,
+              con las dos formaciones puestas.
+            </p>
           </div>
-          <SquadPicker
-            players={players}
-            squad={match.squad}
-            lockedTo={lockedTo}
-            onToggle={toggleSquad}
-            onCycleLock={cycleLock}
-            onSelectAll={selectAll}
-            onClear={clearSquad}
-            tagFilter={tagFilter}
-            onAddPlayer={() => setAddPlayerOpen(true)}
-          />
+          <div className="space-y-4">
+            <SavedTeamsPanel
+              teams={teams}
+              playersById={playersById}
+              match={match}
+              onLoad={loadSavedTeams}
+            />
+            <SquadPicker
+              players={players}
+              squad={match.squad}
+              lockedTo={lockedTo}
+              onToggle={toggleSquad}
+              onCycleLock={cycleLock}
+              onSelectAll={selectAll}
+              onClear={clearSquad}
+              tagFilter={tagFilter}
+              onAddPlayer={() => setAddPlayerOpen(true)}
+            />
+          </div>
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
@@ -660,6 +724,13 @@ export function MatchBuilder({
           </div>
 
           <div className="space-y-4">
+            <SavedTeamsPanel
+              teams={teams}
+              playersById={playersById}
+              match={match}
+              onLoad={loadSavedTeams}
+            />
+
             {/* Who is playing comes first: it is the thing you reach for most,
                 and burying it under the settings made it hard to find. */}
             <SquadPicker

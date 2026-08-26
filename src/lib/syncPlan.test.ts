@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { AppData, Match, MatchId, Player, PlayerId } from "../types.js";
+import type {
+  AppData,
+  Match,
+  MatchId,
+  Player,
+  PlayerId,
+  Team,
+  TeamId,
+} from "../types.js";
 import { DEFAULT_TEAM_A, DEFAULT_TEAM_B } from "../types.js";
 import { mergeAppData } from "../mergeAppData.js";
 import { isEmptyPlan, planSize, planSync, sameVersions } from "./syncPlan.js";
@@ -49,8 +57,10 @@ function appData(overrides: Partial<AppData> = {}): AppData {
   return {
     players: [],
     matches: [],
+    teams: [],
     deletedPlayers: [],
     deletedMatches: [],
+    deletedTeams: [],
     ...overrides,
   };
 }
@@ -210,5 +220,73 @@ describe("sameVersions", () => {
       deletedMatches: [{ id: "m", deletedAt: "2026-01-01T00:00:00Z" }],
     });
     assert.equal(sameVersions(base, deleted), false);
+  });
+});
+
+function team(id: string, name: string, updatedAt: string): Team {
+  return { id: id as TeamId, name, players: [], updatedAt };
+}
+
+describe("planSync with teams", () => {
+  it("uploads a team the cloud has never seen", () => {
+    const local = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    const plan = sync(local, appData());
+    assert.deepEqual(plan.putTeams.map((t) => t.id), ["t1"]);
+  });
+
+  it("puts the newer copy back over a stale one in the cloud", () => {
+    const local = appData({ teams: [team("t1", "nuevo", "2026-02-01T00:00:00Z")] });
+    const remote = appData({ teams: [team("t1", "viejo", "2026-01-01T00:00:00Z")] });
+    assert.deepEqual(sync(local, remote).putTeams.map((t) => t.name), ["nuevo"]);
+  });
+
+  it("writes nothing when the cloud already has it", () => {
+    const both = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    assert.ok(isEmptyPlan(sync(both, both)));
+  });
+
+  it("deletes a team that was deleted here", () => {
+    const local = appData({
+      deletedTeams: [{ id: "t1", deletedAt: "2026-02-01T00:00:00Z" }],
+    });
+    const remote = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    const plan = sync(local, remote);
+    assert.deepEqual(plan.dropTeams, ["t1"]);
+    // The tombstone list rides along, or the other device puts it straight back.
+    assert.deepEqual(plan.tombstones?.deletedTeams, [
+      { id: "t1", deletedAt: "2026-02-01T00:00:00Z" },
+    ]);
+  });
+
+  it("counts a team write towards the size of the plan", () => {
+    const local = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    // One team, plus the tombstone document the empty cloud does not have.
+    assert.equal(planSize(sync(local, appData())), 1);
+  });
+});
+
+describe("sameVersions with teams", () => {
+  it("notices a team that only one side has", () => {
+    const withOne = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    assert.equal(sameVersions(withOne, appData()), false);
+  });
+
+  it("notices a team edited on the other device", () => {
+    const older = appData({ teams: [team("t1", "viejo", "2026-01-01T00:00:00Z")] });
+    const newer = appData({ teams: [team("t1", "nuevo", "2026-02-01T00:00:00Z")] });
+    assert.equal(sameVersions(older, newer), false);
+  });
+
+  it("notices a team deleted on the other device", () => {
+    const clean = appData();
+    const tombstoned = appData({
+      deletedTeams: [{ id: "t1", deletedAt: "2026-02-01T00:00:00Z" }],
+    });
+    assert.equal(sameVersions(clean, tombstoned), false);
+  });
+
+  it("stays quiet when the echo of our own write comes back", () => {
+    const data = appData({ teams: [team("t1", "Los Pibes", "2026-01-01T00:00:00Z")] });
+    assert.equal(sameVersions(data, appData({ teams: [...data.teams] })), true);
   });
 });

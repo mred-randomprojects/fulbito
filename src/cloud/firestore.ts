@@ -1,5 +1,11 @@
 import type { Firestore, Unsubscribe, WriteBatch } from "firebase/firestore";
-import { normalizeAppData, type AppData, type Match, type Player } from "@/types";
+import {
+  normalizeAppData,
+  type AppData,
+  type Match,
+  type Player,
+  type Team,
+} from "@/types";
 import type { SyncPlan } from "@/lib/syncPlan";
 
 /**
@@ -8,6 +14,7 @@ import type { SyncPlan } from "@/lib/syncPlan";
  * ```
  * users/{uid}/players/{playerId}
  * users/{uid}/matches/{matchId}
+ * users/{uid}/teams/{teamId}
  * users/{uid}/meta/tombstones
  * ```
  *
@@ -30,6 +37,7 @@ import type { SyncPlan } from "@/lib/syncPlan";
 
 const PLAYERS = "players";
 const MATCHES = "matches";
+const TEAMS = "teams";
 const META = "meta";
 const TOMBSTONES = "tombstones";
 
@@ -37,7 +45,7 @@ const TOMBSTONES = "tombstones";
 const BATCH_LIMIT = 400;
 
 /**
- * How long to let the three listeners settle before reporting a view.
+ * How long to let the listeners settle before reporting a view.
  *
  * A delete is one atomic batch — the record's document goes and the tombstone
  * list is rewritten together — but it arrives here down *two* listeners, and
@@ -55,7 +63,7 @@ const SETTLE_MS = 60;
  * interface does not satisfy. Spreading produces one without loosening
  * anything at the call site, and without a cast.
  */
-function fields(record: Player | Match): Record<string, unknown> {
+function fields(record: Player | Match | Team): Record<string, unknown> {
   return { ...record };
 }
 
@@ -70,9 +78,11 @@ export async function subscribeCloud(
 
   let players: unknown[] = [];
   let matches: unknown[] = [];
+  let teams: unknown[] = [];
   let tombstones: Record<string, unknown> | null = null;
   let seenPlayers = false;
   let seenMatches = false;
+  let seenTeams = false;
   let seenTombstones = false;
   let settling: ReturnType<typeof setTimeout> | null = null;
 
@@ -82,17 +92,19 @@ export async function subscribeCloud(
       normalizeAppData({
         players,
         matches,
+        teams,
         deletedPlayers: tombstones?.deletedPlayers ?? [],
         deletedMatches: tombstones?.deletedMatches ?? [],
+        deletedTeams: tombstones?.deletedTeams ?? [],
       }),
     );
   }
 
   function emit(): void {
-    // Nothing is reported until all three have spoken once. A partial view is
-    // indistinguishable from a cloud missing records, and the very next thing
-    // the caller does with it is work out what to upload.
-    if (!seenPlayers || !seenMatches || !seenTombstones) return;
+    // Nothing is reported until every listener has spoken once. A partial view
+    // is indistinguishable from a cloud missing records, and the very next
+    // thing the caller does with it is work out what to upload.
+    if (!seenPlayers || !seenMatches || !seenTeams || !seenTombstones) return;
     if (settling !== null) clearTimeout(settling);
     settling = setTimeout(report, SETTLE_MS);
   }
@@ -112,6 +124,15 @@ export async function subscribeCloud(
       (snap) => {
         matches = snap.docs.map((entry) => entry.data());
         seenMatches = true;
+        emit();
+      },
+      onError,
+    ),
+    onSnapshot(
+      collection(db, "users", uid, TEAMS),
+      (snap) => {
+        teams = snap.docs.map((entry) => entry.data());
+        seenTeams = true;
         emit();
       },
       onError,
@@ -146,12 +167,20 @@ export async function applyPlan(db: Firestore, uid: string, plan: SyncPlan): Pro
     const ref = doc(db, "users", uid, MATCHES, match.id);
     operations.push((batch) => void batch.set(ref, fields(match)));
   }
+  for (const team of plan.putTeams) {
+    const ref = doc(db, "users", uid, TEAMS, team.id);
+    operations.push((batch) => void batch.set(ref, fields(team)));
+  }
   for (const id of plan.dropPlayers) {
     const ref = doc(db, "users", uid, PLAYERS, id);
     operations.push((batch) => void batch.delete(ref));
   }
   for (const id of plan.dropMatches) {
     const ref = doc(db, "users", uid, MATCHES, id);
+    operations.push((batch) => void batch.delete(ref));
+  }
+  for (const id of plan.dropTeams) {
+    const ref = doc(db, "users", uid, TEAMS, id);
     operations.push((batch) => void batch.delete(ref));
   }
   if (plan.tombstones !== null) {
@@ -161,6 +190,7 @@ export async function applyPlan(db: Firestore, uid: string, plan: SyncPlan): Pro
       void batch.set(ref, {
         deletedPlayers: book.deletedPlayers,
         deletedMatches: book.deletedMatches,
+        deletedTeams: book.deletedTeams,
       }),
     );
   }

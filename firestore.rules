@@ -34,6 +34,7 @@ service cloud.firestore {
     // One document per record, under the owner's uid:
     //   users/{uid}/players/{playerId}
     //   users/{uid}/matches/{matchId}
+    //   users/{uid}/teams/{teamId}
     //   users/{uid}/meta/tombstones
     match /users/{userId}/{document=**} {
       allow read, write: if isAllowedUser() && request.auth.uid == userId;
