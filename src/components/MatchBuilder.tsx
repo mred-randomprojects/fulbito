@@ -23,12 +23,14 @@ import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { TeamInsights } from "./TeamInsights";
 import { ShareDialog } from "./ShareDialog";
+import { MatchTabsBar } from "./MatchTabsBar";
 import { PlayerForm } from "./PlayerForm";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { evaluateLineup, findSplits, SplitError, type TeamEvaluation } from "@/lib/balance";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
 import { computeStats } from "@/lib/stats";
-import { nextPaymentState } from "@/lib/court";
+import { nextPaymentState, splitCourt } from "@/lib/court";
+import { matchTabs, type MatchTabId } from "@/lib/matchTabs";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import type { TeamMatchPlan } from "@/lib/teamMatch";
@@ -142,6 +144,17 @@ export function MatchBuilder({
   const evalB = useMemo(() => evaluateLineup(lineupB, formationB), [lineupB, formationB]);
 
   const hasLineup = placedIds.size > 0;
+
+  /**
+   * Which of the four jobs is on screen. See `lib/matchTabs.ts`.
+   *
+   * A match that already has a lineup opens on the pitch, because that is what
+   * you came back to look at. One that does not opens on the squad, and that
+   * is not a nicety: the tabs replace the intro layout the moment the squad
+   * reaches two, so defaulting to the pitch would yank the list out from under
+   * the finger that just ticked the second player.
+   */
+  const [tab, setTab] = useState<MatchTabId>(() => (hasLineup ? "cancha" : "jugadores"));
 
   /* ---------------------------------------------------------------- */
   /* Mutations                                                         */
@@ -508,6 +521,29 @@ export function MatchBuilder({
         ? `Sobra${mismatch === -1 ? "" : "n"} ${-mismatch}. Sacá a alguien de la lista o agrandá un equipo.`
         : null;
 
+  // Same input CourtPanel divides, so the badge on the tab and the list
+  // behind it can never disagree.
+  const courtSplit = useMemo(
+    () =>
+      splitCourt({
+        cost: match.courtCost,
+        squad: squadPlayers.map((p) => p.id),
+        payments: match.payments,
+      }),
+    [match.courtCost, match.payments, squadPlayers],
+  );
+
+  const tabs = matchTabs({
+    squadSize: match.squad.length,
+    hasLineup,
+    benchCount: unassigned.length,
+    conflictCount: lineupConflicts.length,
+    sizeMismatch: mismatch,
+    courtCost: match.courtCost,
+    payers: courtSplit.payers,
+    paidCount: courtSplit.paidCount,
+  });
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5">
       <header className="mb-4 flex flex-wrap items-center gap-2">
@@ -579,222 +615,224 @@ export function MatchBuilder({
           </div>
         </div>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
-          {/* The pitch stays put while the analysis beside it scrolls — the
-              teams are the thing you keep glancing back at. */}
-          <div className="space-y-4 lg:sticky lg:top-14">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                onClick={balance}
-                disabled={mismatch !== 0}
-                title={mismatch === 0 ? undefined : sizeHint ?? undefined}
-                className="flex-1 sm:flex-none"
-              >
-                <Shuffle className="mr-1.5 h-4 w-4" />
-                {hasLineup ? "Rearmar" : "Armar los equipos"}
-              </Button>
+        <>
+          <MatchTabsBar tabs={tabs} active={tab} onSelect={setTab} />
 
-              {options != null && options.options.length > 1 && (
-                <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => stepOption(-1)}
-                    className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
-                    aria-label="Opción anterior"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="px-1.5 text-xs text-muted-foreground">
-                    {edited ? (
-                      <span className="flex items-center gap-1">
-                        <Undo2 className="h-3 w-3" /> a mano
-                      </span>
-                    ) : (
-                      <>
-                        Opción {optionIndex + 1}/{options.options.length}
-                      </>
+          <div
+            role="tabpanel"
+            id={`match-panel-${tab}`}
+            aria-labelledby={`match-tab-${tab}`}
+          >
+            {tab === "cancha" && (
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
+                {/* The pitch stays put while the analysis beside it scrolls — the
+                    teams are the thing you keep glancing back at. */}
+                <div className="space-y-4 lg:sticky lg:top-14">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={balance}
+                      disabled={mismatch !== 0}
+                      title={mismatch === 0 ? undefined : sizeHint ?? undefined}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <Shuffle className="mr-1.5 h-4 w-4" />
+                      {hasLineup ? "Rearmar" : "Armar los equipos"}
+                    </Button>
+
+                    {options != null && options.options.length > 1 && (
+                      <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => stepOption(-1)}
+                          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
+                          aria-label="Opción anterior"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="px-1.5 text-xs text-muted-foreground">
+                          {edited ? (
+                            <span className="flex items-center gap-1">
+                              <Undo2 className="h-3 w-3" /> a mano
+                            </span>
+                          ) : (
+                            <>
+                              Opción {optionIndex + 1}/{options.options.length}
+                            </>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => stepOption(1)}
+                          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
+                          aria-label="Opción siguiente"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
                     )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => stepOption(1)}
-                    className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
-                    aria-label="Opción siguiente"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
+
+                    <div className="flex-1" />
+
+                    {hasLineup && (
+                      <Button variant="secondary" onClick={() => setShareOpen(true)}>
+                        <Share2 className="mr-1.5 h-4 w-4" />
+                        Compartir
+                      </Button>
+                    )}
+                  </div>
+
+                  {sizeHint != null && (
+                    <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                      {sizeHint}
+                    </p>
+                  )}
+
+                  {balanceError != null && (
+                    <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      {balanceError}
+                    </p>
+                  )}
+
+                  {/* Only ever appears when the split genuinely could not keep a pair
+                      apart, or when someone put them together by hand. The optimiser
+                      pays a hundred points a pair, so a solvable one never gets
+                      here. */}
+                  {lineupConflicts.length > 0 && (
+                    <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                      <HeartCrack className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        {/* Always plural: even one conflict is two people. */}
+                        {lineupConflicts
+                          .map(({ a, b }) => `${nameOf(a)} y ${nameOf(b)}`)
+                          .join(", ")}{" "}
+                        quedaron juntos, y no se bancan. Movelos a mano, o sacale el
+                        tilde a <em>respetar las malas ondas</em> si hoy da igual.
+                      </span>
+                    </p>
+                  )}
+
+                  <Pitch
+                    tokens={tokens}
+                    labelB={
+                      <TeamChip
+                        config={match.teamB}
+                        evaluation={evalB}
+                        size={match.sizeB}
+                        favoured={summary?.favoured === "B"}
+                      />
+                    }
+                    labelA={
+                      <TeamChip
+                        config={match.teamA}
+                        evaluation={evalA}
+                        size={match.sizeA}
+                        favoured={summary?.favoured === "A"}
+                      />
+                    }
+                  />
+
+                  {hasLineup && (
+                    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      Tocá un jugador y después a otro — o una camiseta vacía — para
+                      cambiarlos de lugar. Los números se actualizan solos.
+                    </p>
+                  )}
+
+                  {unassigned.length > 0 && (
+                    <UnassignedStrip
+                      players={unassigned}
+                      selection={selection}
+                      onSelect={(id) => handleSelect({ where: "unassigned", id })}
+                      lockedTo={lockedTo}
+                    />
+                  )}
                 </div>
-              )}
 
-              <div className="flex-1" />
-
-              {hasLineup && (
-                <Button variant="secondary" onClick={() => setShareOpen(true)}>
-                  <Share2 className="mr-1.5 h-4 w-4" />
-                  Compartir
-                </Button>
-              )}
-            </div>
-
-            {sizeHint != null && (
-              <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-                {sizeHint}
-              </p>
+                {hasLineup && (
+                  <TeamInsights
+                    evalA={evalA}
+                    evalB={evalB}
+                    teamA={match.teamA}
+                    teamB={match.teamB}
+                    basis={match.basis}
+                    handicap={match.handicap}
+                    search={
+                      options == null
+                        ? null
+                        : { exhaustive: options.exhaustive, evaluated: options.evaluated }
+                    }
+                    edited={edited}
+                  />
+                )}
+              </div>
             )}
 
-            {balanceError != null && (
-              <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {balanceError}
-              </p>
-            )}
-
-            {/* Only ever appears when the split genuinely could not keep a pair
-                apart, or when someone put them together by hand. The optimiser
-                pays a hundred points a pair, so a solvable one never gets
-                here. */}
-            {lineupConflicts.length > 0 && (
-              <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-                <HeartCrack className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  {/* Always plural: even one conflict is two people. */}
-                  {lineupConflicts
-                    .map(({ a, b }) => `${nameOf(a)} y ${nameOf(b)}`)
-                    .join(", ")}{" "}
-                  quedaron juntos, y no se bancan. Movelos a mano, o sacale el
-                  tilde a <em>respetar las malas ondas</em> si hoy da igual.
-                </span>
-              </p>
-            )}
-
-            <Pitch
-              tokens={tokens}
-              labelB={
-                <TeamChip
-                  config={match.teamB}
-                  evaluation={evalB}
-                  size={match.sizeB}
-                  favoured={summary?.favoured === "B"}
+            {tab === "jugadores" && (
+              <div className="mx-auto w-full max-w-3xl space-y-4">
+                <SavedTeamsPanel
+                  teams={teams}
+                  playersById={playersById}
+                  match={match}
+                  onLoad={loadSavedTeams}
                 />
-              }
-              labelA={
-                <TeamChip
-                  config={match.teamA}
-                  evaluation={evalA}
-                  size={match.sizeA}
-                  favoured={summary?.favoured === "A"}
+
+                {/* Bringing two saved sides in wholesale sits above picking
+                    people one by one, because it is the shortcut past the
+                    list rather than an option within it. */}
+                <SquadPicker
+                  players={players}
+                  squad={match.squad}
+                  lockedTo={lockedTo}
+                  onToggle={toggleSquad}
+                  onCycleLock={cycleLock}
+                  onSelectAll={selectAll}
+                  onClear={clearSquad}
+                  tagFilter={tagFilter}
+                  onAddPlayer={() => setAddPlayerOpen(true)}
                 />
-              }
-            />
-
-            {hasLineup && (
-              <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Tocá un jugador y después a otro — o una camiseta vacía — para
-                cambiarlos de lugar. Los números se actualizan solos.
-              </p>
+              </div>
             )}
 
-            {unassigned.length > 0 && (
-              <UnassignedStrip
-                players={unassigned}
-                selection={selection}
-                onSelect={(id) => handleSelect({ where: "unassigned", id })}
-                lockedTo={lockedTo}
-              />
-            )}
-
-            {hasLineup && (
-              <div className="lg:hidden">
-                <TeamInsights
-                  evalA={evalA}
-                  evalB={evalB}
+            {tab === "ajustes" && (
+              <div className="mx-auto w-full max-w-3xl">
+                <MatchSetup
                   teamA={match.teamA}
                   teamB={match.teamB}
+                  sizeA={match.sizeA}
+                  sizeB={match.sizeB}
+                  squadSize={match.squad.length}
                   basis={match.basis}
                   handicap={match.handicap}
-                  search={
-                    options == null
-                      ? null
-                      : { exhaustive: options.exhaustive, evaluated: options.evaluated }
+                  formationA={formationA}
+                  formationB={formationB}
+                  onTeamChange={(team, config) =>
+                    patch(team === "A" ? { teamA: config } : { teamB: config })
                   }
-                  edited={edited}
+                  onSizeChange={setSize}
+                  respectAvoids={match.respectAvoids}
+                  avoidPairsInSquad={avoidPairsInSquad}
+                  anyAvoidsRecorded={anyAvoidsRecorded}
+                  onBasisChange={(basis) => patch({ basis })}
+                  onRespectAvoidsChange={(respectAvoids) => patch({ respectAvoids })}
+                  onHandicapChange={(handicap) => patch({ handicap })}
+                />
+              </div>
+            )}
+
+            {tab === "pagos" && (
+              <div className="mx-auto w-full max-w-3xl">
+                <CourtPanel
+                  cost={match.courtCost}
+                  squad={squadPlayers}
+                  payments={match.payments}
+                  onCostChange={(courtCost) => patch({ courtCost })}
+                  onCyclePayment={cyclePayment}
                 />
               </div>
             )}
           </div>
-
-          <div className="space-y-4">
-            <SavedTeamsPanel
-              teams={teams}
-              playersById={playersById}
-              match={match}
-              onLoad={loadSavedTeams}
-            />
-
-            {/* Who is playing comes first: it is the thing you reach for most,
-                and burying it under the settings made it hard to find. */}
-            <SquadPicker
-              players={players}
-              squad={match.squad}
-              lockedTo={lockedTo}
-              onToggle={toggleSquad}
-              onCycleLock={cycleLock}
-              onSelectAll={selectAll}
-              onClear={clearSquad}
-              tagFilter={tagFilter}
-              onAddPlayer={() => setAddPlayerOpen(true)}
-            />
-
-            <MatchSetup
-              teamA={match.teamA}
-              teamB={match.teamB}
-              sizeA={match.sizeA}
-              sizeB={match.sizeB}
-              squadSize={match.squad.length}
-              basis={match.basis}
-              handicap={match.handicap}
-              formationA={formationA}
-              formationB={formationB}
-              onTeamChange={(team, config) =>
-                patch(team === "A" ? { teamA: config } : { teamB: config })
-              }
-              onSizeChange={setSize}
-              respectAvoids={match.respectAvoids}
-              avoidPairsInSquad={avoidPairsInSquad}
-              anyAvoidsRecorded={anyAvoidsRecorded}
-              onBasisChange={(basis) => patch({ basis })}
-              onRespectAvoidsChange={(respectAvoids) => patch({ respectAvoids })}
-              onHandicapChange={(handicap) => patch({ handicap })}
-            />
-
-            <CourtPanel
-              cost={match.courtCost}
-              squad={squadPlayers}
-              payments={match.payments}
-              onCostChange={(courtCost) => patch({ courtCost })}
-              onCyclePayment={cyclePayment}
-            />
-
-            {hasLineup && (
-              <div className="hidden lg:block">
-                <TeamInsights
-                  evalA={evalA}
-                  evalB={evalB}
-                  teamA={match.teamA}
-                  teamB={match.teamB}
-                  basis={match.basis}
-                  handicap={match.handicap}
-                  search={
-                    options == null
-                      ? null
-                      : { exhaustive: options.exhaustive, evaluated: options.evaluated }
-                  }
-                  edited={edited}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+        </>
       )}
 
       <ShareDialog

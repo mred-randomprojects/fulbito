@@ -57,6 +57,8 @@
     "src/lib/tournament.ts",
     "src/lib/tournament.test.ts",
     "src/lib/teamMatch.ts",
-    "src/lib/teamMatch.test.ts"
+    "src/lib/teamMatch.test.ts",
+    "src/lib/matchTabs.ts",
+    "src/lib/matchTabs.test.ts"
   ]
 }

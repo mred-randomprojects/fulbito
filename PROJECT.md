@@ -130,6 +130,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
+| `lib/matchTabs.ts` | Which of a match's four tabs is worth a count or a warning dot |
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
 | `lib/insights.ts` | Turning two team evaluations into the sentences a person would say |
@@ -153,8 +154,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `cloud/firestore.ts` | Documents in, documents out; `useCloudSync.ts` decides when |
 
 Screens: `MatchesPage` (the list, with what is still owed on each row),
-`MatchBuilder` (the one big screen — squad, pitch, setup, insights, result,
-cancha), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
+`MatchBuilder` (one screen in four tabs — Cancha, Jugadores, Ajustes, Pagos —
+above a result panel that is always there), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
@@ -169,6 +170,26 @@ exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `MatchBuilder` renders a different `SquadPicker` element once the squad reaches
 two, and a filter living inside the list would be thrown away on the second
 tap.
+
+### The four tabs of a match
+
+A match is four jobs — look at the pitch, pick who came, set the sizes and
+kits, chase the money — and they used to be one long column. On a phone that
+put the cancha's money at the very bottom, so `MatchTabsBar` puts each job one
+tap away instead. Two consequences worth knowing:
+
+- **The tabs only exist once the squad reaches two.** Below that the screen is
+  still the intro layout: an explainer beside the picker, because there is no
+  pitch to tab to yet.
+- **A match opens on the tab that matches its state** — the pitch if anybody
+  is placed, the squad if not. That second case is load-bearing: the layout
+  swaps to tabs the moment the second player is ticked, and landing on Cancha
+  would pull the list out from under the finger that ticked them.
+
+What each tab *says* — the counts and the amber dot — is `lib/matchTabs.ts`,
+not the component. The rules have a "yes, but" each: no bench count before
+there is a lineup, no money count before there is a price, and nothing
+congratulatory about a cancha you bancaste to everybody.
 
 ### Repartir, and why it is not a match
 
