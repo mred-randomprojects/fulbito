@@ -68,6 +68,8 @@
     "src/lib/stamp.test.ts",
     "src/lib/cloudStatus.ts",
     "src/lib/cloudStatus.test.ts",
+    "src/lib/crowd.ts",
+    "src/lib/crowd.test.ts",
     "src/lib/poll.ts",
     "src/lib/poll.test.ts",
     "src/syncRoundTrip.test.ts"

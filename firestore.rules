@@ -40,6 +40,96 @@ service cloud.firestore {
       allow read, write: if isAllowedUser() && request.auth.uid == userId;
     }
 
+    // ------------------------------------------------------------------
+    // Encuestas — asking other people what your players are worth.
+    //
+    // The one thing in this app that lives outside `users/{uid}`, and every
+    // rule below is about paying for that honestly.
+    //
+    // A poll is a snapshot the owner sends out: names and faces, no ratings.
+    // A ballot is one person's answers, and it is stored with **no uid on
+    // it**. That is not tidiness. The owner has to read every ballot to work
+    // out the medians — there is no server here to do it for them — so a uid
+    // on the ballot would put "who gave El Gordo a 4" one tap away, and
+    // nobody would ever answer honestly again.
+    //
+    // One vote per account is enforced by a marker only its own voter can
+    // read, and the *order* is the whole trick:
+    //
+    //   1. The voter creates `voters/{uid}` holding one random `ballotId`.
+    //      Create-only: it can never be updated or re-pointed at another.
+    //   2. The voter creates `ballots/{ballotId}`, and the rule requires the
+    //      id to be exactly the one their own marker names.
+    //
+    // A marker names one id and cannot change, so an account can only ever
+    // write one ballot. Doing it the obvious way round — "you may write a
+    // ballot if you have no marker yet" — is broken, and quietly: rules are
+    // evaluated against the state *before* the write, so a single batch
+    // holding two ballots and one marker passes every check.
+    //
+    // The email allowlist above deliberately does not apply here. It governs
+    // who may sync their own roster; the entire point of a poll is people who
+    // are not on that list answering it.
+    //
+    // Not defended: the owner can list their own poll's ballot ids, so they
+    // could point their own marker at one and overwrite it. That is somebody
+    // forging the answers to their own question, which costs them their own
+    // numbers and nobody else's.
+    // ------------------------------------------------------------------
+    match /polls/{pollId} {
+      function poll() {
+        return get(/databases/$(database)/documents/polls/$(pollId)).data;
+      }
+      function isOwner() {
+        return request.auth != null && poll().ownerUid == request.auth.uid;
+      }
+      function markerPath() {
+        return /databases/$(database)/documents/polls/$(pollId)/voters/$(request.auth.uid);
+      }
+      function claims(ballotId) {
+        return request.auth != null
+          && exists(markerPath())
+          && get(markerPath()).data.ballotId == ballotId;
+      }
+
+      // Whoever holds the link, once signed in. A poll carries names and
+      // faces, so it is not readable by an unauthenticated crawler that
+      // guessed an id, and it is never enumerable by anybody but its owner.
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      match /ballots/{ballotId} {
+        // The owner reads the pile to work out the medians. A voter reads
+        // exactly the one their marker names, which is how they come back to
+        // a ballot they half filled in.
+        allow list: if isOwner();
+        allow get: if isOwner() || claims(ballotId);
+        allow create, update: if claims(ballotId)
+          && request.resource.data.keys().hasOnly(['votes']);
+        allow delete: if isOwner();
+      }
+
+      match /voters/{voterId} {
+        // The door that stays shut. Opening `list` to the owner would put a
+        // uid beside every ballot and undo the whole design above.
+        allow get: if request.auth != null && request.auth.uid == voterId;
+        allow list: if false;
+        allow create: if request.auth != null
+          && request.auth.uid == voterId
+          && request.resource.data.keys().hasOnly(['ballotId'])
+          && request.resource.data.ballotId is string
+          && request.resource.data.ballotId.size() > 0;
+        // Never re-pointed: that is what makes one marker mean one vote.
+        allow update, delete: if false;
+      }
+    }
+
     // Everything else is denied.
     match /{document=**} {
       allow read, write: if false;

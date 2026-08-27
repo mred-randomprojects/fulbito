@@ -149,6 +149,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
+| `lib/crowd.ts` | What a pile of answers says a player is worth, and when there are enough of them |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
@@ -271,6 +272,36 @@ empty against one proves nothing at all about the server. Which is why **the
 listeners ask for `includeMetadataChanges` precisely so that the moment of
 server acknowledgement arrives as an event. Everything short of that is
 `pending`, which the pill renders as "Guardado acá".
+
+### Encuestas, and the one thing outside the wall
+
+Everything above lives under `users/{uid}`, which is a wall. Asking other
+people what your players are worth cannot: a poll is read, and answered, by
+somebody who is not you. So it is the one collection at the root —
+`polls/{pollId}`, with `ballots/{ballotId}` and `voters/{uid}` under it — and
+the design is about paying for that honestly.
+
+- **A poll is a snapshot, not a window.** Names and faces, copied at the
+  moment the link went out. No ratings — showing yours would anchor the answer
+  and ruin the number you are asking for — and no notes, tags or avoid lists,
+  because a link is readable by whoever holds it.
+- **A ballot carries no uid.** The medians are worked out in the owner's
+  browser, because there is no server here to do it; a uid on the ballot would
+  put "who gave El Gordo a 4" one tap away, and nobody would answer honestly
+  twice. What stops double voting is `voters/{uid}`, a create-only marker
+  naming one random `ballotId`, readable by nobody but its own voter.
+- **The order of those two writes is the whole trick.** Marker first, then the
+  ballot it names. The obvious way round — "you may write a ballot if you have
+  no marker" — passes a batch holding two ballots and one marker, because
+  rules are evaluated against the state before the write.
+- **Nothing is aggregated on the way in.** `lib/crowd.ts` takes the median of
+  the raw votes on every pass, the same bargain `lib/stats.ts` makes with
+  match results. Below `MIN_VOTERS` there is no number at all, and
+  `CrowdNumber` is a union so a screen cannot render one that does not exist.
+- **The crowd never overwrites a hand-entered rating.** It is shown beside it
+  and adopted by a tap, which keeps "nobody asked the app to have opinions"
+  true — the opinions here are other people's, and they are still yours to
+  take or leave.
 
 Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
 [`firestore.rules`](./firestore.rules) is the gate that actually enforces it.
