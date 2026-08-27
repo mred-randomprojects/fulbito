@@ -68,7 +68,9 @@ your own devices.
 - **A list you recognise at a glance.** Every partido puts up the face of the
   best player on each side, so the list reads like the games you played rather
   than like a column of light-against-dark circles. Only people with a photo
-  loaded can be the face; a side where nobody uploaded one keeps its bibs.
+  loaded can be the face; a side where nobody uploaded one keeps its bibs. Once
+  the score is written down, the side that won gets a coronita on top of its
+  circle — a draw crowns nobody, and neither does a game you never wrote down.
 - **How it actually ended.** Write the score down on the match. It sits above
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.

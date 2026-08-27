@@ -111,3 +111,23 @@ export function describeResult(
         : `Baile de ${name}, ${score}. Alguien va a tener que poner el asado.`,
   };
 }
+
+/**
+ * Which side won, for a caller that wants the fact and not the sentence.
+ *
+ * `describeResult` already computes this, but it demands both team names to
+ * build its wording, and the list of partidos has no use for either — it only
+ * wants to know whose badge gets the coronita. Three states, and the two that
+ * are easy to collapse are the interesting ones:
+ *
+ * - **No result is not a draw.** A match nobody has written down yet has
+ *   `result === null`, and it must not be crowned on either side.
+ * - **A draw is not a win.** A recorded 0-0 — or 3-3 — leaves both badges
+ *   bare. A crown that showed up on every finished game would stop meaning
+ *   "these ones won".
+ */
+export function winningSide(result: MatchResult | null): TeamKey | null {
+  if (result === null) return null;
+  if (result.goalsA === result.goalsB) return null;
+  return result.goalsA > result.goalsB ? "A" : "B";
+}

@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { CalendarDays, ChevronRight, Plus, Trophy } from "lucide-react";
+import { CalendarDays, ChevronRight, Crown, Plus, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, splitCourt } from "@/lib/court";
 import { pickFace } from "@/lib/matchFaces";
+import { winningSide } from "@/lib/result";
 import { peakRating } from "@/lib/rating";
 import {
   KITS,
@@ -13,6 +14,7 @@ import {
   type PlayerId,
 } from "@/types";
 import { formatLongDate } from "@/lib/dates";
+import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./PlayerAvatar";
 
 interface Props {
@@ -29,15 +31,9 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
    * in old squads and has no row to be marked paid on — counting one here
    * would leave a match that can never say it is cobrada.
    */
-  const rosterIds = useMemo(
-    () => new Set(players.map((p) => p.id)),
-    [players],
-  );
+  const rosterIds = useMemo(() => new Set(players.map((p) => p.id)), [players]);
 
-  const byId = useMemo(
-    () => new Map(players.map((p) => [p.id, p])),
-    [players],
-  );
+  const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5">
@@ -78,45 +74,53 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
         </div>
       ) : (
         <ul className="space-y-2">
-          {matches.map((match) => (
-            <li key={match.id}>
-              <button
-                type="button"
-                onClick={() => onOpen(match)}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
-              >
-                <div className="flex shrink-0 -space-x-1">
-                  <SideBadge
-                    kit={match.teamA.kit}
-                    lineup={match.lineupA}
-                    byId={byId}
-                  />
-                  <SideBadge
-                    kit={match.teamB.kit}
-                    lineup={match.lineupB}
-                    byId={byId}
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{match.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(match.date)} · {match.sizeA} v {match.sizeB} ·{" "}
-                    {match.squad.length} anotado{match.squad.length === 1 ? "" : "s"}
-                    <CourtNote match={match} rosterIds={rosterIds} />
-                  </p>
-                </div>
-                {/* Reads left to right in the same order as the two shirts on
+          {matches.map((match) => {
+            // Who wears the coronita on this row, and `null` on the games
+            // nobody wrote down and on the ones that finished level.
+            const won = winningSide(match.result);
+            return (
+              <li key={match.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(match)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
+                >
+                  <div className="flex shrink-0 -space-x-1">
+                    <SideBadge
+                      kit={match.teamA.kit}
+                      lineup={match.lineupA}
+                      byId={byId}
+                      won={won === "A"}
+                    />
+                    <SideBadge
+                      kit={match.teamB.kit}
+                      lineup={match.lineupB}
+                      byId={byId}
+                      won={won === "B"}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{match.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(match.date)} · {match.sizeA} v {match.sizeB} ·{" "}
+                      {match.squad.length} anotado
+                      {match.squad.length === 1 ? "" : "s"}
+                      <CourtNote match={match} rosterIds={rosterIds} />
+                    </p>
+                  </div>
+                  {/* Reads left to right in the same order as the two shirts on
                     the left of the row, which is the only thing saying which
                     number belongs to whom. */}
-                {match.result != null && (
-                  <span className="tabular shrink-0 rounded-lg border border-border bg-secondary/60 px-2 py-1 text-sm font-semibold">
-                    {match.result.goalsA} - {match.result.goalsB}
-                  </span>
-                )}
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </button>
-            </li>
-          ))}
+                  {match.result != null && (
+                    <span className="tabular shrink-0 rounded-lg border border-border bg-secondary/60 px-2 py-1 text-sm font-semibold">
+                      {match.result.goalsA} - {match.result.goalsB}
+                    </span>
+                  )}
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -130,19 +134,33 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
  * left here is drawing it: the kit colour becomes a ring around the photo
  * rather than a filled circle, because light-against-dark is still the only
  * thing on the row saying which of the two scores belongs to whom.
+ *
+ * The winner wears a coronita over the top of that circle. It sits on the
+ * badge and not on the score because the score is already there in numbers —
+ * what the row was missing was a way to read the outcome off the *side*, from
+ * the same glance that recognises the game. It rides the shirt as happily as
+ * a face: on a side where nobody uploaded a photo the circle still stands for
+ * that team, and dropping the crown there would hide the win on exactly the
+ * rows that already have the least to look at.
  */
 function SideBadge({
   kit,
   lineup,
   byId,
+  won,
 }: {
   kit: KitId;
   lineup: (PlayerId | null)[];
   byId: ReadonlyMap<PlayerId, Player>;
+  won: boolean;
 }) {
   const face = useMemo(() => {
-    const options: { id: string; avatar: string; score: number; player: Player }[] =
-      [];
+    const options: {
+      id: string;
+      avatar: string;
+      score: number;
+      player: Player;
+    }[] = [];
     for (const id of lineup) {
       if (id === null) continue;
       const player = byId.get(id);
@@ -159,28 +177,42 @@ function SideBadge({
     return pickFace(options)?.player ?? null;
   }, [lineup, byId]);
 
-  if (face === null) {
-    return (
-      <span
-        className="h-9 w-9 rounded-full ring-2 ring-card"
-        style={{ background: KITS[kit].fill }}
-      />
-    );
-  }
-
   return (
-    <span
-      title={playerDisplayName(face)}
-      className="rounded-full"
-      // Two rings in one shadow rather than Tailwind's `ring-2 ring-card`,
-      // which is a box-shadow too and would be dropped by this inline one:
-      // the kit against the photo, then the card colour so the two faces do
-      // not smear into each other where they overlap.
-      style={{
-        boxShadow: `0 0 0 2px ${KITS[kit].ring}, 0 0 0 4px hsl(var(--card))`,
-      }}
-    >
-      <PlayerAvatar player={face} size={36} className="block" />
+    // The two badges overlap by a few pixels and later siblings paint over
+    // earlier ones, so the winner comes forward: nothing on the row is allowed
+    // to paint over the corona, whichever side is wearing it.
+    <span className={cn("relative block", won && "z-10")}>
+      {face === null ? (
+        <span
+          className="block h-9 w-9 rounded-full ring-2 ring-card"
+          style={{ background: KITS[kit].fill }}
+        />
+      ) : (
+        <span
+          title={playerDisplayName(face)}
+          className="block rounded-full"
+          // Two rings in one shadow rather than Tailwind's `ring-2 ring-card`,
+          // which is a box-shadow too and would be dropped by this inline one:
+          // the kit against the photo, then the card colour so the two faces do
+          // not smear into each other where they overlap.
+          style={{
+            boxShadow: `0 0 0 2px ${KITS[kit].ring}, 0 0 0 4px hsl(var(--card))`,
+          }}
+        >
+          <PlayerAvatar player={face} size={36} className="block" />
+        </span>
+      )}
+      {won && (
+        <Crown
+          role="img"
+          aria-label="Ganó"
+          fill="currentColor"
+          strokeWidth={1.5}
+          // Half off the top of the circle: sitting on the head rather than
+          // floating above it, and still clear of the ring below.
+          className="absolute -top-2 left-1/2 h-3.5 w-3.5 -translate-x-1/2 text-amber-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]"
+        />
+      )}
     </span>
   );
 }

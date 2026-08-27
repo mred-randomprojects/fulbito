@@ -136,7 +136,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
 | `lib/insights.ts` | Turning two team evaluations into the sentences a person would say |
-| `lib/result.ts` | Reading a typed-in scoreline, and how lopsided the game was |
+| `lib/result.ts` | Reading a typed-in scoreline, which side won, and how lopsided the game was |
 | `lib/autosave.ts` | When a self-saving form writes, and when it holds back |
 | `lib/saveStatus.ts` | When "Guardado" appears and when it clears |
 | `lib/clipboard.ts` | Which image, if any, a paste actually meant |
@@ -442,7 +442,13 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   are — the row's two shirts are the only thing saying which of the two goal
   numbers belongs to whom. Ties break on the player id, because the natural
   order is the lineup and Rearmar reshuffles that: two equally-rated players
-  would otherwise swap the face on a row nobody edited.
+  would otherwise swap the face on a row nobody edited. The side that won
+  wears a coronita over that circle — `lib/result.ts`'s `winningSide`, which
+  is deliberately three-valued: a match nobody wrote down is not a draw, and a
+  recorded draw is not a win, so both of those leave the row bare. The crown
+  rides a shirt as happily as a face, because the circle stands for the side
+  either way and hiding the win on the rows with no photos would drop it from
+  exactly the rows that have the least to look at.
 
 - **A filter is a view, never a fact.** Nothing about tags is stored beyond
   the labels on the players. The ticked chips die with the screen, and a tick

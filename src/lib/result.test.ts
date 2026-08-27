@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { describeResult, emptyResult, hasGoals, parseGoals } from "./result.js";
+import {
+  describeResult,
+  emptyResult,
+  hasGoals,
+  parseGoals,
+  winningSide,
+} from "./result.js";
 import { clampGoals, MAX_GOALS, type MatchResult } from "../types.js";
 
 function score(goalsA: number, goalsB: number): MatchResult {
@@ -92,5 +98,42 @@ describe("describeResult", () => {
     const shootout = describeResult(score(3, 3), "A", "B").text;
     assert.notEqual(goalless, shootout);
     assert.match(shootout, /3 a 3/);
+  });
+});
+
+describe("winningSide", () => {
+  it("names the side that scored more", () => {
+    assert.equal(winningSide(score(4, 1)), "A");
+    assert.equal(winningSide(score(1, 4)), "B");
+  });
+
+  it("crowns nobody on a match nobody wrote down", () => {
+    // The list crowns off this. A partido with no result must stay bare on
+    // both sides rather than defaulting to one of them.
+    assert.equal(winningSide(null), null);
+  });
+
+  it("crowns nobody on a draw, goalless or not", () => {
+    // A recorded 0-0 is a result, and it is still not a win. A crown that
+    // appeared on every finished game would stop meaning anything.
+    assert.equal(winningSide(score(0, 0)), null);
+    assert.equal(winningSide(score(3, 3)), null);
+  });
+
+  it("agrees with the sentence describeResult would say", () => {
+    // Two places decide who won; they must not drift apart.
+    for (const [a, b] of [
+      [4, 1],
+      [1, 4],
+      [0, 0],
+      [2, 2],
+      [9, 1],
+    ]) {
+      const result = score(a, b);
+      assert.equal(
+        winningSide(result),
+        describeResult(result, "Claros", "Oscuros").winner,
+      );
+    }
   });
 });
