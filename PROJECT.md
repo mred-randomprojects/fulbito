@@ -146,6 +146,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
+| `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
