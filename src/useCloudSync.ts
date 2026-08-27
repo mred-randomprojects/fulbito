@@ -4,10 +4,11 @@ import type { AppDataApi } from "./useAppData";
 import { browserClock } from "./lib/browserClock";
 import { allowsEmail } from "./lib/allowlist";
 import { isEmptyPlan, planSync } from "./lib/syncPlan";
+import { cloudStateFrom, retryDelay, type CloudState } from "./lib/cloudStatus";
 import { errorCode } from "./lib/authErrors";
 import { useCloudAuth } from "./cloud/auth";
 import { ALLOWED_EMAILS, loadCloud, type CloudSdk } from "./cloud/firebase";
-import { applyPlan, subscribeCloud } from "./cloud/firestore";
+import { applyPlan, subscribeCloud, type CloudView } from "./cloud/firestore";
 
 /**
  * Keeping two devices holding the same roster.
@@ -26,19 +27,30 @@ import { applyPlan, subscribeCloud } from "./cloud/firestore";
  * `localStorage` stays the copy the app actually reads. The cloud is a second
  * home for the same data, never the source of truth, so losing the network at
  * the cancha costs nothing and losing the account costs nothing either.
+ *
+ * ## What the hook is allowed to claim
+ *
+ * The state it returns ends up as a word on screen, and one of those words —
+ * "sincronizado" — is a promise about a *different device*. So it is never
+ * inferred here. It is `cloudStateFrom` reading signals that come from
+ * Firestore itself: a snapshot that arrived from the server rather than the
+ * offline cache, with nothing of ours still queued behind it. Everything else
+ * is `pending`, which is the app saying the honest half — it is on this phone,
+ * it is not up there yet.
+ *
+ * That is a real change in behaviour and the reason for it is worth keeping.
+ * The old version reported "synced" after a plan came back empty, and set no
+ * state at all during the debounce before a push — so for the first second
+ * after every tap the pill showed a cloud tick over a change that had not left
+ * the device, and it showed it again against a plan computed on a cached view
+ * of the cloud. Both are the sentence somebody relies on when they decide not
+ * to check, which is the one sentence that has to be earned.
  */
 
 /** Long enough to collect a burst of taps, short enough to beat walking away. */
 const PUSH_DEBOUNCE = 900;
 
-export type CloudState =
-  | { kind: "off" }
-  | { kind: "connecting" }
-  | { kind: "syncing" }
-  | { kind: "synced" }
-  /** Signed in with an account this deployment does not let sync. */
-  | { kind: "blocked" }
-  | { kind: "error"; message: string };
+export type { CloudState };
 
 function messageFor(error: unknown): string {
   const code = errorCode(error);
@@ -51,6 +63,8 @@ function messageFor(error: unknown): string {
   return "Falló la sincronización. Lo tuyo está guardado igual en este dispositivo.";
 }
 
+const UNSEEN: CloudView = { fromServer: false, pendingWrites: false };
+
 export function useCloudSync(app: AppDataApi): CloudState {
   const { available, user, loading } = useCloudAuth();
   const [syncState, setSyncState] = useState<CloudState>({ kind: "connecting" });
@@ -60,14 +74,57 @@ export function useCloudSync(app: AppDataApi): CloudState {
 
   /** The cloud as last seen. `null` until the first full snapshot lands. */
   const seen = useRef<AppData | null>(null);
+  /** How much that last snapshot is worth as evidence. See `cloud/firestore.ts`. */
+  const view = useRef<CloudView>(UNSEEN);
   const sdk = useRef<CloudSdk | null>(null);
   const timer = useRef<number | null>(null);
   const uidRef = useRef<string | null>(uid);
   uidRef.current = uid;
 
+  /** A push is in the air. Two at once would race to report the outcome. */
+  const writing = useRef(false);
+  /** Something changed while that push was in the air; go round again. */
+  const again = useRef(false);
+  const failure = useRef<string | null>(null);
+  const attempt = useRef(0);
+  const retry = useRef<number | null>(null);
+
   // The hook's own object identity changes every render; its methods do not.
   const appRef = useRef(app);
   appRef.current = app;
+
+  /**
+   * Work out what to say, from what is actually known right now.
+   *
+   * Called on every trigger rather than only after a write, because the two
+   * facts that decide the answer arrive from different places: the plan is
+   * ours, and whether the server has spoken is Firestore's.
+   */
+  const evaluate = useCallback(() => {
+    const remote = seen.current;
+    const plan = remote === null ? null : planSync(appRef.current.getData(), remote);
+    const state = cloudStateFrom({
+      connected: remote !== null,
+      writing: writing.current,
+      planEmpty: plan !== null && isEmptyPlan(plan),
+      fromServer: view.current.fromServer,
+      pendingWrites: view.current.pendingWrites,
+      error: failure.current,
+    });
+    // A failure that a server snapshot has since shown to be moot is forgotten
+    // here, not just hidden. Something else got the work up there — the retry,
+    // or the other device carrying the same edit — and leaving the message in
+    // the ref would have it reappear the moment the next edit made the plan
+    // non-empty again, long after it stopped being true.
+    if (state.kind === "synced") {
+      failure.current = null;
+      attempt.current = 0;
+    }
+    setSyncState(state);
+  }, []);
+
+  /** Broken out of `push` so the two can call each other without a cycle. */
+  const pushRef = useRef<() => void>(() => {});
 
   const push = useCallback(async () => {
     const cloud = sdk.current;
@@ -76,30 +133,71 @@ export function useCloudSync(app: AppDataApi): CloudState {
     // Nothing to compare against yet. The first snapshot schedules its own
     // push, so this is a wait rather than a miss.
     if (cloud === null || account === null || remote === null) return;
-
-    const plan = planSync(appRef.current.getData(), remote);
-    if (isEmptyPlan(plan)) {
-      setSyncState({ kind: "synced" });
+    // One writer at a time, and whatever landed meanwhile gets its own turn
+    // when this one is done. Overlapping pushes plan against the same stale
+    // `seen`, send the same documents twice, and then race to report which of
+    // them the state belongs to.
+    if (writing.current) {
+      again.current = true;
       return;
     }
 
-    setSyncState({ kind: "syncing" });
+    const plan = planSync(appRef.current.getData(), remote);
+    if (isEmptyPlan(plan)) {
+      evaluate();
+      return;
+    }
+
+    writing.current = true;
+    evaluate();
     try {
       await applyPlan(cloud.db, account, plan);
-      setSyncState({ kind: "synced" });
+      failure.current = null;
+      attempt.current = 0;
     } catch (error) {
       console.error("[cloud] upload failed:", error);
-      setSyncState({ kind: "error", message: messageFor(error) });
+      failure.current = messageFor(error);
+      // Without this a rejected write waited for the next tap or the next
+      // snapshot, and on a phone back in a pocket that is never.
+      if (retry.current !== null) browserClock.clearTimeout(retry.current);
+      retry.current = browserClock.setTimeout(() => {
+        retry.current = null;
+        pushRef.current();
+      }, retryDelay(attempt.current));
+      attempt.current += 1;
+    } finally {
+      writing.current = false;
+      // Deliberately not "synced" here, even though a resolved `commit` does
+      // mean the server took it. The claim is made in exactly one place — a
+      // server snapshot with nothing of ours pending — and having a second
+      // route to it is how the two drift apart.
+      evaluate();
+      if (again.current) {
+        again.current = false;
+        void push();
+      }
     }
-  }, []);
+  }, [evaluate]);
 
+  pushRef.current = () => void push();
+
+  /**
+   * A push is coming within the debounce window.
+   *
+   * Note what this does *not* do: restart the timer. A trailing debounce that
+   * resets on every trigger can be starved outright — two devices editing at
+   * once feed each other snapshots faster than the window, and the upload that
+   * was scheduled first never fires. A window that runs from the first trigger
+   * collects a burst of taps just as well and always ends.
+   */
   const schedulePush = useCallback(() => {
-    if (timer.current !== null) browserClock.clearTimeout(timer.current);
+    evaluate();
+    if (timer.current !== null) return;
     timer.current = browserClock.setTimeout(() => {
       timer.current = null;
-      void push();
+      pushRef.current();
     }, PUSH_DEBOUNCE);
-  }, [push]);
+  }, [evaluate]);
 
   // Connect, and stay connected, for as long as one account is signed in.
   useEffect(() => {
@@ -116,8 +214,9 @@ export function useCloudSync(app: AppDataApi): CloudState {
         const stop = await subscribeCloud(
           cloud.db,
           uid,
-          (remote) => {
+          (remote, snapshot) => {
             seen.current = remote;
+            view.current = snapshot;
             appRef.current.mergeRemote(remote);
             // Planned even when the merge changed nothing here: the snapshot
             // itself may be what is out of date.
@@ -125,7 +224,8 @@ export function useCloudSync(app: AppDataApi): CloudState {
           },
           (error) => {
             console.error("[cloud] subscription failed:", error);
-            setSyncState({ kind: "error", message: messageFor(error) });
+            failure.current = messageFor(error);
+            evaluate();
           },
         );
         if (!live) {
@@ -136,21 +236,33 @@ export function useCloudSync(app: AppDataApi): CloudState {
       })
       .catch((error: unknown) => {
         console.error("[cloud] could not start:", error);
-        if (live) setSyncState({ kind: "error", message: messageFor(error) });
+        if (!live) return;
+        failure.current = messageFor(error);
+        evaluate();
       });
 
     return () => {
       live = false;
       if (unsubscribe !== null) unsubscribe();
       if (timer.current !== null) browserClock.clearTimeout(timer.current);
+      if (retry.current !== null) browserClock.clearTimeout(retry.current);
       timer.current = null;
+      retry.current = null;
       sdk.current = null;
       seen.current = null;
+      view.current = UNSEEN;
+      writing.current = false;
+      again.current = false;
+      failure.current = null;
+      attempt.current = 0;
     };
-  }, [uid, schedulePush]);
+  }, [uid, schedulePush, evaluate]);
 
   // Anything written here is worth sending. `app.data` is a fresh object on
   // every write and the same one otherwise, so this fires exactly on changes.
+  // It runs `evaluate` synchronously on the way past, which is what stops the
+  // pill claiming the cloud has something that is still sitting in the
+  // debounce window.
   useEffect(() => {
     if (uid === null) return;
     schedulePush();

@@ -1,6 +1,11 @@
 import { normalizeAppData, type AppData, EMPTY_APP_DATA } from "./types";
 
-const STORAGE_KEY = "fulbito-data";
+/**
+ * Exported because a second tab has to know which key woke it up. `storage`
+ * events fire for every key in the origin, and this app is not the only thing
+ * writing to it.
+ */
+export const STORAGE_KEY = "fulbito-data";
 const BACKUP_KEY = "fulbito-data-backup";
 const CORRUPT_RECOVERY_KEY = "fulbito-data-corrupt-recovery";
 

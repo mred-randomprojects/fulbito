@@ -1,6 +1,7 @@
-import { Check, Cloud, CloudOff, Loader2, TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
+import { Check, Cloud, CloudOff, CloudUpload, TriangleAlert } from "lucide-react";
 import type { SaveStatus } from "@/lib/saveStatus";
-import type { CloudState } from "@/useCloudSync";
+import { saveReceipt, type CloudLeg, type CloudState } from "@/lib/cloudStatus";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,12 +18,21 @@ import { cn } from "@/lib/utils";
  * rendered, because a live region only announces changes made *inside* one
  * that was already there.
  *
- * With sync on, the same pill carries the second half of the answer. "Saved"
- * and "saved everywhere" are different promises, and standing at the cancha
- * marking who paid — the exact moment the phone's signal is worst — is when
- * the difference between them matters most. It rides along on the existing
- * pill rather than getting a badge of its own so that the screen gains a word,
- * not another thing blinking at you.
+ * ## Two promises, and only one of them is instant
+ *
+ * With sync on there are two different statements behind the word "guardado":
+ * it is on this phone, and it is on your other one. The first is true the
+ * moment `localStorage` accepts the write. The second is true when a Firestore
+ * server says so, which is later, and at the cancha on bad signal can be a lot
+ * later.
+ *
+ * So the pill says which of them it means. **"Guardado" on its own, with the
+ * cloud tick, is the strong claim** — the server has it, another device will
+ * see it. Anything short of that reads "Guardado acá", and *the pill does not
+ * go away while that is the case*. It outstays the couple of seconds a plain
+ * confirmation is held for, for as long as it takes, because the pill
+ * disappearing is this app's way of saying it is finished and it is not
+ * finished. `lib/cloudStatus.ts` decides which of the two it has earned.
  */
 export function SaveIndicator({
   status,
@@ -31,34 +41,49 @@ export function SaveIndicator({
   status: SaveStatus;
   cloud: CloudState;
 }) {
-  const failed = status.kind === "error";
-  const showing = status.kind !== "idle";
+  const receipt = saveReceipt(status, cloud);
+  if (receipt.kind === "hidden") return <Live />;
 
+  const failed = receipt.kind === "failed";
+  const waiting = receipt.kind === "saved" && receipt.cloud === "waiting";
+
+  return (
+    <Live>
+      <p
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-lg shadow-black/50 backdrop-blur",
+          "animate-in fade-in slide-in-from-bottom-2 duration-200",
+          failed
+            ? "border-destructive/50 bg-destructive/20 text-destructive"
+            : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+        )}
+      >
+        {failed ? (
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <Check className="h-3.5 w-3.5 shrink-0" />
+        )}
+        {failed ? "No se pudo guardar" : waiting ? "Guardado acá" : "Guardado"}
+        {receipt.kind === "saved" && <CloudMark leg={receipt.cloud} />}
+      </p>
+    </Live>
+  );
+}
+
+/**
+ * The wrapper is always rendered, pill or no pill.
+ *
+ * A live region only announces changes made inside one that was already on the
+ * page; mounting the region and its content together announces nothing.
+ */
+function Live({ children }: { children?: ReactNode }) {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 no-print"
       aria-live="polite"
       role="status"
     >
-      {showing && (
-        <p
-          className={cn(
-            "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-lg shadow-black/50 backdrop-blur",
-            "animate-in fade-in slide-in-from-bottom-2 duration-200",
-            failed
-              ? "border-destructive/50 bg-destructive/20 text-destructive"
-              : "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
-          )}
-        >
-          {failed ? (
-            <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-          ) : (
-            <Check className="h-3.5 w-3.5 shrink-0" />
-          )}
-          {failed ? "No se pudo guardar" : "Guardado"}
-          {!failed && <CloudMark state={cloud} />}
-        </p>
-      )}
+      {children}
     </div>
   );
 }
@@ -70,19 +95,19 @@ export function SaveIndicator({
  * never signed in — there is no second promise to report on, so there is
  * nothing to say.
  */
-function CloudMark({ state }: { state: CloudState }) {
-  if (state.kind === "off" || state.kind === "blocked") return null;
+function CloudMark({ leg }: { leg: CloudLeg }) {
+  if (leg === "none") return null;
 
-  if (state.kind === "error") {
+  if (leg === "failed") {
     return (
       <span className="flex items-center gap-1 border-l border-emerald-500/30 pl-1.5 text-amber-300">
         <CloudOff className="h-3.5 w-3.5 shrink-0" />
-        <span className="sr-only">acá, pero no en la nube</span>
+        <span className="sr-only">pero no en la nube</span>
       </span>
     );
   }
 
-  if (state.kind === "synced") {
+  if (leg === "done") {
     return (
       <span className="flex items-center gap-1 border-l border-emerald-500/30 pl-1.5">
         <Cloud className="h-3.5 w-3.5 shrink-0" />
@@ -91,10 +116,12 @@ function CloudMark({ state }: { state: CloudState }) {
     );
   }
 
+  // Waiting. A pulse rather than a spinner: this one can be up for a while,
+  // and a spinner that never stops reads as something being stuck.
   return (
     <span className="flex items-center gap-1 border-l border-emerald-500/30 pl-1.5 text-emerald-300/70">
-      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-      <span className="sr-only">sincronizando</span>
+      <CloudUpload className="h-3.5 w-3.5 shrink-0 animate-pulse" />
+      <span className="sr-only">todavía no en la nube</span>
     </span>
   );
 }

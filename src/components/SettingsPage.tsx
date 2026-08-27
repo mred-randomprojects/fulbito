@@ -6,7 +6,7 @@ import { normalizeAppData, type AppData } from "@/types";
 import { allRubrics } from "@/lib/scales";
 import { todayIso } from "@/lib/dates";
 import { CloudPanel } from "./CloudPanel";
-import type { CloudState } from "@/useCloudSync";
+import type { CloudState } from "@/lib/cloudStatus";
 
 interface Props {
   data: AppData;

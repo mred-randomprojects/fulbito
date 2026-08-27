@@ -61,7 +61,11 @@ export function loadCloud(): Promise<CloudSdk> {
   }
   if (pending === null) {
     pending = (async (): Promise<CloudSdk> => {
-      const [{ initializeApp }, { getAuth }, { initializeFirestore }] = await Promise.all([
+      const [
+        { initializeApp },
+        { getAuth },
+        { initializeFirestore, persistentLocalCache, persistentMultipleTabManager },
+      ] = await Promise.all([
         import("firebase/app"),
         import("firebase/auth"),
         import("firebase/firestore"),
@@ -69,15 +73,35 @@ export function loadCloud(): Promise<CloudSdk> {
       const app = initializeApp(CONFIG);
       return {
         auth: getAuth(app),
-        // `ignoreUndefinedProperties` is not tidiness, it is the difference
-        // between sync working and sync throwing. Firestore refuses a document
-        // containing `undefined` anywhere in it, and this app produces exactly
-        // that: tapping a player's already-chosen foot unsets it by writing
-        // `foot: undefined`, which is a perfectly good way to say "not set" to
-        // every other part of the codebase. Skipping the key instead is the
-        // same meaning — `normalizeAppData` reads an absent `foot` as unset —
-        // and it means a new optional field can never take sync down with it.
-        db: initializeFirestore(app, { ignoreUndefinedProperties: true }),
+        db: initializeFirestore(app, {
+          // **This is what makes "Guardado" survive the tab closing.** Without
+          // a persistent cache Firestore holds unacknowledged writes in
+          // memory, and `localStorage` having the change is no consolation to
+          // the other phone: mark who paid on bad signal at the cancha, put
+          // the phone away, and iOS reclaims the tab with the write still
+          // queued. It is gone from the cloud, and the device that had it may
+          // not be opened again for a week. On IndexedDB the queue is replayed
+          // on the next start instead.
+          //
+          // The multi-tab manager is not optional company: two tabs of the
+          // same app sharing one IndexedDB is the case the single-tab manager
+          // refuses, and it is a case that happens by accident all the time.
+          //
+          // A browser with no usable IndexedDB — Firefox private windows, a
+          // full disk — makes the SDK fall back to a memory cache with a
+          // warning rather than throwing, which is exactly the old behaviour.
+          localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+          // `ignoreUndefinedProperties` is not tidiness, it is the difference
+          // between sync working and sync throwing. Firestore refuses a
+          // document containing `undefined` anywhere in it, and this app
+          // produces exactly that: tapping a player's already-chosen foot
+          // unsets it by writing `foot: undefined`, which is a perfectly good
+          // way to say "not set" to every other part of the codebase.
+          // Skipping the key instead is the same meaning —
+          // `normalizeAppData` reads an absent `foot` as unset — and it means
+          // a new optional field can never take sync down with it.
+          ignoreUndefinedProperties: true,
+        }),
       };
     })();
     pending.catch(() => {

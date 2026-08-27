@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { useCloudAuth } from "@/cloud/auth";
 import { isCancelledSignIn } from "@/lib/authErrors";
-import type { CloudState } from "@/useCloudSync";
+import type { CloudState } from "@/lib/cloudStatus";
 
 /**
  * Turning sync on, and the consent that comes before it.
@@ -197,14 +197,26 @@ export function CloudStateLine({ state }: { state: CloudState }) {
     );
   }
 
+  if (state.kind === "connecting") {
+    return (
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <CloudOff className="h-4 w-4 shrink-0" />
+        Conectando…
+      </p>
+    );
+  }
+
+  // `pending` and `syncing` are the same news to a person — it is here, it is
+  // not up there yet — but they are worth different words. One is waiting for
+  // the server to confirm, the other has the batch in the air right now, and
+  // somebody standing at the cancha wondering whether to reload wants to know
+  // which.
   return (
     <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-      {state.kind === "connecting" ? (
-        <CloudOff className="h-4 w-4 shrink-0" />
-      ) : (
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-      )}
-      {state.kind === "connecting" ? "Conectando…" : "Subiendo los cambios…"}
+      <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+      {state.kind === "syncing"
+        ? "Subiendo los cambios…"
+        : "Guardado acá. Falta que lo tome la nube…"}
     </p>
   );
 }

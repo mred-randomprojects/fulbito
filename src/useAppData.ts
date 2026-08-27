@@ -9,7 +9,7 @@ import type {
   TeamId,
 } from "./types";
 import { normalizeAppData } from "./types";
-import { loadAppData, saveAppData, StorageQuotaError } from "./storage";
+import { loadAppData, saveAppData, STORAGE_KEY, StorageQuotaError } from "./storage";
 import { mergeAppData } from "./mergeAppData";
 import { browserClock } from "./lib/browserClock";
 import { createSaveNotifier, type SaveStatus } from "./lib/saveStatus";
@@ -184,6 +184,35 @@ export function useAppData(): AppDataApi {
       }),
     [persist],
   );
+
+  /**
+   * The same app, open in a second tab.
+   *
+   * Every tab holds its own copy of the data in memory and every tab writes
+   * the *whole* blob back on each change, so without this the last tab to save
+   * silently overwrites everything the other one did — you add three players
+   * on one tab, tick a squad on the other, and the three players are gone.
+   * Nothing about that is exotic: a link opened from the group chat while the
+   * app is already open is enough to cause it, and it happens on one device,
+   * with no network involved, where sync cannot come to the rescue.
+   *
+   * The fix is the merge the app already has, pointed at its own storage. It
+   * settles in two hops rather than echoing forever: the tab that hears the
+   * event merges and writes, the originating tab hears *that* write, merges,
+   * finds it has everything already, and `persist` drops the no-op.
+   */
+  useEffect(() => {
+    function onStorage(event: StorageEvent): void {
+      // `key` is null when the whole store was cleared, which is also our news.
+      if (event.key !== null && event.key !== STORAGE_KEY) return;
+      persist((current) => {
+        const merged = mergeAppData(current, loadAppData());
+        return sameVersions(merged, current) ? current : merged;
+      });
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [persist]);
 
   const playersById = useMemo(
     () => new Map(data.players.map((p) => [p.id, p])),

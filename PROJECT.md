@@ -145,7 +145,9 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number means |
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
+| `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
+| `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
 | `lib/authErrors.ts` | Reading a Firebase error code; which ones are somebody changing their mind |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
@@ -249,6 +251,23 @@ what buys correctness without a transaction per record.
 same data, never the source of truth, so no network at the cancha costs
 nothing, and neither does deleting the account.
 
+**Firestore runs on a persistent IndexedDB cache**, and that is a durability
+decision rather than a speed one. With the default memory cache an
+unacknowledged write lives only as long as the tab: mark who paid on bad signal
+at the cancha, put the phone away, and iOS reclaims the tab with the write
+still queued. `localStorage` having it is no consolation to the other phone,
+and the device that does have it may not be opened again for a week. On
+IndexedDB the queue is replayed on the next start instead.
+
+The cost of that is what `lib/cloudStatus.ts` exists to handle: a cached
+snapshot includes this device's own queued writes, so a plan that comes back
+empty against one proves nothing at all about the server. Which is why **the
+"synced" claim is never inferred from a plan.** It is Firestore's own metadata
+— a snapshot that arrived `!fromCache` with `!hasPendingWrites` — and the
+listeners ask for `includeMetadataChanges` precisely so that the moment of
+server acknowledgement arrives as an event. Everything short of that is
+`pending`, which the pill renders as "Guardado acá".
+
 Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
 [`firestore.rules`](./firestore.rules) is the gate that actually enforces it.
 
@@ -259,6 +278,30 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   **every write is confirmed on screen** by `SaveIndicator`, and a failed write
   says so and stays saying it. Removing that confirmation would leave an app
   that is indistinguishable from one silently losing your work.
+- **"Guardado" and "Guardado acá" are different promises, and the pill says
+  which one it has earned.** Plain "Guardado" with the cloud tick means a
+  Firestore server has acknowledged the write and another device will see it.
+  Anything less says "Guardado acá", and **the pill stays up for as long as
+  that is true** — past the couple of seconds a local confirmation is held for,
+  for as long as it takes. The pill going away is this app saying it has
+  finished, so it may not go first. `lib/cloudStatus.ts` owns both decisions
+  and `cloudStatus.test.ts` pins them.
+- **An edit always beats the version it edited.** `updatedAt` is written from
+  the clock of whichever device made the change, so a phone running a few
+  minutes fast would otherwise poison whatever it touched: every later edit
+  made on a correct clock carries an *older* stamp, loses the merge, and is
+  rolled back on the device that made it, seconds after that device said
+  Guardado. `appDataOps.ts` stamps through `lib/stamp.ts` instead of the raw
+  clock — `stampAfter` for records, which must win a strict `>`, and
+  `stampAtLeast` for tombstones, which are read with `>=`. The cost is that a
+  skewed device leaves its records stamped in the future; that is bounded, and
+  losing the edit is not.
+- **Two tabs of the app must not eat each other.** Every tab keeps its own copy
+  in memory and writes the whole blob back, so without the `storage` listener
+  in `useAppData` the last tab to save silently overwrites the other one's
+  work — on one device, with no network involved, where sync cannot help. It
+  merges through the same `mergeAppData` a cloud snapshot does, and settles in
+  two hops because `persist` drops the resulting no-op.
 - **Optional stays optional.** Anything unrated falls back to the overall
   rating; no absent field may ever count against a player.
 - **A record is read, never written.** `lib/stats.ts` derives every won/lost
@@ -396,6 +439,15 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
 whole loop and it takes seconds. Do not verify by driving a browser — pay for
 the missing coverage with unit tests over `src/lib/` instead. `AGENTS.md` spells
 out why, and what to do when the change is a visual one.
+
+`syncRoundTrip.test.ts` is the exception to the "one module, one test file"
+shape, and deliberately so. Every piece of the sync engine has its own tests
+and all of them can pass while the thing they add up to is broken, so that file
+wires the real modules to a cloud made of a plain object — as blind about
+overwrites as the real one — and asserts the only sentence anybody actually
+relies on: what one device saved, the other one sees. Including when a stale
+device overwrote it, when one of the clocks is wrong, and when nobody has
+touched anything and the two of them must go quiet.
 
 ## Deliberately not built
 

@@ -163,6 +163,14 @@ under your own account, which nobody else can read; `localStorage` stays the cop
 actually reads, so nothing breaks when the signal does. Signed out, or in a
 build with no Firebase keys, the SDK is never even downloaded.
 
+The confirmation says which of the two promises it has kept. **"Guardado acá"**
+means it is on this device and the cloud has not taken it yet — it stays on
+screen until that changes, however long the signal takes. **"Guardado" with the
+little cloud** means a server has acknowledged it and your other phone will see
+it. Writes made with no signal are queued on disk and go up on their own the
+next time the app is opened, so closing the tab at the cancha does not lose
+them.
+
 Photos are centre-cropped and re-encoded on upload: a 1.7 MB camera photo lands
 at a 256px square, usually 10–25 KB and never more than 60, which is what makes
 storing them inline viable at all. They can

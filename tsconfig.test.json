@@ -59,6 +59,11 @@
     "src/lib/teamMatch.ts",
     "src/lib/teamMatch.test.ts",
     "src/lib/matchTabs.ts",
-    "src/lib/matchTabs.test.ts"
+    "src/lib/matchTabs.test.ts",
+    "src/lib/stamp.ts",
+    "src/lib/stamp.test.ts",
+    "src/lib/cloudStatus.ts",
+    "src/lib/cloudStatus.test.ts",
+    "src/syncRoundTrip.test.ts"
   ]
 }
