@@ -2,8 +2,18 @@ import { useMemo } from "react";
 import { CalendarDays, ChevronRight, Plus, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, splitCourt } from "@/lib/court";
-import { KITS, type Match, type Player, type PlayerId } from "@/types";
+import { pickFace } from "@/lib/matchFaces";
+import { peakRating } from "@/lib/rating";
+import {
+  KITS,
+  playerDisplayName,
+  type KitId,
+  type Match,
+  type Player,
+  type PlayerId,
+} from "@/types";
 import { formatLongDate } from "@/lib/dates";
+import { PlayerAvatar } from "./PlayerAvatar";
 
 interface Props {
   matches: Match[];
@@ -21,6 +31,11 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
    */
   const rosterIds = useMemo(
     () => new Set(players.map((p) => p.id)),
+    [players],
+  );
+
+  const byId = useMemo(
+    () => new Map(players.map((p) => [p.id, p])),
     [players],
   );
 
@@ -70,14 +85,16 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
                 onClick={() => onOpen(match)}
                 className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
               >
-                <div className="flex -space-x-1.5">
-                  <span
-                    className="h-8 w-8 rounded-full border-2 border-card"
-                    style={{ background: KITS[match.teamA.kit].fill }}
+                <div className="flex shrink-0 -space-x-1">
+                  <SideBadge
+                    kit={match.teamA.kit}
+                    lineup={match.lineupA}
+                    byId={byId}
                   />
-                  <span
-                    className="h-8 w-8 rounded-full border-2 border-card"
-                    style={{ background: KITS[match.teamB.kit].fill }}
+                  <SideBadge
+                    kit={match.teamB.kit}
+                    lineup={match.lineupB}
+                    byId={byId}
                   />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -103,6 +120,68 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * One side of a match, at a glance: the face of its best player, or its bibs.
+ *
+ * Which face — and when there is no face — is `lib/matchFaces.ts`. What is
+ * left here is drawing it: the kit colour becomes a ring around the photo
+ * rather than a filled circle, because light-against-dark is still the only
+ * thing on the row saying which of the two scores belongs to whom.
+ */
+function SideBadge({
+  kit,
+  lineup,
+  byId,
+}: {
+  kit: KitId;
+  lineup: (PlayerId | null)[];
+  byId: ReadonlyMap<PlayerId, Player>;
+}) {
+  const face = useMemo(() => {
+    const options: { id: string; avatar: string; score: number; player: Player }[] =
+      [];
+    for (const id of lineup) {
+      if (id === null) continue;
+      const player = byId.get(id);
+      // A player deleted from the roster survives in old lineups with nothing
+      // to draw. Same reason `rosterIds` exists above.
+      if (player === undefined) continue;
+      options.push({
+        id: player.id,
+        avatar: player.avatar,
+        score: peakRating(player),
+        player,
+      });
+    }
+    return pickFace(options)?.player ?? null;
+  }, [lineup, byId]);
+
+  if (face === null) {
+    return (
+      <span
+        className="h-9 w-9 rounded-full ring-2 ring-card"
+        style={{ background: KITS[kit].fill }}
+      />
+    );
+  }
+
+  return (
+    <span
+      title={playerDisplayName(face)}
+      className="rounded-full"
+      // Two rings in one shadow rather than Tailwind's `ring-2 ring-card`,
+      // which is a box-shadow too and would be dropped by this inline one:
+      // the kit against the photo, then the card colour so the two faces do
+      // not smear into each other where they overlap.
+      style={{
+        boxShadow: `0 0 0 2px ${KITS[kit].ring}, 0 0 0 4px hsl(var(--card))`,
+      }}
+    >
+      <PlayerAvatar player={face} size={36} className="block" />
+    </span>
   );
 }
 

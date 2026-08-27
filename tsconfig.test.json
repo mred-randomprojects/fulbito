@@ -60,6 +60,8 @@
     "src/lib/teamMatch.test.ts",
     "src/lib/matchTabs.ts",
     "src/lib/matchTabs.test.ts",
+    "src/lib/matchFaces.ts",
+    "src/lib/matchFaces.test.ts",
     "src/lib/stamp.ts",
     "src/lib/stamp.test.ts",
     "src/lib/cloudStatus.ts",

@@ -131,6 +131,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
 | `lib/matchTabs.ts` | Which of a match's four tabs is worth a count or a warning dot |
+| `lib/matchFaces.ts` | Whose photo stands for a side on the list of partidos |
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
 | `lib/insights.ts` | Turning two team evaluations into the sentences a person would say |
@@ -156,7 +157,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `cloud/auth.tsx` | Who is signed in; `cloud/prefs.ts` remembers that they agreed |
 | `cloud/firestore.ts` | Documents in, documents out; `useCloudSync.ts` decides when |
 
-Screens: `MatchesPage` (the list, with what is still owed on each row),
+Screens: `MatchesPage` (the list, with the face of each side's best player
+and what is still owed on each row),
 `MatchBuilder` (one screen in four tabs — Cancha, Jugadores, Ajustes, Pagos —
 above a result panel that is always there), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
@@ -382,6 +384,19 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   duplicated id, cannot move the totals — and a player deleted from the roster
   (whose id survives in old squads, with no row to tap) cannot leave a match
   that can never be marked cobrada.
+- **A face on the list is a photo or it is nothing.** Each side of a match in
+  Partidos shows its best player's face, and `lib/matchFaces.ts` skips anybody
+  who has not uploaded one — even the best player on the side. `PlayerAvatar`'s
+  monogram fallback is the right answer everywhere else and the wrong one here:
+  two coloured initials side by side preview nobody, and they are worse than
+  the two kit circles they replaced, which at least said which side wore which
+  bibs. So a side with no photos on it keeps its shirt, per side rather than
+  per row, and the kit colour survives as a ring around whichever faces there
+  are — the row's two shirts are the only thing saying which of the two goal
+  numbers belongs to whom. Ties break on the player id, because the natural
+  order is the lineup and Rearmar reshuffles that: two equally-rated players
+  would otherwise swap the face on a row nobody edited.
+
 - **A filter is a view, never a fact.** Nothing about tags is stored beyond
   the labels on the players. The ticked chips die with the screen, and a tick
   pointing at a tag whose last carrier just lost it stops filtering rather than

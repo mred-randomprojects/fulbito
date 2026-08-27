@@ -65,6 +65,10 @@ your own devices.
 - **Share without leaking ratings.** A PNG of the pitch, a PNG of the torneito,
   or a plain-text list for the group chat. Ratings are excluded from all of
   them unless you opt in.
+- **A list you recognise at a glance.** Every partido puts up the face of the
+  best player on each side, so the list reads like the games you played rather
+  than like a column of light-against-dark circles. Only people with a photo
+  loaded can be the face; a side where nobody uploaded one keeps its bibs.
 - **How it actually ended.** Write the score down on the match. It sits above
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.
