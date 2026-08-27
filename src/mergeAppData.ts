@@ -1,4 +1,5 @@
 import type { AppData, DeletedEntry, Match, Player, Team } from "./types.js";
+import { byMatchOrder } from "./lib/matchOrder.js";
 
 /**
  * Last-write-wins merge on `updatedAt`, with tombstones.
@@ -119,7 +120,7 @@ export function mergeAppData(
 
   return {
     players: players.sort(byName),
-    matches: matches.sort((a, b) => b.date.localeCompare(a.date)),
+    matches: matches.sort(byMatchOrder),
     teams: teams.sort(byTeamName),
     deletedPlayers: deletedPlayers.filter((e) => !livePlayerIds.has(e.id as Player["id"])),
     deletedMatches: deletedMatches.filter((e) => !liveMatchIds.has(e.id as Match["id"])),

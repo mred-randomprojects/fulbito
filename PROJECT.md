@@ -132,6 +132,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
 | `lib/matchTabs.ts` | Which of a match's four tabs is worth a count or a warning dot |
 | `lib/matchFaces.ts` | Whose photo stands for a side on the list of partidos |
+| `lib/matchOrder.ts` | The order the partidos are in, on every device |
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
 | `lib/formations.ts` | Pitch shapes per team size, and the slots they put people in |
 | `lib/insights.ts` | Turning two team evaluations into the sentences a person would say |
@@ -384,6 +385,21 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   duplicated id, cannot move the totals — and a player deleted from the roster
   (whose id survives in old squads, with no row to tap) cannot leave a match
   that can never be marked cobrada.
+- **The order of the partidos is computed, never inherited.** Newest first,
+  same date reads A→Z, and the id settles the rest — `lib/matchOrder.ts`, one
+  comparator applied at all three doors: `normalizeAppData`, `upsertMatch` and
+  `mergeAppData`. It used to be sorted only on write, by date alone, and
+  `normalizeAppData` did not sort at all, so the list came back in whatever
+  order the writes that built it left behind: a new match was prepended and
+  landed first among its date, an edited one kept its slot, a merged one took
+  whatever slot the merge gave it, and `sort` being stable froze that forever.
+  Two games on the same Tuesday could sit one way on the phone and the other
+  way on the laptop and never agree. The comparator is total for that reason —
+  every pair of distinct matches has an answer, and it is the same answer
+  everywhere. `SplitPage` deliberately keeps its own comparator: "whose squad
+  do we open with" is a question about the most recently *touched* game, so it
+  breaks a date tie on `updatedAt`, not alphabetically.
+
 - **A face on the list is a photo or it is nothing.** Each side of a match in
   Partidos shows its best player's face, and `lib/matchFaces.ts` skips anybody
   who has not uploaded one — even the best player on the side. `PlayerAvatar`'s

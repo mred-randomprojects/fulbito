@@ -9,6 +9,7 @@
 
 import { clampCourtCost, type PaymentBook } from "./lib/court.js";
 import { normalizeTagList } from "./lib/tags.js";
+import { byMatchOrder } from "./lib/matchOrder.js";
 
 export type PlayerId = string & { readonly __brand: "PlayerId" };
 export type MatchId = string & { readonly __brand: "MatchId" };
@@ -616,9 +617,13 @@ export function normalizeAppData(raw: unknown): AppData {
     .map(normalizePlayer)
     .filter((p): p is Player => p != null && !deletedPlayerIds.has(p.id));
 
+  // Sorted here rather than trusted from the blob: this is the only door in,
+  // and the order a stored blob happens to be in is the order the writes that
+  // built it left behind. See `lib/matchOrder.ts`.
   const matches = (Array.isArray(raw.matches) ? raw.matches : [])
     .map(normalizeMatch)
-    .filter((m): m is Match => m != null && !deletedMatchIds.has(m.id));
+    .filter((m): m is Match => m != null && !deletedMatchIds.has(m.id))
+    .sort(byMatchOrder);
 
   // Absent on every blob written before teams existed, which is the same state
   // as an account that has not made one yet.

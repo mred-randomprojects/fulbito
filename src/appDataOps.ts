@@ -8,6 +8,7 @@ import type {
   TeamId,
 } from "./types.js";
 import { stampAfter, stampAtLeast } from "./lib/stamp.js";
+import { byMatchOrder } from "./lib/matchOrder.js";
 
 /**
  * Every change the app can make to its data, as plain functions.
@@ -77,10 +78,7 @@ export function upsertMatch(data: AppData, match: Match, now: string): AppData {
   const matches = exists
     ? data.matches.map((m) => (m.id === stamped.id ? stamped : m))
     : [stamped, ...data.matches];
-  return {
-    ...data,
-    matches: matches.sort((a, b) => b.date.localeCompare(a.date)),
-  };
+  return { ...data, matches: matches.sort(byMatchOrder) };
 }
 
 export function removeMatch(data: AppData, id: MatchId, now: string): AppData {
