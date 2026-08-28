@@ -1,16 +1,20 @@
 /**
- * Whether this browser has opted into sync, and when it agreed to.
+ * This browser's *mirror* of the consent, and nothing more.
  *
- * Kept apart from Firebase's own session so that the app can answer "should I
- * even load the SDK?" before loading anything. Firebase stores its session in
- * IndexedDB, which can only be read asynchronously, and by the time it
- * answered we would already have downloaded the thing we were trying to avoid
- * downloading.
+ * The authority is the account — `users/{uid}/meta/sync`, see
+ * `cloud/syncPrefs.ts` — because the permission belongs to a person and not to
+ * a laptop. What lives here answers exactly one question: should this tab
+ * download the Firebase SDK at boot?
  *
- * The consent date is stored rather than a bare flag because that is what
- * consent is: a thing somebody did, on a day. Signing out clears it, so coming
- * back means being asked again — the question is cheap and the answer is the
- * user's to change.
+ * That question has to be answered synchronously, before anything loads, and
+ * the account cannot answer it: Firebase keeps its session in IndexedDB, which
+ * is only readable asynchronously, so by the time it replied we would already
+ * have downloaded the thing we were deciding whether to download.
+ *
+ * Being a mirror, it can be wrong — sync switched off from another device
+ * leaves a yes sitting here. `lib/syncConsent.ts` never consults it when
+ * deciding whether sync may run, and `mirrorIsStale` is what clears it once
+ * the account has actually contradicted it.
  */
 
 const KEY = "fulbito-cloud";

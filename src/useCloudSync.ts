@@ -6,6 +6,7 @@ import { allowsEmail } from "./lib/allowlist";
 import { isEmptyPlan, planSync } from "./lib/syncPlan";
 import { cloudStateFrom, retryDelay, type CloudState } from "./lib/cloudStatus";
 import { errorCode } from "./lib/authErrors";
+import { maySync } from "./lib/syncConsent";
 import { useCloudAuth } from "./cloud/auth";
 import { ALLOWED_EMAILS, loadCloud, type CloudSdk } from "./cloud/firebase";
 import { applyPlan, subscribeCloud, type CloudView } from "./cloud/firestore";
@@ -66,11 +67,14 @@ function messageFor(error: unknown): string {
 const UNSEEN: CloudView = { fromServer: false, pendingWrites: false };
 
 export function useCloudSync(app: AppDataApi): CloudState {
-  const { available, user, loading } = useCloudAuth();
+  const { available, user, loading, gate } = useCloudAuth();
   const [syncState, setSyncState] = useState<CloudState>({ kind: "connecting" });
 
   const allowed = allowsEmail(user?.email, ALLOWED_EMAILS);
-  const uid = user !== null && allowed ? user.uid : null;
+  // Being signed in is not permission to upload anything. Somebody who signed
+  // in to answer an encuesta has agreed to nothing about their own roster, so
+  // the gate — not the session — is what opens this. See `lib/syncConsent.ts`.
+  const uid = user !== null && allowed && maySync(gate) ? user.uid : null;
 
   /** The cloud as last seen. `null` until the first full snapshot lands. */
   const seen = useRef<AppData | null>(null);
@@ -273,5 +277,8 @@ export function useCloudSync(app: AppDataApi): CloudState {
   if (loading) return { kind: "connecting" };
   if (user === null) return { kind: "off" };
   if (!allowed) return { kind: "blocked" };
+  // Signed in with sync switched off, or with the account's answer still in
+  // flight. Neither is an error and neither has anything to report.
+  if (!maySync(gate)) return { kind: "off" };
   return syncState;
 }

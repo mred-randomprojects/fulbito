@@ -153,11 +153,13 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
+| `lib/syncConsent.ts` | Whether sync may run, and whether this tab needs the SDK at all |
 | `lib/authErrors.ts` | Reading a Firebase error code; which ones are somebody changing their mind |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 | `cloud/firebase.ts` | Whether this build has a cloud at all, and loading the SDK if so |
 | `cloud/polls.ts` | Encuestas in Firestore: sending one out, answering it, reading the answers |
-| `cloud/auth.tsx` | Who is signed in; `cloud/prefs.ts` remembers that they agreed |
+| `cloud/auth.tsx` | Who is signed in, and — separately — whether they agreed to sync |
+| `cloud/syncPrefs.ts` | The account's own yes or no, and deleting the cloud copy; `cloud/prefs.ts` mirrors it locally |
 | `cloud/firestore.ts` | Documents in, documents out; `useCloudSync.ts` decides when |
 
 Screens: `MatchesPage` (the list, with the face of each side's best player
@@ -484,11 +486,31 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   fallback path, it is the main one; the cloud is the extra. A change that
   makes a feature *need* an account has broken the app for most of the people
   who open it.
-- **Nothing leaves the device without an explicit yes.** The consent dialog in
-  `CloudPanel` is the only door out, it is shown before the first sign-in, and
-  signing out clears the consent so the next time asks again. Adding a code
-  path that uploads before that dialog would make every promise on the settings
-  screen false.
+- **Signing in is not consent, and this is load-bearing.** They used to be one
+  act: `signIn` wrote the consent and signing out was the only way back. That
+  held while signing in meant one thing, and stopped holding the moment
+  somebody could sign in to *answer an encuesta* — a voter with their own
+  roster would have had it uploaded for them, having agreed to nothing. So
+  `signIn` gets a session and nothing else, and `enableSync` is the only thing
+  that opens the gate.
+- **Nothing leaves the device without an explicit yes.** The dialog in
+  `CloudPanel` is the only door out. Adding a code path that uploads before it
+  would make every promise on the settings screen false.
+- **Consent lives in the account; the browser keeps a mirror.** The permission
+  is a person's, not a laptop's, so `users/{uid}/meta/sync` decides and turning
+  it off on the phone turns it off on the laptop. `cloud/prefs.ts` answers one
+  other question — should this tab download the SDK at boot? — which has to be
+  answered synchronously, before the thing being decided about is loaded.
+  `syncGate` therefore never reads the mirror, and `mirrorIsStale` clears one
+  the account has contradicted. A missing account document with a mirror
+  present is somebody who agreed under the old scheme, and is backfilled rather
+  than read as a no.
+- **Off is not deleted, and the screen says so.** Switching sync off stops the
+  uploading and leaves what is already up there. Deleting that copy is a
+  separate action from the off state, not a second button on the same dialog:
+  `disableSync` stops the engine by way of a re-render, so a delete fired in
+  the same tick can land while the engine still holds a uid — and an empty
+  cloud is a snapshot `planSync` reads as "everything is missing up there".
 - **`planSync` is given the *merged* data, never the raw local data.** It is
   what makes "in the cloud but not here" mean "deleted here" rather than "not
   pulled down yet" — which is the difference between removing a record on
