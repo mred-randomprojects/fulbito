@@ -130,7 +130,13 @@ export default function App() {
           />
           <Route
             path="/encuestas"
-            element={<PollsPage players={app.players} onSavePlayer={app.savePlayer} />}
+            element={
+              <PollsPage
+                players={app.players}
+                matches={app.matches}
+                onSavePlayer={app.savePlayer}
+              />
+            }
           />
           <Route
             path="/settings"

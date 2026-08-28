@@ -39,6 +39,7 @@ import {
   ROLE_SHORT,
   playerDisplayName,
   type AttributeKey,
+  type Match,
   type Player,
   type PlayerId,
   type Role,
@@ -71,6 +72,7 @@ type View =
 
 interface Props {
   players: Player[];
+  matches: Match[];
   onSavePlayer: (player: Player) => void;
 }
 
@@ -78,7 +80,7 @@ function linkFor(pollId: string): string {
   return `${window.location.origin}${import.meta.env.BASE_URL}#/encuesta/${pollId}`;
 }
 
-export function PollsPage({ players, onSavePlayer }: Props) {
+export function PollsPage({ players, matches, onSavePlayer }: Props) {
   const { available, user, loading, signIn } = useCloudAuth();
   const [view, setView] = useState<View>({ kind: "list" });
   const [polls, setPolls] = useState<PollSummary[] | null>(null);
@@ -88,6 +90,24 @@ export function PollsPage({ players, onSavePlayer }: Props) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
+
+  const rosterIds = useMemo(() => new Set(players.map((p) => p.id)), [players]);
+
+  /**
+   * The last few games, as one-tap ways to fill the list.
+   *
+   * Asking about the people who actually turned up on Saturday is the common
+   * case by a distance, and ticking eleven names by hand right after the game
+   * is exactly the friction that means the encuesta never gets sent.
+   */
+  const recent = useMemo(
+    () =>
+      [...matches]
+        .filter((match) => match.squad.length > 0)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 6),
+    [matches],
+  );
 
   const refresh = useCallback(async () => {
     if (user === null) return;
@@ -242,6 +262,36 @@ export function PollsPage({ players, onSavePlayer }: Props) {
           placeholder="Los del martes"
           className="mb-3"
         />
+        {recent.length > 0 && (
+          <div className="mb-3">
+            <p className="mb-1.5 text-xs text-muted-foreground">
+              Traelos de un partido:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {recent.map((match) => {
+                // A squad keeps the ids of players since deleted from the
+                // roster, so what it can actually put on a list is the
+                // intersection — see `splitCourt`, which draws the same line.
+                const squad = match.squad.filter((id) => rosterIds.has(id));
+                if (squad.length === 0) return null;
+                return (
+                  <button
+                    key={match.id}
+                    type="button"
+                    onClick={() => {
+                      setPicked(new Set(squad));
+                      if (title.trim() === "") setTitle(match.name);
+                    }}
+                    className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    {match.name} <span className="tabular">({squad.length})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-sm text-muted-foreground">
             {picked.size === 0 ? "Elegí a quiénes" : `${picked.size} elegidos`}
@@ -549,7 +599,7 @@ function Results({
             <Button variant="secondary" onClick={() => setConfirming(false)} disabled={working}>
               Mejor no
             </Button>
-            <Button onClick={onDelete} disabled={working} className="text-destructive">
+            <Button variant="destructive" onClick={onDelete} disabled={working}>
               {working && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               Borrar
             </Button>

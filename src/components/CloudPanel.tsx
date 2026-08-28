@@ -345,7 +345,7 @@ export function CloudPanel({ state }: { state: CloudState }) {
             >
               Mejor no
             </Button>
-            <Button onClick={() => void wipe()} disabled={working} className="text-destructive">
+            <Button variant="destructive" onClick={() => void wipe()} disabled={working}>
               {working ? (
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               ) : (
