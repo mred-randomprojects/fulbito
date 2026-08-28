@@ -170,7 +170,11 @@ they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
-dialog). `SaveIndicator` floats over all of them. `SquadPicker` is shared by
+dialog). `PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
+`main.tsx` rather than inside it: whoever is answering a poll has no roster of
+ours to load and no permission to upload one, so that route touches neither
+`useAppData` nor `useCloudSync`, and it has no NavBar because the person on it
+is not using the app. `SaveIndicator` floats over all the others. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.

@@ -3,11 +3,20 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider, createHashRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App";
+import { PollPage } from "./components/PollPage";
 import { CloudAuthProvider } from "./cloud/auth";
 
 // Hash routing, because GitHub Pages serves static files and would 404 on a
 // deep link like /matches/abc under browser routing.
-const router = createHashRouter([{ path: "*", element: <App /> }]);
+//
+// The encuesta sits *beside* `App` rather than inside it, and that is the
+// point: `App` mounts `useAppData` and `useCloudSync` at its top, and the
+// person answering a poll has no roster of ours to load and no permission to
+// upload one. Mounting it here is what keeps this route from touching either.
+const router = createHashRouter([
+  { path: "/encuesta/:pollId", element: <PollPage /> },
+  { path: "*", element: <App /> },
+]);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
