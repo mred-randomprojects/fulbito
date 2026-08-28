@@ -62,6 +62,14 @@ your own devices.
   pairing after the first depends on a result nobody has yet. Either way it
   comes out as one PNG — the teams, the faces and the fixture — for the group
   chat. Nothing is stored: the message you send is the record.
+- **Ask the group what they think.** Send the whole list to the grupo — not one
+  player, so everybody judges against the same field — and each person scores
+  who they know and skips who they do not. They sign in with Google so nobody
+  votes twice, and the answers are stored with no name attached: you see the
+  numbers, not who put them. From three opinions up it shows the median beside
+  the number *you* gave, plus how much they disagreed, and adopting it is a tap
+  you have to make. Your own rating is never shown to whoever is answering —
+  seeing it would anchor them and ruin the answer.
 - **Share without leaking ratings.** A PNG of the pitch, a PNG of the torneito,
   or a plain-text list for the group chat. Ratings are excluded from all of
   them unless you opt in.
@@ -216,6 +224,7 @@ no secrets.
   matches.
 - **Anything that moves money.** No alias, no QR, no payment link. The app says
   who owes what; the transfer happens where it always happened.
-- **Ratings that learn from results.** The 1-10 numbers stay hand-entered.
-  Moving them automatically would turn one bad night into a downgrade, and
-  nobody asked the app to have opinions.
+- **Ratings that learn from results.** The 1-10 numbers stay hand-entered, or
+  adopted from an encuesta on purpose. Moving them from who won on Thursday
+  would turn one bad night into a downgrade, and nobody asked the app to have
+  opinions.

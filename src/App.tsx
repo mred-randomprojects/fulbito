@@ -9,6 +9,7 @@ import { MatchBuilder } from "./components/MatchBuilder";
 import { SplitPage } from "./components/SplitPage";
 import { TeamsPage } from "./components/TeamsPage";
 import { SettingsPage } from "./components/SettingsPage";
+import { PollsPage } from "./components/PollsPage";
 import { SaveIndicator } from "./components/SaveIndicator";
 import {
   DEFAULT_TEAM_A,
@@ -126,6 +127,10 @@ export default function App() {
                 onDelete={app.deletePlayer}
               />
             }
+          />
+          <Route
+            path="/encuestas"
+            element={<PollsPage players={app.players} onSavePlayer={app.savePlayer} />}
           />
           <Route
             path="/settings"

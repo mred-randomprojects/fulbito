@@ -170,7 +170,9 @@ they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
-dialog). `PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
+dialog). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
+the link, read the medians back and adopt them a tap at a time.
+`PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
 `main.tsx` rather than inside it: whoever is answering a poll has no roster of
 ours to load and no permission to upload one, so that route touches neither
 `useAppData` nor `useCloudSync`, and it has no NavBar because the person on it
@@ -560,7 +562,9 @@ touched anything and the two of them must go quiet.
 
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
   devices. Two people cannot edit one plantel: there is no invite, no shared
-  team, and `users/{uid}` is a wall, not a default.
+  team, and `users/{uid}` is a wall, not a default. An encuesta is the one
+  thing that crosses it, and it crosses in one direction only — a read-only
+  snapshot out, anonymous numbers back.
 - **Free placement on the pitch.** Positions come from a formation; dragging a
   player anywhere on the grass is the obvious next step.
 - **Head-to-head history.** A player's own record exists, but "wins 80% of the
@@ -569,5 +573,8 @@ touched anything and the two of them must go quiet.
 - **Anything that moves money.** No alias, no QR, no payment link: the app
   says who owes what, and the transfer happens where it always happened.
 - **Rating people from their results.** The 1-10 numbers are still entirely
-  hand-entered. Nudging them from the record would quietly turn one bad night
-  into a downgrade, and nobody asked the app to have opinions.
+  hand-entered or adopted from an encuesta by a deliberate tap. Nudging them
+  from the *record* — from who won on Thursday — would quietly turn one bad
+  night into a downgrade, and nobody asked the app to have opinions. An
+  encuesta is other people's opinions, which is a different thing and still
+  yours to take or leave.

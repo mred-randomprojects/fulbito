@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
-import { Database, Shield, Shuffle, Trophy, Users } from "lucide-react";
+import { ClipboardList, Database, Shield, Shuffle, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -7,6 +7,7 @@ const LINKS = [
   { to: "/split", label: "Repartir", icon: Shuffle },
   { to: "/teams", label: "Equipos", icon: Shield },
   { to: "/players", label: "Jugadores", icon: Users },
+  { to: "/encuestas", label: "Encuestas", icon: ClipboardList },
   { to: "/settings", label: "Tus datos", icon: Database },
 ];
 
