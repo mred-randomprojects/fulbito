@@ -156,6 +156,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/authErrors.ts` | Reading a Firebase error code; which ones are somebody changing their mind |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 | `cloud/firebase.ts` | Whether this build has a cloud at all, and loading the SDK if so |
+| `cloud/polls.ts` | Encuestas in Firestore: sending one out, answering it, reading the answers |
 | `cloud/auth.tsx` | Who is signed in; `cloud/prefs.ts` remembers that they agreed |
 | `cloud/firestore.ts` | Documents in, documents out; `useCloudSync.ts` decides when |
 
@@ -284,7 +285,9 @@ the design is about paying for that honestly.
 - **A poll is a snapshot, not a window.** Names and faces, copied at the
   moment the link went out. No ratings — showing yours would anchor the answer
   and ruin the number you are asking for — and no notes, tags or avoid lists,
-  because a link is readable by whoever holds it.
+  because a link is readable by whoever holds it. The faces are one document
+  each for the same reason the roster is: an avatar is an inline data URL of
+  up to 60 KB, and twenty on one document cross Firestore's 1 MiB cap.
 - **A ballot carries no uid.** The medians are worked out in the owner's
   browser, because there is no server here to do it; a uid on the ballot would
   put "who gave El Gordo a 4" one tap away, and nobody would answer honestly

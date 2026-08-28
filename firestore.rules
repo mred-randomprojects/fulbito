@@ -47,6 +47,13 @@ service cloud.firestore {
     // rule below is about paying for that honestly.
     //
     // A poll is a snapshot the owner sends out: names and faces, no ratings.
+    // The faces are a subcollection rather than an array on the poll itself,
+    // for the same reason the roster is one document per player: an avatar is
+    // an inline data URL of up to 60 KB, and twenty of them walk straight
+    // into Firestore's 1 MiB document cap. Each one carries `ownerUid` so
+    // that writing twenty in one batch costs no rule reads at all — a `get`
+    // of the parent poll per document would hit the twenty-access ceiling.
+    //
     // A ballot is one person's answers, and it is stored with **no uid on
     // it**. That is not tidiness. The owner has to read every ballot to work
     // out the medians — there is no server here to do it for them — so a uid
@@ -103,6 +110,13 @@ service cloud.firestore {
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      match /players/{playerId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      }
 
       match /ballots/{ballotId} {
         // The owner reads the pile to work out the medians. A voter reads
