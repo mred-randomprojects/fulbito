@@ -14,10 +14,10 @@ is exactly the cost this file exists to remove.
 
 A team picker for pickup football. You rate your mates once, tick who turned
 up, and it works out the fairest split of the sides in the thirty seconds
-before kick-off. Then you record how it actually ended, and who still owes you
-for the cancha. When more people turn up than two teams can hold, a second
-screen splits them into several, lets you name them, and draws the torneito
-they are about to play. And when it is the same two sides every week, you save
+before kick-off. Then you record how it actually ended, whatever needs saying
+about the night, and who still owes you for the cancha. When more people turn
+up than two teams can hold, a second screen splits them into several, lets you
+name them, and draws the torneito they are about to play. And when it is the same two sides every week, you save
 them once and bring them both into a match in a tap.
 
 Three constraints shape every decision here:
@@ -97,7 +97,7 @@ enters the app without going through `normalizeAppData` — a hand-edited
   list. See `lib/tags.ts`.
 - **`Match`** — name, date, the two `TeamConfig`s, the squad, pins, sizes, the
   two lineups (slot → player), balance basis, `respectAvoids`, handicap,
-  `result`, `courtCost`, `payments`, `updatedAt`.
+  `result`, `courtCost`, `payments`, `notes`, `updatedAt`.
 - **`MatchResult`** — `{ goalsA, goalsB }`, or `null`. `null` and 0-0 are
   different states on purpose: one is a game nobody wrote down, the other is a
   game that finished goalless.
@@ -108,6 +108,10 @@ enters the app without going through `normalizeAppData` — a hand-edited
   depends on how many turned up; no rating and no record, because both are read
   off the players and the matches. See `lib/teamMatch.ts` for what happens when
   two of them meet.
+- **`Match.notes`** — free text about the game: quién trajo la pelota, quién
+  se lesionó, por qué el 8-1 no cuenta. Stored exactly as typed, because
+  trimming as you go makes a space impossible to type; whether that adds up to
+  a note at all is decided on the way out. See `lib/matchNotes.ts`.
 - **`Match.courtCost` / `Match.payments`** — what the pitch cost in whole
   pesos, and one record per person: absent means they owe, `"paid"` means they
   put it in, `"comped"` means we bancamos them. Per match rather than global —
@@ -131,6 +135,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
 | `lib/matchTabs.ts` | Which of a match's four tabs is worth a count or a warning dot |
+| `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
 | `lib/matchFaces.ts` | Whose photo stands for a side on the list of partidos |
 | `lib/matchOrder.ts` | The order the partidos are in, on every device |
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
@@ -165,7 +170,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 Screens: `MatchesPage` (the list, with the face of each side's best player
 and what is still owed on each row),
 `MatchBuilder` (one screen in four tabs — Cancha, Jugadores, Ajustes, Pagos —
-above a result panel that is always there), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
+under a result panel and a note that are always there), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
@@ -461,6 +466,17 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   either way and hiding the win on the rows with no photos would drop it from
   exactly the rows that have the least to look at.
 
+- **The note is not one of the four jobs.** `MatchNotes` sits with the
+  scoreboard, above `MatchTabsBar` and outside every tab, because a note filed
+  under Ajustes is a note nobody reads again — and the sentence explaining what
+  happened is the thing you want first whichever of the four you came back for.
+  It is also on the row in Partidos, for the same reason the money is: what is
+  worth writing down is worth seeing without opening anything. What it does
+  *not* do is go out with the shared text or either PNG: those are written for
+  the grupo, and "el Gordo llegó con olor a birra" is written for you. And it
+  has no edit mode and no save button, because nothing else on that screen
+  does: the box *is* the note, and it grows from a mirror of its own text
+  rather than from an effect measuring `scrollHeight`.
 - **A filter is a view, never a fact.** Nothing about tags is stored beyond
   the labels on the players. The ticked chips die with the screen, and a tick
   pointing at a tag whose last carrier just lost it stops filtering rather than

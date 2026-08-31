@@ -56,6 +56,7 @@ function match(id: string, overrides: Partial<Match> = {}): Match {
     result: null,
     courtCost: 0,
     payments: {},
+    notes: "",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };

@@ -90,6 +90,22 @@ describe("normalizing respectAvoids", () => {
   });
 });
 
+describe("normalizing the note", () => {
+  it("has no note on a match saved before notes existed", () => {
+    assert.equal(withMatch({}).notes, "");
+  });
+
+  it("keeps what was typed, spaces and newlines and all", () => {
+    // Trimming here would make a space impossible to type. `lib/matchNotes.ts`
+    // decides what counts as a note on the way out instead.
+    assert.equal(withMatch({ notes: "  trae la pelota\nel Colo " }).notes, "  trae la pelota\nel Colo ");
+  });
+
+  it("reads a hand-edited blob with a number in the field as no note", () => {
+    assert.equal(withMatch({ notes: 7 }).notes, "");
+  });
+});
+
 describe("normalizing the cancha", () => {
   it("has no price and owes nobody on a match saved before it existed", () => {
     assert.equal(withMatch({}).courtCost, 0);

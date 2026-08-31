@@ -82,6 +82,11 @@ your own devices.
 - **How it actually ended.** Write the score down on the match. It sits above
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.
+- **Notas del partido.** One free-text box on every match, sitting with the
+  score and above the four tabs rather than buried in one of them: quién trajo
+  la pelota, quién se lesionó, por qué el 8-1 no cuenta. The first line of it
+  shows on the list of partidos, so what you wrote down is there without
+  opening anything. Nothing to save — the box is the note.
 - **Who paid the cancha, and who is still owing.** Put in what the pitch cost
   and it works out what each one puts. Bancar somebody is one extra tap: they
   come out of the reparto and the rest cover it, so a fútbol 5 with one on the

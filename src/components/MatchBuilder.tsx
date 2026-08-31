@@ -19,6 +19,7 @@ import { Pitch, type PitchToken } from "./Pitch";
 import { MatchSetup } from "./MatchSetup";
 import { CourtPanel } from "./CourtPanel";
 import { ResultPanel } from "./ResultPanel";
+import { MatchNotes } from "./MatchNotes";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { TeamInsights } from "./TeamInsights";
@@ -31,6 +32,7 @@ import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid
 import { computeStats } from "@/lib/stats";
 import { nextPaymentState, splitCourt } from "@/lib/court";
 import { matchTabs, type MatchTabId } from "@/lib/matchTabs";
+import { hasNote } from "@/lib/matchNotes";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import type { TeamMatchPlan } from "@/lib/teamMatch";
@@ -573,6 +575,16 @@ export function MatchBuilder({
           played has a squad. A result already written down always shows. */}
       {(squadReady || match.result != null) && (
         <ResultPanel match={match} onChange={(result) => patch({ result })} />
+      )}
+
+      {/* Same rule as the result panel, and for the same reason: the one
+          question worth asking on a match with nobody in it is who is playing,
+          and two boxes above it would bury the list. A note already written
+          always shows — including on a match somebody emptied afterwards,
+          which is exactly when the note is the only thing left saying what it
+          was. */}
+      {(squadReady || hasNote(match.notes)) && (
+        <MatchNotes notes={match.notes} onChange={(notes) => patch({ notes })} />
       )}
 
       {!squadReady ? (

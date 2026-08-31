@@ -236,6 +236,16 @@ export interface Match {
    * `lib/court.ts`, which is the only thing that reads this.
    */
   payments: PaymentBook;
+  /**
+   * Whatever needs saying about this game, in free text: quién trajo la
+   * pelota, quién se lesionó, por qué el 8-1 no cuenta.
+   *
+   * Stored exactly as it was typed, spaces at the ends included. Trimming on
+   * the way in would fight the cursor — you could never type a space between
+   * two words — so *whether there is a note here at all* is decided on the way
+   * out instead. `lib/matchNotes.ts` is the only thing that reads this.
+   */
+  notes: string;
   updatedAt: string;
 }
 
@@ -565,6 +575,9 @@ function normalizeMatch(raw: unknown): Match | null {
     // the same state as a match nobody has put one on yet.
     courtCost: clampCourtCost(num(raw.courtCost, 0)),
     payments: normalizePayments(raw.payments),
+    // Absent on any match saved before notes existed, which is the same state
+    // as a match nobody has written anything on.
+    notes: str(raw.notes),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
 }

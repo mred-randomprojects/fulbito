@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { CalendarDays, ChevronRight, Crown, Plus, Trophy } from "lucide-react";
+import { CalendarDays, ChevronRight, Crown, NotebookPen, Plus, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, splitCourt } from "@/lib/court";
 import { pickFace } from "@/lib/matchFaces";
+import { notePreview } from "@/lib/matchNotes";
 import { winningSide } from "@/lib/result";
 import { peakRating } from "@/lib/rating";
 import {
@@ -107,6 +108,7 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
                       {match.squad.length === 1 ? "" : "s"}
                       <CourtNote match={match} rosterIds={rosterIds} />
                     </p>
+                    <NoteLine notes={match.notes} />
                   </div>
                   {/* Reads left to right in the same order as the two shirts on
                     the left of the row, which is the only thing saying which
@@ -214,6 +216,28 @@ function SideBadge({
         />
       )}
     </span>
+  );
+}
+
+/**
+ * The note, on the row, in one line.
+ *
+ * A note that only exists inside the match is a note you have to remember to
+ * go and look for, and the whole reason to write one down is that you will not
+ * remember. So the sentence rides the row that already tells you which game
+ * this was — collapsed to one line by `notePreview`, then cut by the row's own
+ * ellipsis at whatever width the screen turned out to be. Silent on a match
+ * nobody wrote on, which is most of them.
+ */
+function NoteLine({ notes }: { notes: string }) {
+  const preview = notePreview(notes);
+  if (preview === null) return null;
+
+  return (
+    <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground/80">
+      <NotebookPen className="h-3 w-3 shrink-0" />
+      <span className="min-w-0 truncate">{preview}</span>
+    </p>
   );
 }
 

@@ -49,6 +49,7 @@ function match(id: string, updatedAt: string): Match {
     result: null,
     courtCost: 0,
     payments: {},
+    notes: "",
     updatedAt,
   };
 }
