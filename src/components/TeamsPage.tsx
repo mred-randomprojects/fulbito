@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
+import { usePlayerFormTarget } from "@/usePlayerFormTarget";
+import { useLongPress } from "@/useLongPress";
 import { SquadPicker } from "./SquadPicker";
 import { useTagFilter } from "@/useTagFilter";
 import { computeStats } from "@/lib/stats";
@@ -53,7 +55,7 @@ export function TeamsPage({
   onDeletePlayer,
 }: Props) {
   const [openId, setOpenId] = useState<TeamId | null>(null);
-  const [addPlayerOpen, setAddPlayerOpen] = useState(false);
+  const form = usePlayerFormTarget();
   const tagFilter = useTagFilter(players);
 
   const playersById = useMemo(
@@ -209,18 +211,11 @@ export function TeamsPage({
                   {members.length > 0 && (
                     <ul className="flex flex-wrap gap-1.5 border-t border-border p-3">
                       {members.map((player) => (
-                        <li
+                        <MemberChip
                           key={player.id}
-                          className="flex items-center gap-1.5 rounded-full bg-secondary py-0.5 pl-0.5 pr-2"
-                        >
-                          <PlayerAvatar player={player} size={22} />
-                          <span className="max-w-[140px] truncate text-xs">
-                            {playerDisplayName(player)}
-                          </span>
-                          <span className="tabular text-[10px] text-muted-foreground">
-                            {player.rating.toFixed(0)}
-                          </span>
-                        </li>
+                          player={player}
+                          onView={() => form.view(player.id)}
+                        />
                       ))}
                     </ul>
                   )}
@@ -270,7 +265,8 @@ export function TeamsPage({
                   })
                 }
                 tagFilter={tagFilter}
-                onAddPlayer={() => setAddPlayerOpen(true)}
+                onAddPlayer={form.create}
+                onViewPlayer={form.view}
               />
             )}
           </div>
@@ -278,12 +274,23 @@ export function TeamsPage({
       )}
 
       <PlayerForm
-        open={addPlayerOpen}
-        onOpenChange={setAddPlayerOpen}
+        open={form.target != null}
+        onOpenChange={(next) => {
+          if (!next) form.close();
+        }}
+        player={
+          form.target?.kind === "player"
+            ? playersById.get(form.target.id)
+            : undefined
+        }
         roster={players}
         statsById={statsById}
         onSave={(player) => {
           onSavePlayer(player);
+          // Only the nuevo flow adds anybody. Opening the ficha of somebody
+          // already in Los Pibes — or of somebody who is not — must not
+          // rewrite who the team is.
+          if (!form.wasCreating()) return;
           // The form writes itself on every keystroke, so this runs many times
           // for one new player: adding them to the team has to be idempotent.
           if (open == null || open.players.includes(player.id)) return;
@@ -299,5 +306,39 @@ export function TeamsPage({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * One name inside a saved team.
+ *
+ * Nothing else has claimed the tap on these, so here it opens the ficha
+ * outright — same as on the roster. Holding does the same thing rather than
+ * nothing: somebody who learnt the gesture on the cancha will try it here, and
+ * a hold that is not handled is iOS offering to save the photo.
+ */
+function MemberChip({ player, onView }: { player: Player; onView: () => void }) {
+  const press = useLongPress({ onClick: onView, onLongPress: onView });
+
+  return (
+    <li>
+      <button
+        {...press}
+        type="button"
+        title={`Ver la ficha de ${playerDisplayName(player)}`}
+        className={cn(
+          press.className,
+          "flex items-center gap-1.5 rounded-full bg-secondary py-0.5 pl-0.5 pr-2 transition-colors hover:bg-accent",
+        )}
+      >
+        <PlayerAvatar player={player} size={22} />
+        <span className="max-w-[140px] truncate text-xs">
+          {playerDisplayName(player)}
+        </span>
+        <span className="tabular text-[10px] text-muted-foreground">
+          {player.rating.toFixed(0)}
+        </span>
+      </button>
+    </li>
   );
 }

@@ -97,6 +97,11 @@ your own devices.
   player's won/drawn/lost tally, their goal difference, their last five, and
   the run they are on. Nothing is stored on the player: it is read back off the
   matches every time, so fixing a scoreline fixes the record.
+- **Who is this again, from wherever you are.** Hold a finger on any player —
+  on the pitch, on the bench, in the list of anotados, in Repartir, in
+  Encuestas — and their ficha opens right there, without losing whatever you
+  were in the middle of arranging. The tap still does what it always did:
+  swap them, anotarlos, take them off. On a laptop it is the right-click.
 - **Groups, for a plantel bigger than one game.** Tag a player with the crews
   they belong to — the laburo, the barrio, the ones who only turn up in
   summer — and the chips above the roster and above the squad list narrow it to

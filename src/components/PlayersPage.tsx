@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
 import { PlayerTags, TagFilter } from "./TagFilter";
+import { useLongPress } from "@/useLongPress";
 import { detailLevel, naturalRole } from "@/lib/rating";
 import { computeStats, emptyStats, winPercent, type PlayerStats } from "@/lib/stats";
 import { matchesTags } from "@/lib/tags";
@@ -191,11 +192,20 @@ function PlayerRow({
   const detail = detailLevel(player);
   const best = naturalRole(player);
 
+  // Nothing has claimed the tap on the roster, so here it opens the ficha
+  // outright. Holding does the same thing rather than nothing: somebody who
+  // learnt the gesture on the cancha will try it here, and a hold that is not
+  // handled is iOS offering to save the photo.
+  const press = useLongPress({ onClick, onLongPress: onClick });
+
   return (
     <button
+      {...press}
       type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
+      className={cn(
+        press.className,
+        "flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40",
+      )}
     >
       <PlayerAvatar player={player} size={44} />
       <div className="min-w-0 flex-1">

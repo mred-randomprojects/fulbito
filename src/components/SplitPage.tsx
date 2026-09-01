@@ -18,6 +18,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
+import { usePlayerFormTarget } from "@/usePlayerFormTarget";
+import { useLongPress } from "@/useLongPress";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { useTagFilter } from "@/useTagFilter";
 import { SplitError } from "@/lib/balance";
@@ -106,7 +108,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   const [handMade, setHandMade] = useState<ReadonlySet<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [addPlayerOpen, setAddPlayerOpen] = useState(false);
+  const form = usePlayerFormTarget();
 
   const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const statsById = useMemo(() => computeStats(matches), [matches]);
@@ -646,6 +648,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                     }
                     picked={picked}
                     onPick={(id) => tapPlayer(index, id)}
+                    onView={form.view}
                   />
                 ))}
               </div>
@@ -654,7 +657,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                 <ArrowLeftRight className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                   {picked == null
-                    ? "¿No te convence? Tocá a uno y después a otro de otro equipo y se cambian de camiseta. Los números se recalculan solos — sirve también para cargar los equipos que ya armaron a mano y ver qué tan parejos quedaron."
+                    ? "¿No te convence? Tocá a uno y después a otro de otro equipo y se cambian de camiseta. Los números se recalculan solos — sirve también para cargar los equipos que ya armaron a mano y ver qué tan parejos quedaron. Mantené apretado a cualquiera para ver su ficha."
                     : `${nameOf(picked)} está esperando. Tocá a alguien de otro equipo para hacer el cambio, o tocalo de nuevo para soltarlo.`}
                 </span>
               </p>
@@ -764,18 +767,29 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
               )
             }
             tagFilter={squadFilter}
-            onAddPlayer={() => setAddPlayerOpen(true)}
+            onAddPlayer={form.create}
+            onViewPlayer={form.view}
           />
         </div>
       </div>
 
       <PlayerForm
-        open={addPlayerOpen}
-        onOpenChange={setAddPlayerOpen}
+        open={form.target != null}
+        onOpenChange={(next) => {
+          if (!next) form.close();
+        }}
+        player={
+          form.target?.kind === "player"
+            ? playersById.get(form.target.id)
+            : undefined
+        }
         roster={players}
         statsById={statsById}
         onSave={(player) => {
           onSavePlayer(player);
+          // Only the nuevo flow anota. Opening a ficha to see what somebody is
+          // worth must not put them in tonight's reparto.
+          if (!form.wasCreating()) return;
           // The form saves itself as you type, so this runs on every keystroke:
           // anotarlo has to be idempotent or one slowly typed name lands in the
           // squad half a dozen times.
@@ -1074,6 +1088,7 @@ function TeamCard({
   onRename,
   picked,
   onPick,
+  onView,
 }: {
   tag: TeamTag;
   team: GroupTeam;
@@ -1084,6 +1099,7 @@ function TeamCard({
   /** Who is being held, anywhere on the screen. */
   picked: PlayerId | null;
   onPick: (id: PlayerId) => void;
+  onView: (id: PlayerId) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border" style={{ borderColor: `${tag.fill}44` }}>
@@ -1111,39 +1127,78 @@ function TeamCard({
       <ul className="divide-y divide-border/60 bg-card">
         {team.evaluation.lineup.map((player, slot) =>
           player == null ? null : (
-            <li key={player.id}>
-              <button
-                type="button"
-                onClick={() => onPick(player.id)}
-                aria-pressed={picked === player.id}
-                className={cn(
-                  "flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/50",
-                  picked === player.id && "bg-accent",
-                )}
-              >
-                <PlayerAvatar
-                  player={player}
-                  size={26}
-                  // The team colour normally, and something that reads against
-                  // every one of the eight while held.
-                  ring={picked === player.id ? "hsl(var(--foreground))" : tag.fill}
-                  ringWidth={picked === player.id ? 3 : 2}
-                />
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  {playerShortName(player)}
-                </span>
-                <span className="rounded bg-secondary px-1 py-0.5 text-[10px] text-muted-foreground">
-                  {ROLE_SHORT[formation.slots[slot].role]}
-                </span>
-                <span className="tabular w-7 text-right text-xs font-medium text-muted-foreground">
-                  {team.evaluation.slotRatings[slot].toFixed(1)}
-                </span>
-              </button>
-            </li>
+            <TeamCardRow
+              key={player.id}
+              player={player}
+              role={ROLE_SHORT[formation.slots[slot].role]}
+              rating={team.evaluation.slotRatings[slot]}
+              tag={tag}
+              picked={picked === player.id}
+              onPick={() => onPick(player.id)}
+              onView={() => onView(player.id)}
+            />
           ),
         )}
       </ul>
     </div>
+  );
+}
+
+/**
+ * One name inside a team card. Its own component so it can hold a
+ * `useLongPress`: the tap here is already the swap between two teams.
+ */
+function TeamCardRow({
+  player,
+  role,
+  rating,
+  tag,
+  picked,
+  onPick,
+  onView,
+}: {
+  player: Player;
+  role: string;
+  rating: number;
+  tag: TeamTag;
+  picked: boolean;
+  onPick: () => void;
+  onView: () => void;
+}) {
+  const press = useLongPress({ onClick: onPick, onLongPress: onView });
+
+  return (
+    <li>
+      <button
+        {...press}
+        type="button"
+        aria-pressed={picked}
+        title={`${playerShortName(player)} — mantené apretado para ver su ficha`}
+        className={cn(
+          press.className,
+          "flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/50",
+          picked && "bg-accent",
+        )}
+      >
+        <PlayerAvatar
+          player={player}
+          size={26}
+          // The team colour normally, and something that reads against every
+          // one of the eight while held.
+          ring={picked ? "hsl(var(--foreground))" : tag.fill}
+          ringWidth={picked ? 3 : 2}
+        />
+        <span className="min-w-0 flex-1 truncate text-sm">
+          {playerShortName(player)}
+        </span>
+        <span className="rounded bg-secondary px-1 py-0.5 text-[10px] text-muted-foreground">
+          {role}
+        </span>
+        <span className="tabular w-7 text-right text-xs font-medium text-muted-foreground">
+          {rating.toFixed(1)}
+        </span>
+      </button>
+    </li>
   );
 }
 

@@ -103,6 +103,17 @@ input[type="number"] {
     font-variant-numeric: tabular-nums;
   }
 
+  /* Anything you can hold a finger on to open a ficha — see `useLongPress`.
+     A player is a photo with their name under it, so without this iOS answers
+     half a second on the pitch with "Guardar imagen" and half a second on a
+     name with the selection loupe, both on top of the gesture we are after.
+     `touch-action` is deliberately left alone: the list of anotados has to
+     stay scrollable, and the press cancels itself once the finger moves. */
+  .pressable {
+    -webkit-touch-callout: none;
+    @apply select-none;
+  }
+
   /* A scoreline you can read from where the phone is lying on the bench.
      iOS only zooms in on inputs *under* 16px, so going up is safe — but the
      blanket rule above is !important, and only a class selector outranks it. */

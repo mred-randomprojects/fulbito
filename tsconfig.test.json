@@ -76,6 +76,8 @@
     "src/lib/poll.test.ts",
     "src/lib/matchNotes.ts",
     "src/lib/matchNotes.test.ts",
+    "src/lib/longPress.ts",
+    "src/lib/longPress.test.ts",
     "src/syncRoundTrip.test.ts"
   ]
 }

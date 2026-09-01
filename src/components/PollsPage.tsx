@@ -20,6 +20,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { PlayerForm } from "@/components/PlayerForm";
+import { useLongPress } from "@/useLongPress";
+import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { useCloudAuth } from "@/cloud/auth";
 import { loadCloud } from "@/cloud/firebase";
 import {
@@ -33,6 +36,7 @@ import {
 import { isCancelledSignIn } from "@/lib/authErrors";
 import { MIN_VOTERS, aggregateBallots, type CrowdPlayer } from "@/lib/crowd";
 import { pollOrder } from "@/lib/poll";
+import { computeStats } from "@/lib/stats";
 import { formatMatchDate } from "@/lib/dates";
 import {
   ATTRIBUTE_LABELS,
@@ -90,8 +94,14 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
+  const form = usePlayerFormTarget();
 
   const rosterIds = useMemo(() => new Set(players.map((p) => p.id)), [players]);
+  const playersById = useMemo(
+    () => new Map(players.map((p) => [p.id, p])),
+    [players],
+  );
+  const statsById = useMemo(() => computeStats(matches), [matches]);
 
   /**
    * The last few games, as one-tap ways to fill the list.
@@ -315,37 +325,35 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
         </div>
 
         <ul className="mb-3 max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-          {players.map((player) => {
-            const on = picked.has(player.id);
-            return (
-              <li key={player.id}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPicked((current) => {
-                      const next = new Set(current);
-                      if (on) next.delete(player.id);
-                      else next.add(player.id);
-                      return next;
-                    })
-                  }
-                  className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
-                    on ? "bg-secondary" : "hover:bg-secondary/50"
-                  }`}
-                >
-                  <PlayerAvatar player={player} size={28} />
-                  <span className="flex-1 truncate text-sm">{playerDisplayName(player)}</span>
-                  <span className="tabular text-xs text-muted-foreground">{player.rating}</span>
-                </button>
-              </li>
-            );
-          })}
+          {players.map((player) => (
+            <PickRow
+              key={player.id}
+              player={player}
+              picked={picked.has(player.id)}
+              onToggle={() =>
+                setPicked((current) => {
+                  const next = new Set(current);
+                  if (!next.delete(player.id)) next.add(player.id);
+                  return next;
+                })
+              }
+              onView={() => form.view(player.id)}
+            />
+          ))}
           {players.length === 0 && (
             <li className="px-3 py-4 text-sm text-muted-foreground">
               Todavía no tenés jugadores cargados.
             </li>
           )}
         </ul>
+
+        {/* Same gesture as the list of anotados, because the tap here is spent
+            the same way: it picks who goes on the list. */}
+        {players.length > 0 && (
+          <p className="mb-3 text-[11px] text-muted-foreground">
+            Mantené apretado a alguien para ver su ficha.
+          </p>
+        )}
 
         <Button onClick={() => setAsking(true)} disabled={picked.size === 0 || working}>
           <ClipboardList className="mr-1.5 h-4 w-4" />
@@ -431,7 +439,61 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* No `onDelete`: borrar a alguien del plantel while picking who to ask
+          about is not a thing this screen is for, and the roster is one tap
+          away. */}
+      <PlayerForm
+        open={form.target != null}
+        onOpenChange={(next) => {
+          if (!next) form.close();
+        }}
+        player={
+          form.target?.kind === "player" ? playersById.get(form.target.id) : undefined
+        }
+        roster={players}
+        statsById={statsById}
+        onSave={onSavePlayer}
+      />
     </Page>
+  );
+}
+
+/**
+ * One name on the list of who to ask about.
+ *
+ * Its own component so it can hold a `useLongPress`: the tap here already
+ * picks somebody on or off the encuesta, so the ficha is a held finger — the
+ * same gesture as everywhere else a player is tappable.
+ */
+function PickRow({
+  player,
+  picked,
+  onToggle,
+  onView,
+}: {
+  player: Player;
+  picked: boolean;
+  onToggle: () => void;
+  onView: () => void;
+}) {
+  const press = useLongPress({ onClick: onToggle, onLongPress: onView });
+
+  return (
+    <li>
+      <button
+        {...press}
+        type="button"
+        title={`${playerDisplayName(player)} — mantené apretado para ver su ficha`}
+        className={`${press.className} flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
+          picked ? "bg-secondary" : "hover:bg-secondary/50"
+        }`}
+      >
+        <PlayerAvatar player={player} size={28} />
+        <span className="flex-1 truncate text-sm">{playerDisplayName(player)}</span>
+        <span className="tabular text-xs text-muted-foreground">{player.rating}</span>
+      </button>
+    </li>
   );
 }
 

@@ -26,6 +26,8 @@ import { TeamInsights } from "./TeamInsights";
 import { ShareDialog } from "./ShareDialog";
 import { MatchTabsBar } from "./MatchTabsBar";
 import { PlayerForm } from "./PlayerForm";
+import { usePlayerFormTarget } from "@/usePlayerFormTarget";
+import { useLongPress } from "@/useLongPress";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { evaluateLineup, findSplits, SplitError, type TeamEvaluation } from "@/lib/balance";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
@@ -71,6 +73,7 @@ type Selection =
   | { where: "pitch"; team: TeamKey; slot: number }
   | { where: "unassigned"; id: PlayerId };
 
+
 export function MatchBuilder({
   match,
   players,
@@ -86,7 +89,16 @@ export function MatchBuilder({
   const [optionIndex, setOptionIndex] = useState(0);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [addPlayerOpen, setAddPlayerOpen] = useState(false);
+  /**
+   * Who the ficha is open on, if anybody.
+   *
+   * One dialog for both jobs — "cargar a alguien nuevo" and "quién es este" —
+   * because `PlayerForm` re-seeds itself whenever the player it is pointed at
+   * changes, and a second mounted copy would be a second autosaver writing to
+   * the same roster. What the two flows do differ on is the side effect: see
+   * `onSave` at the bottom of this file.
+   */
+  const form = usePlayerFormTarget();
   /** True once the lineup has been hand-edited away from a generated option. */
   const [edited, setEdited] = useState(false);
 
@@ -455,8 +467,8 @@ export function MatchBuilder({
   /* ---------------------------------------------------------------- */
 
   const tokens = [
-    ...buildTokens("A", lineupA, formationA, match.teamA, match, selection, handleSelect),
-    ...buildTokens("B", lineupB, formationB, match.teamB, match, selection, handleSelect),
+    ...buildTokens("A", lineupA, formationA, match.teamA, match, selection, handleSelect, form.view),
+    ...buildTokens("B", lineupB, formationB, match.teamB, match, selection, handleSelect, form.view),
   ];
 
   const summary = hasLineup
@@ -622,7 +634,8 @@ export function MatchBuilder({
               onSelectAll={selectAll}
               onClear={clearSquad}
               tagFilter={tagFilter}
-              onAddPlayer={() => setAddPlayerOpen(true)}
+              onAddPlayer={form.create}
+              onViewPlayer={form.view}
             />
           </div>
         </div>
@@ -747,7 +760,8 @@ export function MatchBuilder({
                     <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
                       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       Tocá un jugador y después a otro — o una camiseta vacía — para
-                      cambiarlos de lugar. Los números se actualizan solos.
+                      cambiarlos de lugar. Los números se actualizan solos. Si lo
+                      mantenés apretado, te muestra su ficha.
                     </p>
                   )}
 
@@ -756,6 +770,7 @@ export function MatchBuilder({
                       players={unassigned}
                       selection={selection}
                       onSelect={(id) => handleSelect({ where: "unassigned", id })}
+                      onView={form.view}
                       lockedTo={lockedTo}
                     />
                   )}
@@ -801,7 +816,8 @@ export function MatchBuilder({
                   onSelectAll={selectAll}
                   onClear={clearSquad}
                   tagFilter={tagFilter}
-                  onAddPlayer={() => setAddPlayerOpen(true)}
+                  onAddPlayer={form.create}
+                  onViewPlayer={form.view}
                 />
               </div>
             )}
@@ -859,12 +875,26 @@ export function MatchBuilder({
       />
 
       <PlayerForm
-        open={addPlayerOpen}
-        onOpenChange={setAddPlayerOpen}
+        open={form.target != null}
+        onOpenChange={(next) => {
+          if (!next) form.close();
+        }}
+        player={
+          form.target?.kind === "player"
+            ? playersById.get(form.target.id)
+            : undefined
+        }
         roster={players}
         statsById={statsById}
         onSave={(player) => {
           onSavePlayer(player);
+          // Anotarlo belongs to "cargar a alguien nuevo" and to nothing else.
+          // Opening somebody's ficha off the pitch to check what they are
+          // worth, and having the app quietly anotar them because you nudged a
+          // number, is an edit nobody asked for — and the ficha is reachable
+          // from the roster, where most of the plantel is *not* playing
+          // tonight.
+          if (!form.wasCreating()) return;
           // The form saves itself as you type, so this runs on every edit and
           // not once at the end: anotarlo has to be idempotent, or a player
           // typed slowly would land in the squad half a dozen times.
@@ -874,9 +904,11 @@ export function MatchBuilder({
           patch({ squad, sizeA, sizeB: squad.length - sizeA });
         }}
         onDelete={(player) => {
-          // Without a Cancelar to fall back on, this is the way out of a
-          // jugador nuevo invented by mistake — so it has to take them out of
-          // tonight's game as well as out of the roster.
+          // Two ways to get here: a jugador nuevo invented by mistake, which
+          // has no Cancelar to fall back on, and somebody borrado from their
+          // own ficha. Both have to take them out of tonight's game as well as
+          // out of the roster, or the squad keeps counting a player who no
+          // longer exists.
           if (match.squad.includes(player.id)) toggleSquad(player.id);
           onDeletePlayer(player.id);
         }}
@@ -922,6 +954,7 @@ function buildTokens(
   match: Match,
   selection: Selection | null,
   onSelect: (selection: Selection) => void,
+  onView: (id: PlayerId) => void,
 ): PitchToken[] {
   const kit = KITS[config.kit];
 
@@ -947,6 +980,8 @@ function buildTokens(
         chipText: "rgba(255,255,255,0.65)",
         selected,
         dimmed: true,
+        // No `onLongPress`: an empty shirt is a position, not a person, and
+        // there is no ficha behind it.
         onClick: () => onSelect({ where: "pitch", team, slot: index }),
       };
     }
@@ -966,6 +1001,7 @@ function buildTokens(
       selected,
       badge: match.pins[player.id] != null ? "🔒" : undefined,
       onClick: () => onSelect({ where: "pitch", team, slot: index }),
+      onLongPress: () => onView(player.id),
     };
   });
 }
@@ -1054,11 +1090,13 @@ function UnassignedStrip({
   players,
   selection,
   onSelect,
+  onView,
   lockedTo,
 }: {
   players: Player[];
   selection: Selection | null;
   onSelect: (id: PlayerId) => void;
+  onView: (id: PlayerId) => void;
   lockedTo: (id: PlayerId) => LockTarget | null;
 }) {
   return (
@@ -1068,37 +1106,53 @@ function UnassignedStrip({
         estos para que entre.
       </p>
       <ul className="flex flex-wrap gap-2">
-        {players.map((player) => {
-          const selected =
-            selection?.where === "unassigned" && selection.id === player.id;
-          const lock = lockedTo(player.id);
-          return (
-            <li key={player.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(player.id)}
-                className={cn(
-                  "flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs transition-colors",
-                  selected
-                    ? "border-primary bg-primary/15"
-                    : "border-border hover:bg-accent",
-                )}
-              >
-                <PlayerAvatar
-                  player={player}
-                  size={24}
-                  ring={lock?.fill}
-                  ringWidth={2}
-                />
-                <span className="max-w-[110px] truncate">
-                  {playerShortName(player)}
-                </span>
-                {lock != null && <Lock className="h-3 w-3 text-muted-foreground" />}
-              </button>
-            </li>
-          );
-        })}
+        {players.map((player) => (
+          <BenchChip
+            key={player.id}
+            player={player}
+            selected={selection?.where === "unassigned" && selection.id === player.id}
+            lock={lockedTo(player.id)}
+            onSelect={() => onSelect(player.id)}
+            onView={() => onView(player.id)}
+          />
+        ))}
       </ul>
     </div>
+  );
+}
+
+/** One name on the bench. Its own component so it can hold a `useLongPress`. */
+function BenchChip({
+  player,
+  selected,
+  lock,
+  onSelect,
+  onView,
+}: {
+  player: Player;
+  selected: boolean;
+  lock: LockTarget | null;
+  onSelect: () => void;
+  onView: () => void;
+}) {
+  const press = useLongPress({ onClick: onSelect, onLongPress: onView });
+
+  return (
+    <li>
+      <button
+        {...press}
+        type="button"
+        title={`${playerShortName(player)} — mantené apretado para ver su ficha`}
+        className={cn(
+          press.className,
+          "flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs transition-colors",
+          selected ? "border-primary bg-primary/15" : "border-border hover:bg-accent",
+        )}
+      >
+        <PlayerAvatar player={player} size={24} ring={lock?.fill} ringWidth={2} />
+        <span className="max-w-[110px] truncate">{playerShortName(player)}</span>
+        {lock != null && <Lock className="h-3 w-3 text-muted-foreground" />}
+      </button>
+    </li>
   );
 }

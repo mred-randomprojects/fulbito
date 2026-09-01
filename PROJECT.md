@@ -145,6 +145,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/autosave.ts` | When a self-saving form writes, and when it holds back |
 | `lib/saveStatus.ts` | When "Guardado" appears and when it clears |
 | `lib/clipboard.ts` | Which image, if any, a paste actually meant |
+| `lib/longPress.ts` | When a held finger is "quién es este" and when it is a scroll |
 | `lib/image.ts` | Turning a camera photo into a square avatar of at most 60 KB |
 | `lib/lineupImage.ts` | Drawing the shareable PNG of the pitch on a canvas |
 | `lib/tournamentImage.ts` | Drawing the shareable PNG of the whole torneito |
@@ -191,6 +192,54 @@ exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `MatchBuilder` renders a different `SquadPicker` element once the squad reaches
 two, and a filter living inside the list would be thrown away on the second
 tap.
+
+### Getting to a player from wherever they are
+
+The ficha — `PlayerForm`, the same dialog the roster opens — is reachable from
+every screen a player appears on, and the rule for how is one sentence:
+
+> **Where the tap on a player is free, it opens the ficha. Where the tap is
+> already spent, holding for half a second does.**
+
+The tap is spent nearly everywhere, and on something different each time: on
+the cancha it swaps two shirts, on the bench it sends somebody on, in the list
+of anotados it ticks them in or out, in a team card on Repartir it moves them
+between sides, on Encuestas it picks who goes on the list. Only the roster and
+the members of a saved team had a tap going spare. So the gesture is
+`useLongPress`, and it is the same one everywhere — *including* on the two
+screens where the tap already works, which hold to the same thing rather than
+to nothing. A hold nobody handles is iOS offering to save the photo, and one
+screen answering the gesture with a share sheet teaches people to stop trying
+it.
+
+Three things about it are load-bearing:
+
+- **A press that moves is a scroll.** The list of anotados scrolls by dragging
+  the very rows this listens on, so the press gives up as soon as the finger
+  leaves a small radius — measured from where it landed, not from the last
+  frame, so a slow drag cannot creep past it. `lib/longPress.ts` decides that
+  and `longPress.test.ts` pins it.
+- **The click afterwards has to be swallowed.** The browser still sends one on
+  release, and left alone it would do the swap, or desanotar the player,
+  underneath the dialog that just opened. That is the rule with teeth: getting
+  it wrong does not fail to show a ficha, it silently edits the match.
+- **A mouse gets the right-click instead of the hold.** Somebody at a laptop
+  deliberating over a swap holds the button down for well over half a second,
+  and turning that into a ficha would make careful clicking the one thing that
+  does not work. Touch has no second button, which is why the hold exists at
+  all.
+
+`.pressable`, in `index.css` and part of what `useLongPress` returns rather
+than something each call site remembers, is what stops the browser answering
+the gesture itself: half a second on an `<img>` is iOS's "Guardar imagen" and
+half a second on text is the selection loupe, and a player is a photo with
+their name under it. `touch-action` is deliberately *not* touched — the lists
+have to stay scrollable.
+
+**One `PlayerForm` per screen serves both jobs**, because a second mounted copy
+would be a second autosaver writing to the same roster. `usePlayerFormTarget`
+holds which job is running, and the reason it is a hook rather than a
+`useState` in five files is the invariant below.
 
 ### The four tabs of a match
 
@@ -353,6 +402,17 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   work — on one device, with no network involved, where sync cannot help. It
   merges through the same `mergeAppData` a cloud snapshot does, and settles in
   two hops because `persist` drops the resulting no-op.
+- **Looking at somebody is not signing them up.** Creating a player from the
+  match screen anota them, and from Equipos adds them to the side being
+  edited — and neither may happen for merely opening somebody's ficha, because
+  most of the plantel is not playing tonight. The two flows share one dialog,
+  so the screens branch their `onSave` side effect on `usePlayerFormTarget`'s
+  `wasCreating`. **And that question cannot be answered by reading the live
+  state**, which is the whole reason it is a function over a ref: `PlayerForm`
+  writes its last edit from an effect that runs *after* the dialog has closed,
+  so somebody who types a name and dismisses with the X produces exactly one
+  write, and it lands when the target is already back to null. Deciding from
+  the state would drop the anotar on the most likely path out.
 - **Optional stays optional.** Anything unrated falls back to the overall
   rating; no absent field may ever count against a player.
 - **A record is read, never written.** `lib/stats.ts` derives every won/lost

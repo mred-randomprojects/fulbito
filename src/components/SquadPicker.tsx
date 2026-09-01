@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { TagFilter } from "./TagFilter";
+import { useLongPress } from "@/useLongPress";
 import { matchesTags } from "@/lib/tags";
 import type { TagFilterState } from "@/useTagFilter";
 import { playerDisplayName, type Player, type PlayerId } from "@/types";
@@ -76,6 +77,13 @@ interface Props {
   tagFilter: TagFilterState;
   onAddPlayer: () => void;
   /**
+   * Show me who this is.
+   *
+   * The tap on a row is already spent — it anota somebody, or takes them out
+   * of the equipo — so the ficha is a held finger. See `useLongPress`.
+   */
+  onViewPlayer: (id: PlayerId) => void;
+  /**
    * Whether the lock column is shown at all.
    *
    * Off where there are no sides to lock to. A row of buttons that never do
@@ -104,6 +112,7 @@ export function SquadPicker({
   onClear,
   tagFilter,
   onAddPlayer,
+  onViewPlayer,
   showLocks = true,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -185,75 +194,28 @@ export function SquadPicker({
           onToggle={tagFilter.toggle}
           onClear={tagFilter.clear}
         />
+        {/* A held finger is not a gesture anybody guesses, and this list is
+            where most people will meet it first. */}
+        {players.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">
+            Mantené apretado a alguien para ver su ficha.
+          </p>
+        )}
       </div>
 
       <ul className="max-h-[420px] overflow-y-auto p-2">
-        {visible.map((player) => {
-          const playing = squadSet.has(player.id);
-          const lock = lockedTo(player.id);
-
-          return (
-            <li key={player.id} className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => onToggle(player.id)}
-                className={cn(
-                  "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-2 text-left transition-colors",
-                  playing ? "bg-primary/10" : "hover:bg-accent/40",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
-                    playing
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border",
-                  )}
-                >
-                  {playing && <Check className="h-3.5 w-3.5" />}
-                </span>
-                <PlayerAvatar player={player} size={30} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">
-                    {playerDisplayName(player)}
-                  </span>
-                  {lock != null && (
-                    <span
-                      className="block truncate text-[11px]"
-                      style={{ color: lock.caption ?? lock.fill }}
-                    >
-                      fijado a {lock.name}
-                    </span>
-                  )}
-                </span>
-                <span className="tabular shrink-0 text-sm font-semibold text-muted-foreground">
-                  {player.rating.toFixed(0)}
-                </span>
-              </button>
-              {showLocks && (
-              <button
-                type="button"
-                onClick={() => onCycleLock(player.id)}
-                disabled={!playing}
-                title={
-                  lock == null
-                    ? "Fijarlo a un equipo"
-                    : `Fijado a ${lock.name} — tocá para cambiar`
-                }
-                className={cn(
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-25",
-                  lock == null
-                    ? "border-border text-muted-foreground hover:bg-accent"
-                    : "border-transparent",
-                )}
-                style={lock != null ? { background: lock.fill, color: lock.text } : undefined}
-              >
-                <Lock className="h-3.5 w-3.5" />
-              </button>
-              )}
-            </li>
-          );
-        })}
+        {visible.map((player) => (
+          <SquadRow
+            key={player.id}
+            player={player}
+            playing={squadSet.has(player.id)}
+            lock={lockedTo(player.id)}
+            showLocks={showLocks}
+            onToggle={() => onToggle(player.id)}
+            onCycleLock={() => onCycleLock(player.id)}
+            onView={() => onViewPlayer(player.id)}
+          />
+        ))}
 
         {visible.length === 0 && (
           <li className="px-2 py-8 text-center text-sm text-muted-foreground">
@@ -273,5 +235,98 @@ export function SquadPicker({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * One name in the list, with the tick, the lock and the ficha behind it.
+ *
+ * Its own component so it can hold a `useLongPress`, which a `map` over a list
+ * that grows and shrinks cannot. Worth knowing: this list scrolls, and it
+ * scrolls by dragging these very rows — the press giving up as soon as the
+ * finger moves is what keeps scrolling past twenty people from opening twenty
+ * fichas. That rule lives in `lib/longPress.ts`.
+ */
+function SquadRow({
+  player,
+  playing,
+  lock,
+  showLocks,
+  onToggle,
+  onCycleLock,
+  onView,
+}: {
+  player: Player;
+  playing: boolean;
+  lock: LockTarget | null;
+  showLocks: boolean;
+  onToggle: () => void;
+  onCycleLock: () => void;
+  onView: () => void;
+}) {
+  const press = useLongPress({ onClick: onToggle, onLongPress: onView });
+
+  return (
+    <li className="flex items-center gap-1">
+      <button
+        {...press}
+        type="button"
+        title={`${playerDisplayName(player)} — mantené apretado para ver su ficha`}
+        className={cn(
+          press.className,
+          "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-2 text-left transition-colors",
+          playing ? "bg-primary/10" : "hover:bg-accent/40",
+        )}
+      >
+        <span
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+            playing
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border",
+          )}
+        >
+          {playing && <Check className="h-3.5 w-3.5" />}
+        </span>
+        <PlayerAvatar player={player} size={30} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">
+            {playerDisplayName(player)}
+          </span>
+          {lock != null && (
+            <span
+              className="block truncate text-[11px]"
+              style={{ color: lock.caption ?? lock.fill }}
+            >
+              fijado a {lock.name}
+            </span>
+          )}
+        </span>
+        <span className="tabular shrink-0 text-sm font-semibold text-muted-foreground">
+          {player.rating.toFixed(0)}
+        </span>
+      </button>
+      {showLocks && (
+        <button
+          type="button"
+          onClick={onCycleLock}
+          disabled={!playing}
+          title={
+            lock == null
+              ? "Fijarlo a un equipo"
+              : `Fijado a ${lock.name} — tocá para cambiar`
+          }
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-25",
+            lock == null
+              ? "border-border text-muted-foreground hover:bg-accent"
+              : "border-transparent",
+          )}
+          style={lock != null ? { background: lock.fill, color: lock.text } : undefined}
+        >
+          <Lock className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </li>
   );
 }

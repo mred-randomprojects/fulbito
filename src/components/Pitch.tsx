@@ -1,4 +1,5 @@
 import { StaticAvatar } from "./PlayerAvatar";
+import { useLongPress } from "@/useLongPress";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +27,11 @@ export interface PitchToken {
   dimmed?: boolean;
   badge?: string;
   onClick?: () => void;
+  /**
+   * Open this player's ficha. Absent on an empty slot, which is a position
+   * rather than a person and has nothing to show.
+   */
+  onLongPress?: () => void;
 }
 
 interface Props {
@@ -95,63 +101,98 @@ export function Pitch({ tokens, labelA, labelB, className }: Props) {
       >
         <Markings />
 
-        {tokens.map((token) => {
-          const { left, top } = position(token);
-          const Element = token.onClick != null ? "button" : "div";
-          return (
-            <Element
-              key={token.key}
-              type={token.onClick != null ? "button" : undefined}
-              onClick={token.onClick}
-              style={{ left, top }}
-              className={cn(
-                "absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 transition-transform",
-                token.onClick != null && "cursor-pointer hover:scale-105 active:scale-95",
-                token.dimmed && "opacity-45",
-              )}
-            >
-              <span className="relative">
-                <StaticAvatar
-                  avatar={token.avatar}
-                  name={token.name}
-                  seed={token.seed}
-                  size={AVATAR_SIZE}
-                  ring={token.selected === true ? "#ffffff" : token.ring}
-                  ringWidth={token.selected === true ? 3 : 2}
-                  className={cn(
-                    "shadow-lg shadow-black/50",
-                    token.selected === true && "animate-pulse",
-                  )}
-                />
-                {token.badge != null && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold text-black shadow">
-                    {token.badge}
-                  </span>
-                )}
-                {token.rating !== undefined && (
-                  <span className="tabular absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-black/85 px-1 text-[10px] font-bold text-white shadow ring-1 ring-white/20">
-                    {token.rating.toFixed(1)}
-                  </span>
-                )}
-              </span>
-              <span
-                style={{
-                  background: token.chip,
-                  color: token.chipText,
-                  fontSize: NAME_FONT,
-                  maxWidth: NAME_MAX_WIDTH,
-                }}
-                className="truncate rounded px-1.5 py-0.5 font-semibold leading-tight shadow-sm"
-              >
-                {token.name}
-              </span>
-            </Element>
-          );
-        })}
+        {tokens.map((token) => (
+          <Token key={token.key} token={token} />
+        ))}
       </div>
 
       {labelA != null && <div className="mt-2 flex justify-center">{labelA}</div>}
     </div>
+  );
+}
+
+/**
+ * One shirt on the grass.
+ *
+ * Its own component only so that it can call a hook: the tap belongs to the
+ * swap, so the ficha is a held finger, and `useLongPress` cannot be called
+ * from inside a `map` whose length changes with the formation.
+ */
+function Token({ token }: { token: PitchToken }) {
+  const press = useLongPress({
+    onClick: token.onClick,
+    onLongPress: token.onLongPress,
+  });
+  const { left, top } = position(token);
+  const interactive = token.onClick != null || token.onLongPress != null;
+
+  const content = (
+    <>
+      <span className="relative">
+        <StaticAvatar
+          avatar={token.avatar}
+          name={token.name}
+          seed={token.seed}
+          size={AVATAR_SIZE}
+          ring={token.selected === true ? "#ffffff" : token.ring}
+          ringWidth={token.selected === true ? 3 : 2}
+          className={cn(
+            "shadow-lg shadow-black/50",
+            token.selected === true && "animate-pulse",
+          )}
+        />
+        {token.badge != null && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold text-black shadow">
+            {token.badge}
+          </span>
+        )}
+        {token.rating !== undefined && (
+          <span className="tabular absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-black/85 px-1 text-[10px] font-bold text-white shadow ring-1 ring-white/20">
+            {token.rating.toFixed(1)}
+          </span>
+        )}
+      </span>
+      <span
+        style={{
+          background: token.chip,
+          color: token.chipText,
+          fontSize: NAME_FONT,
+          maxWidth: NAME_MAX_WIDTH,
+        }}
+        className="truncate rounded px-1.5 py-0.5 font-semibold leading-tight shadow-sm"
+      >
+        {token.name}
+      </span>
+    </>
+  );
+
+  const layout =
+    "absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 transition-transform";
+
+  // A div rather than a dead button on the share view, which has names and
+  // photos but no roster behind them and nothing to tap towards.
+  if (!interactive) {
+    return (
+      <div style={{ left, top }} className={cn(layout, token.dimmed && "opacity-45")}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      {...press}
+      type="button"
+      style={{ left, top }}
+      className={cn(
+        press.className,
+        layout,
+        "cursor-pointer hover:scale-105 active:scale-95",
+        token.dimmed && "opacity-45",
+      )}
+    >
+      {content}
+    </button>
   );
 }
 
