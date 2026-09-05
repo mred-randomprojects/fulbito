@@ -115,17 +115,37 @@ export type BalanceBasis = "total" | "average";
 
 export interface TeamConfig {
   name: string;
-  /** Tailwind-ish colour token key, see `KIT_COLORS`. */
+  /** Which bibs this side got tonight. See `KITS`, and `lib/kits.ts`. */
   kit: KitId;
   formationId: string;
 }
 
 /**
- * Light shirts against dark shirts. That is the whole vocabulary of a picked
- * game — nobody brings six sets of bibs — so the team's identity is its name,
- * not a colour picker.
+ * The bibs, and the whole vocabulary of colour in this app.
+ *
+ * Claros against oscuros is what most picked games actually look like, so it
+ * is the pair a new match opens with — but plenty of groups own one set of
+ * pecheras in whatever colour the club had, and being told they are playing in
+ * white when they are visibly in orange makes every screen slightly wrong. So
+ * the kit is picked, per side, per match: it is a fact about the night rather
+ * than about the team (`Team` deliberately has none), and `lib/kits.ts` is the
+ * one place that decides what a tap on a colour means.
+ *
+ * Adding one here is enough: every screen, both PNGs and the shared text read
+ * the colour off this table, and `normalizeKit` falls back to the side's
+ * default for anything it does not recognise — so a blob written by a newer
+ * build lands as claros against oscuros rather than as a crash.
  */
-export const KIT_IDS = ["light", "dark"] as const;
+export const KIT_IDS = [
+  "light",
+  "dark",
+  "red",
+  "blue",
+  "green",
+  "yellow",
+  "orange",
+  "purple",
+] as const;
 export type KitId = (typeof KIT_IDS)[number];
 
 export interface Kit {
@@ -133,11 +153,14 @@ export interface Kit {
   label: string;
   /** Shirt fill. */
   fill: string;
-  /** Ring around the avatar on the pitch. */
+  /**
+   * Ring around the avatar on the pitch — the same colour, except where the
+   * fill is too close to the grass or the card to be seen against it.
+   */
   ring: string;
   /** Text colour that reads on `fill`. */
   text: string;
-  /** Soft background for panels. */
+  /** Soft background for panels: `fill` (or `ring`) at a low alpha. */
   soft: string;
 }
 
@@ -158,12 +181,66 @@ export const KITS: Record<KitId, Kit> = {
     text: "#e8ecf2",
     soft: "rgba(91,108,175,0.16)",
   },
+  red: {
+    id: "red",
+    label: "Rojos",
+    fill: "#ef5f6b",
+    ring: "#ef5f6b",
+    text: "#1f0709",
+    soft: "rgba(239,95,107,0.16)",
+  },
+  blue: {
+    id: "blue",
+    label: "Azules",
+    fill: "#5b8def",
+    ring: "#5b8def",
+    text: "#08101f",
+    soft: "rgba(91,141,239,0.16)",
+  },
+  green: {
+    id: "green",
+    label: "Verdes",
+    fill: "#4fbf85",
+    ring: "#4fbf85",
+    text: "#04150c",
+    soft: "rgba(79,191,133,0.16)",
+  },
+  yellow: {
+    id: "yellow",
+    label: "Amarillos",
+    fill: "#e5c257",
+    ring: "#e5c257",
+    text: "#1a1403",
+    soft: "rgba(229,194,87,0.16)",
+  },
+  orange: {
+    id: "orange",
+    label: "Naranjas",
+    fill: "#ef9a4f",
+    ring: "#ef9a4f",
+    text: "#1c0f03",
+    soft: "rgba(239,154,79,0.16)",
+  },
+  purple: {
+    id: "purple",
+    label: "Violetas",
+    fill: "#a97bef",
+    ring: "#a97bef",
+    text: "#12061f",
+    soft: "rgba(169,123,239,0.16)",
+  },
 };
 
 /** Shirt colour as an emoji, for plain-text exports into a group chat. */
 export const KIT_EMOJI: Record<KitId, string> = {
   light: "🤍",
   dark: "🖤",
+  red: "🔴",
+  blue: "🔵",
+  green: "🟢",
+  yellow: "🟡",
+  orange: "🟠",
+  purple: "🟣",
 };
 
 /**
@@ -260,10 +337,11 @@ export interface Match {
  *
  * Deliberately just a name and a list of people:
  *
- * - **No kit.** Light against dark is a fact about a game, not about a team;
- *   two saved teams both remembering "we wear light" would put two identical
- *   sides on one pitch. Loading a team into a match sets its *name* and leaves
- *   the bibs to the night.
+ * - **No kit.** The colour is a fact about a game, not about a team: two saved
+ *   teams both remembering "we wear red" would put two identical sides on one
+ *   pitch, and whoever brought the pecheras decides on the night anyway.
+ *   Loading a team into a match sets its *name* and leaves the bibs alone —
+ *   they are picked per side, per match. See `KITS` and `lib/kits.ts`.
  * - **No formation.** The shape depends on how many turned up, which is a
  *   question a saved team cannot answer.
  * - **No rating, no record.** Both are read off the players and the matches,

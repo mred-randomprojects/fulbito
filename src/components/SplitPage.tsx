@@ -826,10 +826,12 @@ interface TeamTag {
 /**
  * Eight teams told apart by colour.
  *
- * Not `KITS`: that vocabulary is light shirts against dark shirts, which is the
- * whole truth of a two-sided game and useless past it. These are labels on a
- * screen — nobody is bringing eight sets of bibs — so they only have to be
- * distinguishable from each other at arm's length, outdoors, on a phone.
+ * Not `KITS`, even though the two palettes have grown to look alike. A kit is
+ * something somebody picked for one side of one match, and it comes with a
+ * name, an emoji and a claim about what those ten are actually wearing. These
+ * are labels on a screen — nobody is bringing eight sets of bibs — assigned in
+ * order and never chosen, so they only have to be distinguishable from each
+ * other at arm's length, outdoors, on a phone.
  */
 const TEAM_TAGS: TeamTag[] = [
   { name: "Equipo 1", emoji: "🔵", fill: "#5b8def", text: "#08101f" },

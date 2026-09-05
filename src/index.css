@@ -24,10 +24,6 @@
     --input: 158 14% 17%;
     --ring: 142 72% 45%;
     --radius: 0.75rem;
-
-    /* Team identities, referenced from both the pitch and the summary panels. */
-    --team-a: 210 20% 88%;
-    --team-b: 225 35% 30%;
   }
 }
 

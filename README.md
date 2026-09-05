@@ -40,6 +40,14 @@ your own devices.
   is in it, or deleting it never rewrites a game that already happened.
 - **A lineup you can argue with.** Drag nobody: tap a player, tap another, they
   swap, and every number updates.
+- **The bibs you actually brought.** Claros against oscuros is only where a
+  match starts — each side picks its own colour out of eight, and it carries
+  through everything: the shirts on the pitch, the two circles on the list of
+  partidos, the ring around every face in the shared PNG, the emoji in the
+  message for the grupo. Asking for the colour the other side is wearing swaps
+  the two, the way handing your pecheras over does, because two sides in one
+  colour makes every one of those useless. A team still called "Claros" is
+  renamed along with the change; a name you typed yourself is never touched.
 - **Insight, not just a total.** Line-by-line comparisons, top-heaviness, the
   gap between the two best players, and a plain-English read on what it means.
 - **Uneven sides and deliberate handicaps.** 5 v 6 is normal. So is stacking one

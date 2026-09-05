@@ -2,7 +2,7 @@ import { HeartCrack, Minus, Plus, Scale, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formationsForSize, generateFormation, type Formation } from "@/lib/formations";
-import { KITS, type BalanceBasis, type TeamConfig } from "@/types";
+import { KIT_IDS, KITS, type BalanceBasis, type KitId, type TeamConfig } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -25,6 +25,12 @@ interface Props {
    */
   anyAvoidsRecorded: boolean;
   onTeamChange: (team: "A" | "B", config: TeamConfig) => void;
+  /**
+   * Not folded into `onTeamChange`: picking a colour is the one control here
+   * that can move the *other* side too — see `lib/kits.ts` — so it cannot be
+   * expressed as a new config for one team.
+   */
+  onKitChange: (team: "A" | "B", kit: KitId) => void;
   /** Each side is set on its own; the other one never moves behind your back. */
   onSizeChange: (team: "A" | "B", size: number) => void;
   onBasisChange: (basis: BalanceBasis) => void;
@@ -48,6 +54,7 @@ export function MatchSetup({
   avoidPairsInSquad,
   anyAvoidsRecorded,
   onTeamChange,
+  onKitChange,
   onSizeChange,
   onBasisChange,
   onRespectAvoidsChange,
@@ -110,12 +117,14 @@ export function MatchSetup({
           size={sizeA}
           formation={formationA}
           onChange={(next) => onTeamChange("A", next)}
+          onKit={(kit) => onKitChange("A", kit)}
         />
         <TeamCard
           config={teamB}
           size={sizeB}
           formation={formationB}
           onChange={(next) => onTeamChange("B", next)}
+          onKit={(kit) => onKitChange("B", kit)}
         />
       </div>
 
@@ -258,11 +267,13 @@ function TeamCard({
   size,
   formation,
   onChange,
+  onKit,
 }: {
   config: TeamConfig;
   size: number;
   formation: Formation;
   onChange: (config: TeamConfig) => void;
+  onKit: (kit: KitId) => void;
 }) {
   const presets = formationsForSize(size);
   const options =
@@ -274,17 +285,39 @@ function TeamCard({
       className="space-y-2 rounded-lg border p-3"
       style={{ borderColor: `${kit.fill}44`, background: kit.soft }}
     >
-      <div className="flex items-center gap-2">
-        <span
-          className="h-4 w-4 shrink-0 rounded-full border border-white/20"
-          style={{ background: kit.fill }}
-        />
-        <Input
-          value={config.name}
-          onChange={(e) => onChange({ ...config, name: e.target.value })}
-          className="h-9 border-transparent bg-transparent px-2 font-semibold"
-          aria-label="Nombre del equipo"
-        />
+      <Input
+        value={config.name}
+        onChange={(e) => onChange({ ...config, name: e.target.value })}
+        className="h-9 border-transparent bg-transparent px-2 font-semibold"
+        aria-label="Nombre del equipo"
+      />
+
+      <div
+        role="group"
+        aria-label={`Pecheras de ${config.name}`}
+        className="flex flex-wrap gap-1.5 px-1"
+      >
+        {KIT_IDS.map((id) => {
+          const option = KITS[id];
+          const worn = id === config.kit;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onKit(id)}
+              aria-pressed={worn}
+              aria-label={option.label}
+              title={option.label}
+              className={cn(
+                "h-7 w-7 shrink-0 rounded-full border border-white/20 transition-opacity",
+                worn
+                  ? "ring-2 ring-foreground/70 ring-offset-2 ring-offset-card"
+                  : "opacity-60 hover:opacity-100",
+              )}
+              style={{ background: option.fill }}
+            />
+          );
+        })}
       </div>
 
       <select

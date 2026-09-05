@@ -101,13 +101,20 @@ enters the app without going through `normalizeAppData` — a hand-edited
 - **`MatchResult`** — `{ goalsA, goalsB }`, or `null`. `null` and 0-0 are
   different states on purpose: one is a game nobody wrote down, the other is a
   game that finished goalless.
+- **`TeamConfig.kit`** — which of the eight colours in `KITS` this side is
+  wearing tonight, picked per side on the Ajustes tab. Claros against oscuros
+  is only what a new match opens with; every screen, both PNGs and the shared
+  text read the colour off that one table, and `normalizeKit` falls back to the
+  side's default for anything it does not recognise. What a tap on a colour
+  *means* is `lib/kits.ts`.
 - **`Team`** — a name and a list of players, and nothing else: the side that
   exists *between* games. Not a `TeamConfig`, which is one side of one match
   (what they were called that night, which bibs, what shape). No kit, because
-  light against dark is a fact about a game; no formation, because the shape
-  depends on how many turned up; no rating and no record, because both are read
-  off the players and the matches. See `lib/teamMatch.ts` for what happens when
-  two of them meet.
+  the colour is a fact about a game — two saved teams both remembering "we wear
+  red" would put two identical sides on one pitch; no formation, because the
+  shape depends on how many turned up; no rating and no record, because both
+  are read off the players and the matches. See `lib/teamMatch.ts` for what
+  happens when two of them meet.
 - **`Match.notes`** — free text about the game: quién trajo la pelota, quién
   se lesionó, por qué el 8-1 no cuenta. Stored exactly as typed, because
   trimming as you go makes a space impossible to type; whether that adds up to
@@ -146,6 +153,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/saveStatus.ts` | When "Guardado" appears and when it clears |
 | `lib/clipboard.ts` | Which image, if any, a paste actually meant |
 | `lib/longPress.ts` | When a held finger is "quién es este" and when it is a scroll |
+| `lib/kits.ts` | What a tap on a colour does to *both* sides, and when the name follows it |
 | `lib/image.ts` | Turning a camera photo into a square avatar of at most 60 KB |
 | `lib/lineupImage.ts` | Drawing the shareable PNG of the pitch on a canvas |
 | `lib/tournamentImage.ts` | Drawing the shareable PNG of the whole torneito |

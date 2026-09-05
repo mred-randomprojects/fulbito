@@ -135,6 +135,28 @@ describe("normalizing the cancha", () => {
   });
 });
 
+describe("normalizing the kit", () => {
+  it("keeps a colour somebody picked", () => {
+    const match = withMatch({ teamA: { kit: "orange" }, teamB: { kit: "purple" } });
+    assert.equal(match?.teamA.kit, "orange");
+    assert.equal(match?.teamB.kit, "purple");
+  });
+
+  it("opens claros against oscuros when nobody has picked", () => {
+    const match = withMatch({});
+    assert.equal(match?.teamA.kit, "light");
+    assert.equal(match?.teamB.kit, "dark");
+  });
+
+  it("falls each side back to its own default, not to one shared colour", () => {
+    // A blob from a build with colours this one has never heard of must still
+    // come back as two sides that can be told apart.
+    const match = withMatch({ teamA: { kit: "chartreuse" }, teamB: { kit: 7 } });
+    assert.equal(match?.teamA.kit, "light");
+    assert.equal(match?.teamB.kit, "dark");
+  });
+});
+
 describe("normalizing a lineup", () => {
   it("keeps the player ids and the holes, which the record reads off", () => {
     const match = withMatch({ lineupA: ["p1", null, "", 3] });

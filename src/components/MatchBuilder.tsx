@@ -35,6 +35,7 @@ import { computeStats } from "@/lib/stats";
 import { nextPaymentState, splitCourt } from "@/lib/court";
 import { matchTabs, type MatchTabId } from "@/lib/matchTabs";
 import { hasNote } from "@/lib/matchNotes";
+import { pickKit } from "@/lib/kits";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import type { TeamMatchPlan } from "@/lib/teamMatch";
@@ -45,6 +46,7 @@ import {
   KITS,
   ROLE_SHORT,
   playerShortName,
+  type KitId,
   type Match,
   type Player,
   type PlayerId,
@@ -277,6 +279,25 @@ export function MatchBuilder({
     [patch],
   );
 
+  /**
+   * The bibs, which are the one setting where a tap on one side moves both.
+   * `pickKit` decides that (and whether the name follows the colour); the
+   * identity check is what keeps a tap on the colour already worn from
+   * announcing a save.
+   */
+  const setKit = useCallback(
+    (team: TeamKey, kit: KitId) => {
+      const pair = { A: match.teamA, B: match.teamB };
+      const next = pickKit(pair, team, kit);
+      if (next === pair) return;
+      patch({
+        teamA: { ...match.teamA, ...next.A },
+        teamB: { ...match.teamB, ...next.B },
+      });
+    },
+    [match.teamA, match.teamB, patch],
+  );
+
   const [options, setOptions] = useState<ReturnType<typeof findSplits> | null>(null);
 
   /**
@@ -305,8 +326,8 @@ export function MatchBuilder({
         sizeB: plan.sizeB,
         lineupA: plan.lineupA,
         lineupB: plan.lineupB,
-        // The team keeps its name; the bibs stay whatever tonight's are. Light
-        // against dark is a fact about a game, not about a team.
+        // The team keeps its name; the bibs stay whatever tonight's are. The
+        // colour is a fact about a game, not about a team.
         teamA: { ...match.teamA, name: names.a, formationId: plan.formationIdA },
         teamB: { ...match.teamB, name: names.b, formationId: plan.formationIdB },
         payments,
@@ -837,6 +858,7 @@ export function MatchBuilder({
                   onTeamChange={(team, config) =>
                     patch(team === "A" ? { teamA: config } : { teamB: config })
                   }
+                  onKitChange={setKit}
                   onSizeChange={setSize}
                   respectAvoids={match.respectAvoids}
                   avoidPairsInSquad={avoidPairsInSquad}
