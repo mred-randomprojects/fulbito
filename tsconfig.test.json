@@ -80,6 +80,8 @@
     "src/lib/longPress.test.ts",
     "src/lib/kits.ts",
     "src/lib/kits.test.ts",
+    "src/lib/pwa.ts",
+    "src/lib/pwa.test.ts",
     "src/syncRoundTrip.test.ts"
   ]
 }

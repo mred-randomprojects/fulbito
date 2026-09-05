@@ -18,7 +18,8 @@ Live at **https://mred-randomprojects.github.io/fulbito/**
 
 Runs entirely in the browser. No account needed and nothing to sign up for —
 sign-in exists, but only as an optional extra that syncs your own data between
-your own devices.
+your own devices. Installable too: put it on the home screen and it opens like
+any other app, full screen and with no signal needed.
 
 ## What it does
 
@@ -214,6 +215,20 @@ the on-screen pitch uses (`src/lib/lineupImage.ts`), or a PNG of the whole
 torneito — teams, faces and fixture — sized to whatever the night turned out to
 be (`src/lib/tournamentImage.ts`), plus a plain-text list for the group chat.
 None of it needs a server.
+
+## Installed as an app
+
+It is a PWA. Chrome offers an install button in "Tus datos"; on an iPhone the
+same panel points at Compartir → Agregar a inicio, because Safari never offers
+one. Installed, it gets its own icon, opens full screen with no browser bar,
+and starts with no connection at all — a service worker (`public/sw.js`) keeps
+the bundle and the last page it saw, and the data was never on a server to
+begin with. Nothing about signing in or syncing changes: the worker only ever
+answers for this site's own files and lets every Firebase request go straight
+to the network.
+
+Updates need no thought. A reload picks up the newest deploy, and the worker
+itself swaps in once the last tab is closed.
 
 ## Deploying
 

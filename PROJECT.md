@@ -44,7 +44,9 @@ deploys it (`.github/workflows/deploy.yml`, or `./deploy.sh` to watch the run).
 
 React 18 + TypeScript (strict) + Vite + Tailwind, a few Radix primitives, and
 `createHashRouter` because GitHub Pages would 404 on a deep link otherwise. No
-state library: one hook owns everything.
+state library: one hook owns everything. `public/` holds the three things the
+build copies through untouched: the web app manifest, the service worker and
+the icons.
 
 The codebase is split along one line, and it is the line that matters:
 
@@ -160,6 +162,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/canvas.ts` | The canvas drawing both of those share: photos, chips, corners |
 | `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number means |
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
+| `lib/pwa.ts` | Whether to offer to install the app, and whether this is a device that will never ask |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
@@ -184,7 +187,8 @@ they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
-dialog). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
+dialog, `InstallPanel` is the offer to install and renders nothing at all when
+there is nothing to offer). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
 the link, read the medians back and adopt them a tap at a time.
 `PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
 `main.tsx` rather than inside it: whoever is answering a poll has no roster of
@@ -378,6 +382,51 @@ the design is about paying for that honestly.
 
 Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
 [`firestore.rules`](./firestore.rules) is the gate that actually enforces it.
+
+### Installing it, and the service worker
+
+The app is installable, and it opens with no signal. Two files do that, both in
+`public/` so Vite copies them through untouched: `manifest.webmanifest` gives
+it a name, the icons and a `standalone` display mode, and `sw.js` is the cache.
+Every path inside the manifest is relative — `start_url`, `scope` and `id` are
+all `./` — because the app is served from `/` on the dev server and `/fulbito/`
+on Pages, and a relative path resolves against the manifest's own URL either
+way. The `<link rel="manifest">` in `index.html` is written root-absolute
+instead, because Vite rewrites those with the base path at build time.
+
+Three things about the worker are worth knowing before touching it:
+
+- **It only ever answers for its own origin, inside its own scope.** Firebase,
+  Firestore and the Google sign-in popup all live somewhere else, so it returns
+  without calling `respondWith` and the browser does exactly what it did
+  before. A cached authentication response is a bug with a very long tail.
+- **Anything under `assets/` is cached forever; a navigation goes to the
+  network first.** Vite names bundles by the hash of their contents, so a
+  hashed file is immutable by construction and a stale one cannot exist. The
+  HTML is the opposite case — it is the thing that names the new bundles — so
+  the cached copy is only ever a fallback, and a deploy lands on the next
+  reload rather than the one after. Everything else same-origin is served stale
+  and refreshed behind you.
+- **It does not call `skipWaiting`.** A new worker waits for the last tab to
+  close before taking over, so it cannot delete a running page's bundle out
+  from under it — this app imports the Firebase chunk lazily, and Pages has
+  already thrown the old one away by then. Waiting costs nothing, because the
+  network-first HTML means the *app* is up to date on reload either way.
+
+The bundles to precache are read off `index.html` at install time rather than
+written out by the build. Their names are the build's to decide and the HTML is
+the one place they are recorded, so parsing it there is what makes the app work
+offline after the *first* visit instead of the second — with no build plugin,
+and no generated file to keep in step. If that parse ever misses one, the cost
+is that the file waits until something asks for it: a slower first offline
+visit, not a broken app.
+
+Offering the install is `lib/pwa.ts` plus `useInstallPrompt`, and the decision
+worth having in a tested module is that an iPhone gets sentences instead of a
+button: Safari never fires `beforeinstallprompt`, so there is nothing to press,
+and Agregar a inicio is a menu people genuinely do not know is there.
+`isApplePhoneOrTablet` exists because an iPad has called itself a Macintosh
+since iPadOS 13, and the only thing that gives it away is a touchscreen.
 
 ## Invariants worth not breaking
 
@@ -614,6 +663,12 @@ Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP
   codebase reads as "not set". `ignoreUndefinedProperties` on the Firestore
   instance is what keeps that from throwing mid-sync, and it is what makes the
   next optional field safe to add without thinking about it.
+- **The service worker never touches a cross-origin request.** Everything the
+  cloud does — Firestore, the sign-in popup, the SDK download itself — goes
+  over the network untouched, because `public/sw.js` returns before calling
+  `respondWith` the moment the origin is not its own. That file is also the one
+  thing here the typechecker never sees, which is the other reason it is kept
+  as small as it is.
 - **New test files must be added to `tsconfig.test.json`.** The `include` list
   is explicit; a file missing from it silently never runs.
 

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#11492e" />
+      <stop offset="1" stop-color="#061a11" />
+    </linearGradient>
+    <clipPath id="ball"><circle cx="256" cy="256" r="168.0" /></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#bg)" />
+  <g clip-path="url(#ball)">
+    <circle cx="256" cy="256" r="168.0" fill="#f6faf7" />
+    <g stroke="#0a1a11" stroke-width="12.6" stroke-linecap="butt">
+      <line x1="256.0" y1="205.6" x2="256.0" y2="75.4" />
+      <line x1="303.9" y1="240.4" x2="427.8" y2="200.2" />
+      <line x1="285.6" y1="296.8" x2="362.2" y2="402.1" />
+      <line x1="226.4" y1="296.8" x2="149.8" y2="402.1" />
+      <line x1="208.1" y1="240.4" x2="84.2" y2="200.2" />
+    </g>
+    <g fill="#0a1a11">
+      <polygon points="256.0,205.6 303.9,240.4 285.6,296.8 226.4,296.8 208.1,240.4" />
+      <polygon points="256.0,145.1 201.7,105.7 222.4,41.8 289.6,41.8 310.3,105.7" />
+      <polygon points="361.5,221.7 382.2,157.9 449.4,157.9 470.1,221.7 415.8,261.2" />
+      <polygon points="321.2,345.7 388.3,345.7 409.1,409.6 354.7,449.0 300.4,409.6" />
+      <polygon points="190.8,345.7 211.6,409.6 157.3,449.0 102.9,409.6 123.7,345.7" />
+      <polygon points="150.5,221.7 96.2,261.2 41.9,221.7 62.6,157.9 129.8,157.9" />
+    </g>
+  </g>
+</svg>

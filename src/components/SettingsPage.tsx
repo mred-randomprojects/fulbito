@@ -6,6 +6,7 @@ import { normalizeAppData, type AppData } from "@/types";
 import { allRubrics } from "@/lib/scales";
 import { todayIso } from "@/lib/dates";
 import { CloudPanel } from "./CloudPanel";
+import { InstallPanel } from "./InstallPanel";
 import type { CloudState } from "@/lib/cloudStatus";
 
 interface Props {
@@ -62,6 +63,8 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
       </header>
 
       <CloudPanel state={cloud} />
+
+      <InstallPanel />
 
       <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
         <h2 className="mb-1 text-base font-medium">Backup</h2>

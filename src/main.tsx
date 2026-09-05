@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App";
 import { PollPage } from "./components/PollPage";
 import { CloudAuthProvider } from "./cloud/auth";
+import { registerServiceWorker } from "./registerServiceWorker";
 
 // Hash routing, because GitHub Pages serves static files and would 404 on a
 // deep link like /matches/abc under browser routing.
@@ -29,3 +30,7 @@ createRoot(document.getElementById("root")!).render(
     </CloudAuthProvider>
   </StrictMode>,
 );
+
+// Last, and on purpose: nothing above this line waits on it, and a browser
+// that refuses to run a worker still gets the whole app.
+registerServiceWorker();

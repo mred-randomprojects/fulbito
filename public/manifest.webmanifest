@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "Fulbito — equipos parejos, sin discutir",
+  "short_name": "Fulbito",
+  "description": "Armá los equipos del fulbito en treinta segundos: puntuás a los pibes una vez, marcás quién vino y sale el reparto más parejo.",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07120c",
+  "theme_color": "#07120c",
+  "categories": ["sports", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
