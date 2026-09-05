@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { HeartCrack, Minus, Plus, Scale, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -279,46 +280,73 @@ function TeamCard({
   const options =
     presets.length > 0 || size < 2 ? presets : [generateFormation(size)];
   const kit = KITS[config.kit];
+  // The palette is behind the shirt it changes rather than always on screen:
+  // eight dots per side, twice, is more colour than the rest of this card put
+  // together, and the bibs are set once a night at most.
+  const [picking, setPicking] = useState(false);
 
   return (
     <div
       className="space-y-2 rounded-lg border p-3"
       style={{ borderColor: `${kit.fill}44`, background: kit.soft }}
     >
-      <Input
-        value={config.name}
-        onChange={(e) => onChange({ ...config, name: e.target.value })}
-        className="h-9 border-transparent bg-transparent px-2 font-semibold"
-        aria-label="Nombre del equipo"
-      />
-
-      <div
-        role="group"
-        aria-label={`Pecheras de ${config.name}`}
-        className="flex flex-wrap gap-1.5 px-1"
-      >
-        {KIT_IDS.map((id) => {
-          const option = KITS[id];
-          const worn = id === config.kit;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onKit(id)}
-              aria-pressed={worn}
-              aria-label={option.label}
-              title={option.label}
-              className={cn(
-                "h-7 w-7 shrink-0 rounded-full border border-white/20 transition-opacity",
-                worn
-                  ? "ring-2 ring-foreground/70 ring-offset-2 ring-offset-card"
-                  : "opacity-60 hover:opacity-100",
-              )}
-              style={{ background: option.fill }}
-            />
-          );
-        })}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setPicking((open) => !open)}
+          aria-expanded={picking}
+          aria-label={`Pecheras: ${kit.label}. Tocá para cambiarlas`}
+          title="Cambiar las pecheras"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/10"
+        >
+          <span
+            className={cn(
+              "h-5 w-5 rounded-full border border-white/20 transition-all",
+              picking && "ring-2 ring-foreground/70 ring-offset-2 ring-offset-card",
+            )}
+            style={{ background: kit.fill }}
+          />
+        </button>
+        <Input
+          value={config.name}
+          onChange={(e) => onChange({ ...config, name: e.target.value })}
+          className="h-9 border-transparent bg-transparent px-2 font-semibold"
+          aria-label="Nombre del equipo"
+        />
       </div>
+
+      {picking && (
+        <div
+          role="group"
+          aria-label="Pecheras"
+          className="flex flex-wrap gap-1.5 rounded-lg bg-black/20 p-2"
+        >
+          {KIT_IDS.map((id) => {
+            const option = KITS[id];
+            const worn = id === config.kit;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  onKit(id);
+                  setPicking(false);
+                }}
+                aria-pressed={worn}
+                aria-label={option.label}
+                title={option.label}
+                className={cn(
+                  "h-7 w-7 shrink-0 rounded-full border border-white/20 transition-opacity",
+                  worn
+                    ? "ring-2 ring-foreground/70 ring-offset-2 ring-offset-card"
+                    : "opacity-60 hover:opacity-100",
+                )}
+                style={{ background: option.fill }}
+              />
+            );
+          })}
+        </div>
+      )}
 
       <select
         value={formation.id}
