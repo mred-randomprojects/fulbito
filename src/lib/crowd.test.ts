@@ -64,13 +64,22 @@ describe("median", () => {
 describe("the floor", () => {
   it("gives no number at all below it", () => {
     // Decision 2: not a provisional number, not a greyed-out one. None.
-    assert.deepEqual(summarise([8, 8]), { kind: "few", votes: 2 });
+    assert.deepEqual(summarise([8]), { kind: "few", votes: 1 });
     assert.deepEqual(summarise([]), { kind: "few", votes: 0 });
   });
 
-  it("opens up exactly at three", () => {
-    assert.equal(MIN_VOTERS, 3);
-    assert.equal(summarise([8, 8, 8]).kind, "ready");
+  it("opens up exactly at two", () => {
+    assert.equal(MIN_VOTERS, 2);
+    assert.equal(summarise([8, 8]).kind, "ready");
+  });
+
+  it("at exactly two, the median is their average and the range is both", () => {
+    // The floor's cheapest case: nothing hides how far apart the two are.
+    const n = ready(summarise([6, 9]));
+    assert.equal(n.median, 7.5);
+    assert.equal(n.suggested, 8);
+    assert.equal(n.low, 6);
+    assert.equal(n.high, 9);
   });
 
   it("carries the range once it is open, so disagreement is visible", () => {
@@ -89,10 +98,10 @@ describe("the floor", () => {
 
 describe("aggregateBallots", () => {
   it("counts each field on its own, because opinions run out at different depths", () => {
-    // Decision 2 again: five people know how good he is, two know how quick.
+    // Decision 2 again: five people know how good he is, one knows how quick.
     const ballots = [
       setAttribute(says(NANO, 7), NANO, "pace", 9),
-      setAttribute(says(NANO, 8), NANO, "pace", 8),
+      says(NANO, 8),
       says(NANO, 7),
       says(NANO, 6),
       says(NANO, 7),
@@ -100,7 +109,7 @@ describe("aggregateBallots", () => {
     const row = rowFor(ballots, NANO);
     assert.equal(ready(row.overall).votes, 5);
     assert.equal(ready(row.overall).median, 7);
-    assert.deepEqual(row.attributes.pace, { kind: "few", votes: 2 });
+    assert.deepEqual(row.attributes.pace, { kind: "few", votes: 1 });
   });
 
   it("leaves out fields nobody touched rather than listing them empty", () => {
@@ -127,7 +136,10 @@ describe("aggregateBallots", () => {
 
   it("ignores numbers left behind on somebody the voter then passed on", () => {
     const ballots = [says(NANO, 7), says(NANO, 7), skipPlayer(says(NANO, 1), NANO)];
-    assert.deepEqual(rowFor(ballots, NANO).overall, { kind: "few", votes: 2 });
+    const n = ready(rowFor(ballots, NANO).overall);
+    assert.equal(n.votes, 2);
+    assert.equal(n.median, 7);
+    assert.equal(n.low, 7, "the 1 on the skipped player never reaches the range");
   });
 
   it("returns one row per player on the list, even for one nobody rated", () => {

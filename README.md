@@ -66,7 +66,7 @@ your own devices.
   player, so everybody judges against the same field — and each person scores
   who they know and skips who they do not. They sign in with Google so nobody
   votes twice, and the answers are stored with no name attached: you see the
-  numbers, not who put them. From three opinions up it shows the median beside
+  numbers, not who put them. From two opinions up it shows the median beside
   the number *you* gave, plus how much they disagreed, and adopting it is a tap
   you have to make. Your own rating is never shown to whoever is answering —
   seeing it would anchor them and ruin the answer.

@@ -12,7 +12,7 @@
  *    what makes it safe to leave a player rating themselves in the list: it is
  *    one vote among several, and the middle of the pile does not care.
  * 2. **The floor is per field, not per player.** Five people can have an
- *    opinion on how good somebody is and only two on how quick they are.
+ *    opinion on how good somebody is and only one on how quick they are.
  *    Below `MIN_VOTERS` there is no number at all — not a greyed-out one, not
  *    a provisional one. `CrowdNumber` is a union so that a screen physically
  *    cannot render a median that does not exist yet.
@@ -31,11 +31,13 @@ import { ballotSummary, type Ballot } from "./poll.js";
 /**
  * How many people have to weigh in before there is a number.
  *
- * Three is doing two jobs. It is the point where a median means anything at
- * all, and it is the point where an aggregate stops being a way of reading
- * one person's opinion back off the screen.
+ * Two is the first count that is not a way of reading one person's opinion
+ * back off the screen, which is the job that actually matters — a grupo of
+ * five where three bother to answer should still get its numbers. At exactly
+ * two the median is their average and the spread is the whole disagreement,
+ * so the range shown next to it is doing most of the honest work.
  */
-export const MIN_VOTERS = 3;
+export const MIN_VOTERS = 2;
 
 export type CrowdNumber =
   | { kind: "few"; votes: number }
