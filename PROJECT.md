@@ -167,6 +167,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
 | `lib/crowd.ts` | What a pile of answers says a player is worth, and when there are enough of them |
+| `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, named or not |
+| `lib/superAdmin.ts` | The one address that may see who voted, and that the switch alone is not a permission |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
@@ -177,6 +179,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `cloud/polls.ts` | Encuestas in Firestore: sending one out, answering it, reading the answers |
 | `cloud/auth.tsx` | Who is signed in, and — separately — whether they agreed to sync |
 | `cloud/syncPrefs.ts` | The account's own yes or no, and deleting the cloud copy; `cloud/prefs.ts` mirrors it locally |
+| `cloud/adminPrefs.ts` | Whether the super admin switch is on in this browser; `useSuperAdmin.ts` reads it against the session |
 | `cloud/firestore.ts` | Documents in, documents out; `useCloudSync.ts` decides when |
 
 Screens: `MatchesPage` (the list, with the face of each side's best player
@@ -188,8 +191,11 @@ they play), `TeamsPage` (Equipos: the sides that live between games),
 they belong to, and who they will not play with), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
 dialog, `InstallPanel` is the offer to install and renders nothing at all when
-there is nothing to offer). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
-the link, read the medians back and adopt them a tap at a time.
+there is nothing to offer, `AdminPanel` is the super admin switch and renders
+for exactly one Google account). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
+the link, read the medians back and adopt them a tap at a time — with, for that
+one account and only when the switch is on, a panel underneath saying who sent
+each ballot.
 `PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
 `main.tsx` rather than inside it: whoever is answering a poll has no roster of
 ours to load and no permission to upload one, so that route touches neither
@@ -353,8 +359,9 @@ server acknowledgement arrives as an event. Everything short of that is
 Everything above lives under `users/{uid}`, which is a wall. Asking other
 people what your players are worth cannot: a poll is read, and answered, by
 somebody who is not you. So it is the one collection at the root —
-`polls/{pollId}`, with `ballots/{ballotId}` and `voters/{uid}` under it — and
-the design is about paying for that honestly.
+`polls/{pollId}`, with `ballots/{ballotId}`, `voters/{uid}` and
+`identities/{ballotId}` under it — and the design is about paying for that
+honestly.
 
 - **A poll is a snapshot, not a window.** Names and faces, copied at the
   moment the link went out. No ratings — showing yours would anchor the answer
@@ -379,6 +386,41 @@ the design is about paying for that honestly.
   and adopted by a tap, which keeps "nobody asked the app to have opinions"
   true — the opinions here are other people's, and they are still yours to
   take or leave.
+
+#### The one exception: who sent which ballot
+
+A median absorbs one bad-faith 2 — that is decision 1 in `lib/crowd.ts` — but
+it does not *say* there was one, and two of them move it. A link that goes to a
+grupo de WhatsApp is a link somebody's cuñado can open, so there is one way to
+look, and it is deliberately one account wide: `SUPER_ADMIN_EMAIL` in
+`lib/superAdmin.ts`, and the identical address in `isSuperAdmin()` in
+`firestore.rules`. Four things keep it from undoing the anonymity above.
+
+- **The poll's owner still cannot see it.** Not `get`, not `list`. The
+  anonymity a voter was promised is anonymity *from the person who made the
+  list*, and that person's access is exactly what it was. This is why the
+  address is a sibling document and not a field on the ballot: a field is
+  readable by whoever can read the ballot, and that is the owner.
+- **It is keyed by ballot id, so the owner can delete it without reading it.**
+  They already know every ballot id and can derive no other, which is what lets
+  `deletePoll` take the addresses down with the poll. Under `voters/{uid}` they
+  could not be named without first being enumerated, and "se cae todo con ella"
+  would have been a lie about email addresses.
+- **The address is pinned to the Google token by the rules, and it is the only
+  field that is.** `name` is whatever the voter's browser sent — a label to
+  read by, never proof.
+- **The voter is told, before they sign in.** `PollPage` says it in the
+  paragraph above the button: the one who made the list sees numbers and not
+  names, your mail is kept, and the one who maintains the app can see it. A
+  promise the code has quietly stopped keeping is worse than no promise, so if
+  this ever changes, the cartel changes with it.
+
+The switch itself (`AdminPanel`, `useSuperAdmin`, `cloud/adminPrefs.ts`) is
+off by default, lives in this browser rather than on the account, and grants
+nothing — `superAdminSees` re-checks the live session every render, so signing
+out takes the addresses off the screen. Like `lib/allowlist.ts`, the
+client-side half only decides what the app *asks* for; the rules decide what
+comes back.
 
 Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
 [`firestore.rules`](./firestore.rules) is the gate that actually enforces it.

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ChevronDown,
   ClipboardList,
   Copy,
   Loader2,
   LogIn,
+  Mail,
   RefreshCw,
+  ShieldCheck,
   Trash2,
   TriangleAlert,
   Users,
@@ -28,14 +31,23 @@ import { loadCloud } from "@/cloud/firebase";
 import {
   createPoll,
   deletePoll,
-  fetchBallots,
+  fetchBallotEntries,
+  fetchIdentities,
   fetchPoll,
   listMyPolls,
   type PollSummary,
 } from "@/cloud/polls";
 import { isCancelledSignIn } from "@/lib/authErrors";
 import { MIN_VOTERS, aggregateBallots, type CrowdPlayer } from "@/lib/crowd";
-import { pollOrder } from "@/lib/poll";
+import { pollOrder, type VoteSummary } from "@/lib/poll";
+import {
+  answeredCount,
+  auditPoll,
+  describeVote,
+  identifiedCount,
+  type AuditRow,
+} from "@/lib/pollAudit";
+import { useSuperAdmin } from "@/useSuperAdmin";
 import { computeStats } from "@/lib/stats";
 import { formatMatchDate } from "@/lib/dates";
 import {
@@ -562,6 +574,10 @@ function Results({
   const [names, setNames] = useState<Map<PlayerId, string>>(new Map());
   const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [audit, setAudit] = useState<AuditRow[] | null>(null);
+  const [auditFailed, setAuditFailed] = useState(false);
+  const admin = useSuperAdmin();
+  const showNames = admin.on;
 
   const byId = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
@@ -574,19 +590,38 @@ function Results({
       const { db } = await loadCloud();
       const [poll, ballots] = await Promise.all([
         fetchPoll(db, pollId),
-        fetchBallots(db, pollId),
+        fetchBallotEntries(db, pollId),
       ]);
       if (poll === null) {
         setFailed(true);
         return;
       }
+      const order = pollOrder(poll);
       setNames(new Map(poll.players.map((player) => [player.id, player.name])));
       setVoters(ballots.length);
-      setRows(aggregateBallots(ballots, pollOrder(poll)));
+      setRows(aggregateBallots(ballots.map((entry) => entry.ballot), order));
+
+      if (!showNames) {
+        setAudit(null);
+        setAuditFailed(false);
+        return;
+      }
+      // Fetched second and separately, because the medians must not depend on
+      // it: for any account but the one, `firestore.rules` refuses this and it
+      // is right to. Falling back to the ballots with nobody attached shows
+      // the same rows the results above were counted from, which is the honest
+      // version of "we could not put names to them".
+      try {
+        setAudit(auditPoll(ballots, await fetchIdentities(db, pollId), order));
+        setAuditFailed(false);
+      } catch {
+        setAudit(auditPoll(ballots, [], order));
+        setAuditFailed(true);
+      }
     } catch {
       setFailed(true);
     }
-  }, [pollId]);
+  }, [pollId, showNames]);
 
   useEffect(() => {
     void load();
@@ -636,6 +671,10 @@ function Results({
         </ul>
       )}
 
+      {showNames && audit !== null && (
+        <AuditPanel rows={audit} names={names} failed={auditFailed} />
+      )}
+
       <Button
         variant="secondary"
         className="mt-6 text-destructive"
@@ -669,6 +708,138 @@ function Results({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Who said what — the super admin's half                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The encuesta with the names on, for the one account that may see them.
+ *
+ * Shown *under* the medians rather than instead of them, and that order is the
+ * argument: the medians are what the encuesta is for, and this is a thing you
+ * scroll down to when a number looks wrong. Reversing them would make reading
+ * a poll an act of looking at who said what, which is not what anybody signed
+ * in for.
+ *
+ * Every ballot gets a row even when nobody can be put to it — see
+ * `lib/pollAudit.ts` — because the count here has to be the count the numbers
+ * above came from, or the two halves of this screen are answering different
+ * questions.
+ */
+function AuditPanel({
+  rows,
+  names,
+  failed,
+}: {
+  rows: AuditRow[];
+  names: Map<PlayerId, string>;
+  failed: boolean;
+}) {
+  const answered = answeredCount(rows);
+  const identified = identifiedCount(rows);
+
+  return (
+    <section className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+      <h2 className="mb-1 flex items-center gap-1.5 text-base font-medium">
+        <ShieldCheck className="h-4 w-4" />
+        Quién contestó qué
+      </h2>
+      <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+        {rows.length === 0
+          ? "Todavía no llegó ninguna respuesta."
+          : `Llegaron ${rows.length} respuesta${rows.length === 1 ? "" : "s"}, ${answered} con números. De ${identified} sabemos el mail.`}{" "}
+        Esto lo ves vos y nadie más — al que armó la lista, si no sos vos, le
+        siguen llegando los números pelados.
+      </p>
+
+      {failed && (
+        <p className="mb-3 flex items-center gap-1.5 text-sm text-destructive">
+          <TriangleAlert className="h-4 w-4 shrink-0" />
+          No se pudieron traer los mails. Están las respuestas igual, sin
+          nombre: fijate que las reglas de Firestore estén publicadas.
+        </p>
+      )}
+
+      {rows.length > 0 && (
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+          {rows.map((row) => (
+            <AuditEntry key={row.ballotId} row={row} names={names} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** What one status means when you are reading somebody else's ballot. */
+const AUDIT_STATUS: Record<VoteSummary["status"], string> = {
+  rated: "",
+  unknown: "No lo conoce",
+  skipped: "Lo omitió",
+  started: "Dijo que jugó, no puso números",
+  pending: "No llegó hasta acá",
+};
+
+function AuditEntry({ row, names }: { row: AuditRow; names: Map<PlayerId, string> }) {
+  const [open, setOpen] = useState(false);
+  const email = row.identity?.email ?? "";
+  const name = row.identity?.name ?? "";
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => setOpen((was) => !was)}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-secondary/60"
+      >
+        <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">
+            {email === "" ? (
+              <span className="text-muted-foreground">Sin identificar</span>
+            ) : (
+              email
+            )}
+          </span>
+          {name !== "" && (
+            <span className="block truncate text-xs text-muted-foreground">{name}</span>
+          )}
+        </span>
+        <span className="tabular shrink-0 text-xs text-muted-foreground">
+          {row.progress.rated} de {row.progress.total}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <ul className="divide-y divide-border/60 border-t border-border bg-secondary/20">
+          {row.votes.map(({ playerId, status, vote }) => (
+            <li key={playerId} className="flex items-baseline gap-2 px-3 py-1.5">
+              <span className="min-w-0 flex-1 truncate text-xs">
+                {names.get(playerId) ?? "Sin nombre"}
+              </span>
+              <span
+                className={`tabular text-xs ${status === "rated" ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                {status === "rated" ? describeVote(vote) : AUDIT_STATUS[status]}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {open && email === "" && (
+        <p className="border-t border-border bg-secondary/20 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          Sin mail: o llegó antes de que se guardaran, o la escribió el dueño de
+          la encuesta a mano. Cuenta para las medianas igual.
+        </p>
+      )}
+    </li>
   );
 }
 

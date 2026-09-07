@@ -74,8 +74,11 @@ any other app, full screen and with no signal needed.
 - **Ask the group what they think.** Send the whole list to the grupo — not one
   player, so everybody judges against the same field — and each person scores
   who they know and skips who they do not. They sign in with Google so nobody
-  votes twice, and the answers are stored with no name attached: you see the
-  numbers, not who put them. From two opinions up it shows the median beside
+  votes twice, and the answers are stored with no name attached: whoever sent
+  the encuesta sees the numbers, not who put them. Only the one account that
+  runs the deployment can put a mail to a ballot, and only to tell an opinion
+  from a troll — the person answering is told so before they start. From two
+  opinions up it shows the median beside
   the number *you* gave, plus how much they disagreed, and adopting it is a tap
   you have to make. Your own rating is never shown to whoever is answering —
   seeing it would anchor them and ruin the answer.

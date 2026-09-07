@@ -5,6 +5,7 @@ import { getStorageUsage } from "@/storage";
 import { normalizeAppData, type AppData } from "@/types";
 import { allRubrics } from "@/lib/scales";
 import { todayIso } from "@/lib/dates";
+import { AdminPanel } from "./AdminPanel";
 import { CloudPanel } from "./CloudPanel";
 import { InstallPanel } from "./InstallPanel";
 import type { CloudState } from "@/lib/cloudStatus";
@@ -63,6 +64,8 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
       </header>
 
       <CloudPanel state={cloud} />
+
+      <AdminPanel />
 
       <InstallPanel />
 

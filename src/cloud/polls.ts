@@ -2,20 +2,24 @@ import type { Firestore } from "firebase/firestore";
 import { generateId, type PlayerId } from "@/types";
 import {
   normalizeBallot,
+  normalizeIdentity,
   normalizePoll,
   type Ballot,
   type Poll,
+  type PollIdentity,
   type PollPlayer,
 } from "@/lib/poll";
+import type { BallotEntry } from "@/lib/pollAudit";
 
 /**
  * The encuesta, in Firestore.
  *
  * ```
- * polls/{pollId}                     { ownerUid, title, createdAt }
- * polls/{pollId}/players/{playerId}  { ownerUid, name, avatar }
- * polls/{pollId}/ballots/{ballotId}  { votes }
- * polls/{pollId}/voters/{uid}        { ballotId }
+ * polls/{pollId}                        { ownerUid, title, createdAt }
+ * polls/{pollId}/players/{playerId}     { ownerUid, name, avatar }
+ * polls/{pollId}/ballots/{ballotId}     { votes }
+ * polls/{pollId}/voters/{uid}           { ballotId }
+ * polls/{pollId}/identities/{ballotId}  { email, name, at }
  * ```
  *
  * This is the only collection in the app outside `users/{uid}`, because it is
@@ -43,6 +47,10 @@ const POLLS = "polls";
 const PLAYERS = "players";
 const BALLOTS = "ballots";
 const VOTERS = "voters";
+const IDENTITIES = "identities";
+
+/** Firestore caps a batch at 500; leave room rather than court it. */
+const BATCH_LIMIT = 400;
 
 /** A poll as it appears in a list, without paying for the faces. */
 export interface PollSummary {
@@ -108,17 +116,42 @@ export async function listMyPolls(db: Firestore, uid: string): Promise<PollSumma
 }
 
 /**
- * Every answer that has come in.
+ * Every answer that has come in, with the id each one was stored at.
  *
  * Nothing here is aggregated on the way in — `lib/crowd.ts` takes the median
  * of the raw votes on every pass, the same bargain `lib/stats.ts` makes with
  * match results, so a change of mind about how to read them is a change to one
  * function rather than to what was written down.
+ *
+ * The medians do not care which ballot a number came from; that is the whole
+ * design. The ids come back anyway because `lib/pollAudit.ts` needs them: an
+ * id is what an identity is filed under, and it is the only join between a
+ * ballot and a person there is.
  */
-export async function fetchBallots(db: Firestore, pollId: string): Promise<Ballot[]> {
+export async function fetchBallotEntries(
+  db: Firestore,
+  pollId: string,
+): Promise<BallotEntry[]> {
   const { collection, getDocs } = await import("firebase/firestore");
   const snap = await getDocs(collection(db, POLLS, pollId, BALLOTS));
-  return snap.docs.map((entry) => normalizeBallot(entry.data()));
+  return snap.docs.map((entry) => ({ id: entry.id, ballot: normalizeBallot(entry.data()) }));
+}
+
+/**
+ * Who sent which ballot. **Readable by one account only.**
+ *
+ * `firestore.rules` is the gate, not this function: for anybody who is not the
+ * address in `lib/superAdmin.ts` this rejects with a permission error, which
+ * is the correct outcome and the reason the caller must be prepared to show
+ * the results page without it.
+ */
+export async function fetchIdentities(
+  db: Firestore,
+  pollId: string,
+): Promise<PollIdentity[]> {
+  const { collection, getDocs } = await import("firebase/firestore");
+  const snap = await getDocs(collection(db, POLLS, pollId, IDENTITIES));
+  return snap.docs.map((entry) => normalizeIdentity(entry.id, entry.data()));
 }
 
 /**
@@ -138,9 +171,26 @@ export async function deletePoll(db: Firestore, pollId: string): Promise<void> {
     getDocs(collection(pollRef, PLAYERS)),
     getDocs(collection(pollRef, BALLOTS)),
   ]);
-  const batch = writeBatch(db);
-  for (const entry of [...players.docs, ...ballots.docs]) batch.delete(entry.ref);
-  await batch.commit();
+  // The identities go too, and this is the only way they can: the owner may
+  // delete one but may not list or read one, so the ballot ids just fetched
+  // are the only handle on them that exists. It is also why an identity is
+  // filed under its ballot id in the first place — under `voters/{uid}` there
+  // would be no way to name one without first being allowed to enumerate them,
+  // and "se cae todo con ella" would have been a lie about email addresses.
+  const doomed = [
+    ...players.docs.map((entry) => entry.ref),
+    ...ballots.docs.map((entry) => entry.ref),
+    ...ballots.docs.map((entry) => doc(collection(pollRef, IDENTITIES), entry.id)),
+  ];
+  // Chunked because a well-answered poll is now two deletes per voter plus one
+  // per face, and Firestore caps a batch at 500. The size costs nothing in
+  // rule reads: `isOwner()` reads the poll document once and every later call
+  // in the same request is served from that same read.
+  for (let i = 0; i < doomed.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    for (const ref of doomed.slice(i, i + BATCH_LIMIT)) batch.delete(ref);
+    await batch.commit();
+  }
   await deleteDoc(pollRef);
 }
 
@@ -223,19 +273,40 @@ export async function fetchBallot(
   return snap.exists() ? normalizeBallot(snap.data()) : null;
 }
 
+/** Who is sending, for the identity document. */
+export interface Voter {
+  email: string | null;
+  name: string;
+}
+
 /**
- * Send the answers.
+ * Send the answers, and — separately, and only if it works — say who sent them.
  *
- * The document holds `votes` and nothing else — no uid, no name, no email.
- * The owner has to read every one of these to work out the medians, and a
- * ballot that could be traced back to whoever wrote it would be answered
- * politely once and honestly never.
+ * The ballot document still holds `votes` and nothing else: no uid, no name,
+ * no email. The owner has to read every one of these to work out the medians,
+ * and a ballot that could be traced back to whoever wrote it would be answered
+ * politely once and honestly never. That has not changed, and the identity
+ * living in its own document under its own rule is what keeps it true.
+ *
+ * **The second write is deliberately not in the batch with the first.** Two
+ * separate reasons, and either one on its own would be enough:
+ *
+ * - A batch is all or nothing, so a rule that has not been published yet — and
+ *   these are pasted into the Firebase console by hand — would turn every
+ *   encuesta into a screen nobody can answer. Degrading to the anonymous
+ *   encuesta of yesterday is the only acceptable way for this to fail.
+ * - An account with no address on its token cannot write one the rules will
+ *   accept, and that person is still entitled to vote.
+ *
+ * So the error is swallowed, and `lib/pollAudit.ts` renders a ballot with
+ * nobody attached rather than pretending it is not there.
  */
 export async function submitBallot(
   db: Firestore,
   pollId: string,
   ballotId: string,
   ballot: Ballot,
+  voter?: Voter,
 ): Promise<void> {
   const { doc, setDoc } = await import("firebase/firestore");
   const votes: Record<string, unknown> = {};
@@ -243,4 +314,18 @@ export async function submitBallot(
     if (vote !== undefined) votes[id as PlayerId] = { ...vote };
   }
   await setDoc(doc(db, POLLS, pollId, BALLOTS, ballotId), { votes });
+
+  if (voter === undefined || voter.email === null || voter.email === "") return;
+  // Not awaited, on purpose: this function resolving is what turns "Guardado"
+  // on, and that claim is about the vote. Making it wait on a second round
+  // trip would slow the only feedback the voter gets, to report on something
+  // they were never told about. The persistent cache replays it on the next
+  // start if the tab goes first.
+  void setDoc(doc(db, POLLS, pollId, IDENTITIES, ballotId), {
+    email: voter.email,
+    name: voter.name,
+    at: new Date().toISOString(),
+  }).catch(() => {
+    // See above. A vote that landed is a vote that landed.
+  });
 }

@@ -134,3 +134,32 @@ Two places, and they must agree:
 Both read an empty list as "anybody", so filling them in is what closes the
 door and emptying them is what opens it. Anyone signed in but not on the list
 sees "esta cuenta no está habilitada" instead of a permission error.
+
+## 10. Who may see who voted
+
+One Google address, in two places, and they must agree:
+
+1. `isSuperAdmin()` in [`firestore.rules`](./firestore.rules) → Publish. This
+   is the one that enforces it.
+2. `SUPER_ADMIN_EMAIL` in [`src/lib/superAdmin.ts`](./src/lib/superAdmin.ts) →
+   re-run the deploy. This one only decides whether the app shows the switch,
+   so somebody who edits it out of their copy of the JavaScript still gets a
+   permission error from the rules.
+
+**Republishing the rules is not optional if you want this at all.** Voters
+write their address to `polls/{id}/identities/{ballotId}` when they send a
+ballot, and until the rule that allows it is published, that write is denied —
+silently and on purpose, so that an encuesta on an old ruleset stays an
+encuesta somebody can answer rather than a screen that breaks. The effect is
+that answers from before the rules went up have no address attached and never
+will; the panel shows them as "Sin identificar" and still counts them.
+
+It is deliberately not a list, not a secret and not a field on a document. A
+privilege that can be granted by editing data is a privilege that gets granted
+by accident, and this one reads other people's names off their votes. To hand
+it to somebody else, change both places; to switch it off entirely, put an
+address nobody owns in the rules.
+
+Everything it buys is `polls/{id}/identities` plus the ballots of a poll whose
+link it already holds. It is not on `allow list` for `/polls`: auditing an
+encuesta you were sent is a different power from enumerating everybody's.

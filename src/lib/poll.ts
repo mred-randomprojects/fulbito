@@ -385,3 +385,52 @@ export function normalizePoll(raw: unknown): Poll {
     createdAt: str(raw.createdAt),
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Who answered — the one thing the owner cannot read                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A name and an address, filed under the ballot they belong to.
+ *
+ * This is the exception to "a ballot carries no uid", and it is deliberately
+ * shaped so that the exception stays exactly one account wide:
+ *
+ * - **It is a separate document, not a field.** A field on the ballot would be
+ *   readable by whoever can read the ballot, and that is the poll's owner —
+ *   the very person the anonymity is for. A sibling document can be locked to
+ *   somebody else entirely, and in `firestore.rules` it is: only the address
+ *   in `lib/superAdmin.ts` may read one.
+ * - **It is keyed by the ballot id, not by uid.** That is what lets the owner
+ *   delete it with the poll without ever being able to list or read one — they
+ *   already know every ballot id, and no other id is derivable from it. A
+ *   marker under `voters/{uid}` could not be deleted without first being
+ *   enumerated, so "borrar la encuesta" would have quietly left addresses
+ *   behind forever.
+ * - **Only `email` is evidence.** The rules pin it to the Google token. `name`
+ *   is whatever the voter's browser sent, so it is a label to read by and
+ *   never the thing to trust.
+ *
+ * Written when a ballot is sent, so one existing means somebody answered —
+ * opening the link and walking away leaves nothing here at all.
+ */
+export interface PollIdentity {
+  /** The ballot this is the sender of. Also the document id. */
+  ballotId: string;
+  /** Pinned to the Google token by the rules. */
+  email: string;
+  /** Their Google display name. Decoration — see above. */
+  name: string;
+  /** The last time they sent anything, ISO. */
+  at: string;
+}
+
+export function normalizeIdentity(ballotId: string, raw: unknown): PollIdentity {
+  if (!isRecord(raw)) return { ballotId, email: "", name: "", at: "" };
+  return {
+    ballotId,
+    email: str(raw.email),
+    name: str(raw.name),
+    at: str(raw.at),
+  };
+}

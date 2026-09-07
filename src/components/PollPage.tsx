@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { RatingControl } from "@/components/RatingControl";
 import { useCloudAuth } from "@/cloud/auth";
 import { loadCloud } from "@/cloud/firebase";
-import { claimBallotId, fetchBallot, fetchPoll, submitBallot } from "@/cloud/polls";
+import {
+  claimBallotId,
+  fetchBallot,
+  fetchPoll,
+  submitBallot,
+  type Voter,
+} from "@/cloud/polls";
 import { isCancelledSignIn } from "@/lib/authErrors";
 import { browserClock } from "@/lib/browserClock";
 import {
@@ -86,6 +92,20 @@ export function PollPage() {
 
   const order = useMemo(() => (poll === null ? [] : pollOrder(poll)), [poll]);
 
+  /**
+   * Who to file the ballot under, for the one account that may read it.
+   *
+   * Sent with every save rather than once, because the debounce means "every
+   * save" is already how this screen works and a second code path that fires
+   * only on the first one is a second code path to get wrong. The document is
+   * three small fields; rewriting it costs nothing and leaves `at` meaning
+   * "last time they touched it", which is the more useful of the two answers.
+   */
+  const voter = useMemo<Voter | undefined>(
+    () => (user === null ? undefined : { email: user.email, name: user.name }),
+    [user],
+  );
+
   /* ---------------------------------------------------------------- */
   /* Loading                                                           */
   /* ---------------------------------------------------------------- */
@@ -163,7 +183,7 @@ export function PollPage() {
       void (async () => {
         try {
           const { db } = await loadCloud();
-          await submitBallot(db, pollId, ballotId, ballot);
+          await submitBallot(db, pollId, ballotId, ballot, voter);
           setSaved(true);
         } catch {
           setSaved(false);
@@ -174,7 +194,7 @@ export function PollPage() {
     return () => {
       if (timer.current !== null) browserClock.clearTimeout(timer.current);
     };
-  }, [ballot, order, phase.kind, pollId, ballotId]);
+  }, [ballot, order, phase.kind, pollId, ballotId, voter]);
 
   const enter = useCallback(async () => {
     setSignInError(null);
@@ -238,9 +258,12 @@ export function PollPage() {
         <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
           Entrás con Google nada más para que cada uno pueda opinar una vez.{" "}
           <span className="text-foreground">
-            No se sube nada tuyo y tus respuestas quedan sin tu nombre:
+            No se sube nada tuyo y el que armó la lista ve los números, no
+            quién los puso.
           </span>{" "}
-          el que armó la lista ve los números, no quién los puso.
+          Tu mail sí queda guardado, pero no lo ve él: lo ve nada más el que
+          mantiene la app, y sólo para cazar a algún vivo que venga a poner
+          cualquier cosa.
         </p>
         <Button onClick={() => void enter()} disabled={signingIn}>
           {signingIn ? (
@@ -278,7 +301,7 @@ export function PollPage() {
     void (async () => {
       try {
         const { db } = await loadCloud();
-        await submitBallot(db, pollId, ballotId, ballot);
+        await submitBallot(db, pollId, ballotId, ballot, voter);
         setSaved(true);
       } catch {
         setSaved(false);

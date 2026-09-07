@@ -7,7 +7,7 @@ rules_version = '2';
 // it decides whether the app offers to sync, and anybody can edit it out of
 // their own copy of the JavaScript. These rules cannot be edited by anybody.
 //
-// Two things are enforced here:
+// Three things are enforced here:
 //
 //   1. You can only ever touch documents under your own uid. That is what
 //      makes an open sign-up safe: every account is an island.
@@ -15,6 +15,8 @@ rules_version = '2';
 //      anybody with a Google account sync their own roster — the default, and
 //      what Fulbito is deployed as. Fill it in to make the app invitational,
 //      and keep it in step with the VITE_ALLOWED_EMAILS secret.
+//   3. One address, and only that one, may read who sent which ballot. See
+//      `isSuperAdmin()` and the `identities` block near the bottom.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -29,6 +31,26 @@ service cloud.firestore {
       return request.auth != null
         && (allowedEmails().size() == 0
             || request.auth.token.email in allowedEmails());
+    }
+
+    // The one account that may read who sent which ballot. Keep in step with
+    // `SUPER_ADMIN_EMAIL` in `src/lib/superAdmin.ts` — that half only decides
+    // whether the app offers the switch, and anybody can edit it out of their
+    // own copy of the JavaScript. This half is the one that matters.
+    //
+    // One address, written here, and deliberately not a list and not a field
+    // on a document: a privilege that can be granted by editing data is a
+    // privilege that gets granted by accident.
+    //
+    // It buys exactly one thing — `polls/{id}/identities` — plus the ability
+    // to read the ballots of a poll whose link it holds. It is NOT added to
+    // `allow list` on /polls: being able to audit an encuesta you were sent is
+    // a different power from being able to enumerate everybody's.
+    function isSuperAdmin() {
+      return request.auth != null
+        && 'email' in request.auth.token
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'maxiredigonda@gmail.com';
     }
 
     // One document per record, under the owner's uid:
@@ -58,7 +80,9 @@ service cloud.firestore {
     // it**. That is not tidiness. The owner has to read every ballot to work
     // out the medians — there is no server here to do it for them — so a uid
     // on the ballot would put "who gave El Gordo a 4" one tap away, and
-    // nobody would ever answer honestly again.
+    // nobody would ever answer honestly again. That is still true: the one
+    // place a person and a ballot are written down together is `identities`,
+    // which the owner may delete and may never read.
     //
     // One vote per account is enforced by a marker only its own voter can
     // read, and the *order* is the whole trick:
@@ -122,11 +146,47 @@ service cloud.firestore {
         // The owner reads the pile to work out the medians. A voter reads
         // exactly the one their marker names, which is how they come back to
         // a ballot they half filled in.
-        allow list: if isOwner();
-        allow get: if isOwner() || claims(ballotId);
+        allow list: if isOwner() || isSuperAdmin();
+        allow get: if isOwner() || isSuperAdmin() || claims(ballotId);
         allow create, update: if claims(ballotId)
           && request.resource.data.keys().hasOnly(['votes']);
         allow delete: if isOwner();
+      }
+
+      // ----------------------------------------------------------------
+      // Who sent which ballot. The exception to everything above, and the
+      // narrowest one that answers the question it exists for.
+      //
+      // The question is whether an encuesta is being trolled. A median
+      // absorbs one bad-faith 2 and says nothing about it; two of them move
+      // it. Nobody could tell, and there was no way to look.
+      //
+      // So: a document per ballot, holding the sender's Google address. Three
+      // things keep it from undoing the anonymity it sits beside.
+      //
+      //   1. **The owner cannot read it.** Not `get`, not `list`. This is the
+      //      whole point — the anonymity a voter was promised is anonymity
+      //      *from the person who made the list*, and that person's access is
+      //      unchanged. Only `isSuperAdmin()` reads these.
+      //   2. **The address is pinned to the token.** A voter can only ever
+      //      write their own, so an identity is evidence rather than a claim.
+      //      `name` is not pinned and cannot be — a display name is whatever
+      //      the browser sent — so it is a label, never proof.
+      //   3. **It is keyed by ballot id, so the owner can delete it blind.**
+      //      That is what lets `deletePoll` take these down with everything
+      //      else: the owner already knows every ballot id and can derive no
+      //      other. Under `voters/{uid}` deleting would have required
+      //      enumerating, and "borrar la encuesta" would have been a lie.
+      //
+      // Writing one is gated on the same `claims()` as the ballot itself, so
+      // it can only accompany a ballot this account was entitled to write.
+      // ----------------------------------------------------------------
+      match /identities/{ballotId} {
+        allow get, list: if isSuperAdmin();
+        allow create, update: if claims(ballotId)
+          && request.resource.data.keys().hasOnly(['email', 'name', 'at'])
+          && request.resource.data.email == request.auth.token.email;
+        allow delete: if isOwner() || isSuperAdmin();
       }
 
       match /voters/{voterId} {
