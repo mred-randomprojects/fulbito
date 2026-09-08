@@ -5,6 +5,7 @@ import {
   auditPoll,
   describeVote,
   identifiedCount,
+  votesOnPlayer,
   type BallotEntry,
 } from "./pollAudit.js";
 import { emptyVote, type Ballot, type PollIdentity } from "./poll.js";
@@ -133,5 +134,91 @@ describe("describeVote", () => {
     // "No lo conozco" and omitir are carried by the status beside it, so this
     // line staying empty is what keeps the table from saying it twice.
     assert.equal(describeVote(emptyVote()), "");
+  });
+});
+
+describe("votesOnPlayer", () => {
+  /** A ballot that gives Ana `overall` and says nothing about Beto. */
+  function onAna(overall: number): Ballot {
+    return { votes: { [ANA]: { ...emptyVote(), played: true, overall } } };
+  }
+
+  it("puts a name on every number somebody gave one player", () => {
+    const rows = auditPoll(
+      [entry("b1", onAna(8)), entry("b2", onAna(2))],
+      [who("b1", "generoso@gmail.com"), who("b2", "vivo@gmail.com")],
+      ORDER,
+    );
+    const { rows: votes } = votesOnPlayer(rows, ANA);
+    assert.deepEqual(
+      votes.map((v) => [v.identity?.email, v.vote.overall]),
+      [
+        ["vivo@gmail.com", 2],
+        ["generoso@gmail.com", 8],
+      ],
+    );
+  });
+
+  it("sorts low to high, so both ends of the range are one glance away", () => {
+    const rows = auditPoll(
+      [entry("b1", onAna(7)), entry("b2", onAna(3)), entry("b3", onAna(9))],
+      [],
+      ORDER,
+    );
+    assert.deepEqual(
+      votesOnPlayer(rows, ANA).rows.map((v) => v.vote.overall),
+      [3, 7, 9],
+    );
+  });
+
+  it("puts the numbers before the answers that are not numbers", () => {
+    const knows: Ballot = { votes: { [ANA]: { ...emptyVote(), played: false } } };
+    const passed: Ballot = { votes: { [ANA]: { ...emptyVote(), played: true, skipped: true } } };
+    const rows = auditPoll(
+      [entry("b1", knows), entry("b2", passed), entry("b3", onAna(6))],
+      [],
+      ORDER,
+    );
+    assert.deepEqual(
+      votesOnPlayer(rows, ANA).rows.map((v) => v.status),
+      ["rated", "unknown", "skipped"],
+    );
+  });
+
+  it("sorts a vote with no overall after the ones that have a number", () => {
+    const roleOnly: Ballot = {
+      votes: { [ANA]: { ...emptyVote(), played: true, roleRatings: { DEF: 9 } } },
+    };
+    const rows = auditPoll([entry("b1", roleOnly), entry("b2", onAna(9))], [], ORDER);
+    assert.deepEqual(
+      votesOnPlayer(rows, ANA).rows.map((v) => v.ballotId),
+      ["b2", "b1"],
+    );
+  });
+
+  it("counts whoever never got this far instead of listing them", () => {
+    // Beto is second on the list, so a ballot that only reached Ana says
+    // nothing about him — and ten of those would bury the two that do.
+    const rows = auditPoll([entry("b1", onAna(7)), entry("b2", onAna(5))], [], ORDER);
+    const votes = votesOnPlayer(rows, BETO);
+    assert.deepEqual(votes.rows, []);
+    assert.equal(votes.pending, 2);
+  });
+
+  it("counts a ballot that predates this player being on the list", () => {
+    const rows = auditPoll([entry("b1", { votes: {} })], [], ORDER);
+    assert.equal(votesOnPlayer(rows, ANA).pending, 1);
+  });
+
+  it("sorts a nameless vote after a named one that gave the same number", () => {
+    const rows = auditPoll(
+      [entry("b1", onAna(5)), entry("b2", onAna(5))],
+      [who("b2", "alguien@gmail.com")],
+      ORDER,
+    );
+    assert.deepEqual(
+      votesOnPlayer(rows, ANA).rows.map((v) => v.identity?.email ?? null),
+      ["alguien@gmail.com", null],
+    );
   });
 });

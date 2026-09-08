@@ -167,7 +167,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
 | `lib/crowd.ts` | What a pile of answers says a player is worth, and when there are enough of them |
-| `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, named or not |
+| `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, and the same pile turned sideways onto one player |
 | `lib/superAdmin.ts` | The one address that may see who voted, and that the switch alone is not a permission |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
@@ -194,8 +194,9 @@ dialog, `InstallPanel` is the offer to install and renders nothing at all when
 there is nothing to offer, `AdminPanel` is the super admin switch and renders
 for exactly one Google account). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
 the link, read the medians back and adopt them a tap at a time — with, for that
-one account and only when the switch is on, a panel underneath saying who sent
-each ballot.
+one account and only when the switch is on, two ways to see who is behind the
+numbers: "Quién lo votó" under each player, and a panel at the foot of the page
+saying what each person sent.
 `PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
 `main.tsx` rather than inside it: whoever is answering a poll has no roster of
 ours to load and no permission to upload one, so that route touches neither
@@ -414,6 +415,15 @@ look, and it is deliberately one account wide: `SUPER_ADMIN_EMAIL` in
   names, your mail is kept, and the one who maintains the app can see it. A
   promise the code has quietly stopped keeping is worse than no promise, so if
   this ever changes, the cartel changes with it.
+
+It reads two ways, and the two are the same data sorted differently.
+`auditPoll` answers "what did this person say" — one row per ballot, at the
+foot of the results. `votesOnPlayer` answers "who said this about him", which
+is where the question actually starts: you notice a median looks wrong and
+*then* want the name on the number that dragged it. That one sorts low to high,
+so the ends of the range the crowd row already prints are its first and last
+lines, and it counts the ballots that never reached that player rather than
+listing them.
 
 The switch itself (`AdminPanel`, `useSuperAdmin`, `cloud/adminPrefs.ts`) is
 off by default, lives in this browser rather than on the account, and grants

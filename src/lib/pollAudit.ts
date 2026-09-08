@@ -42,6 +42,7 @@ import {
   type BallotProgress,
   type PlayerVote,
   type PollIdentity,
+  type VoteStatus,
   type VoteSummary,
 } from "./poll.js";
 
@@ -131,4 +132,104 @@ export function describeVote(vote: PlayerVote): string {
     if (value !== undefined) parts.push(`${ATTRIBUTE_LABELS[key]} ${value}`);
   }
   return parts.join(" · ");
+}
+
+/* ------------------------------------------------------------------ */
+/* The same pile, turned sideways: one player, everybody's vote on them */
+/* ------------------------------------------------------------------ */
+
+/** One person's verdict on one player, with whoever gave it. */
+export interface PlayerVoteRow {
+  ballotId: string;
+  identity: PollIdentity | null;
+  status: VoteStatus;
+  vote: PlayerVote;
+}
+
+export interface PlayerVotes {
+  rows: PlayerVoteRow[];
+  /**
+   * Ballots that never got as far as this player.
+   *
+   * Counted rather than listed. A `pending` vote is the absence of an answer,
+   * and a screen that spells out ten people who did not reach somebody buries
+   * the four who did — but dropping them silently would make the list look
+   * like fewer people answered the encuesta than actually did, so the number
+   * is kept and said out loud.
+   */
+  pending: number;
+}
+
+/** Where each status sits when the votes on one player are lined up. */
+const RANK: Record<VoteStatus, number> = {
+  rated: 0,
+  unknown: 1,
+  skipped: 2,
+  started: 3,
+  pending: 4,
+};
+
+/**
+ * Everybody's vote on one player.
+ *
+ * `auditPoll` answers "what did this person say"; this answers "who said this
+ * about him", and it is the one the question actually starts from — you notice
+ * that El Gordo came out a 4 and *then* want to know who put the 2.
+ *
+ * So the numbers are sorted low to high, with the ends of the range where they
+ * can be seen at a glance: the crowd row above already says "9 votos, de 2 a
+ * 8", and this is the list that puts a name on the 2 and on the 8. After the
+ * numbers come the people who answered something other than a number, because
+ * "no lo conozco" is a real answer and worth reading, just not a comparable
+ * one.
+ */
+export function votesOnPlayer(
+  rows: readonly AuditRow[],
+  playerId: PlayerId,
+): PlayerVotes {
+  const found: PlayerVoteRow[] = [];
+  let pending = 0;
+
+  for (const row of rows) {
+    const summary = row.votes.find((vote) => vote.playerId === playerId);
+    // A ballot from before this player was on the list has no entry at all,
+    // which is the same nothing as never having got to him.
+    if (summary === undefined || summary.status === "pending") {
+      pending += 1;
+      continue;
+    }
+    found.push({
+      ballotId: row.ballotId,
+      identity: row.identity,
+      status: summary.status,
+      vote: summary.vote,
+    });
+  }
+
+  return { rows: found.sort(compareOnPlayer), pending };
+}
+
+function compareOnPlayer(a: PlayerVoteRow, b: PlayerVoteRow): number {
+  const byStatus = RANK[a.status] - RANK[b.status];
+  if (byStatus !== 0) return byStatus;
+
+  if (a.status === "rated" && b.status === "rated") {
+    // A vote that rated the puestos but never the overall has no number to be
+    // low or high, so it sits after the ones that do rather than at either end.
+    const overallA = a.vote.overall;
+    const overallB = b.vote.overall;
+    if (overallA === undefined && overallB !== undefined) return 1;
+    if (overallB === undefined && overallA !== undefined) return -1;
+    if (overallA !== undefined && overallB !== undefined && overallA !== overallB) {
+      return overallA - overallB;
+    }
+  }
+
+  const emailA = a.identity?.email ?? "";
+  const emailB = b.identity?.email ?? "";
+  if (emailA === "" && emailB !== "") return 1;
+  if (emailB === "" && emailA !== "") return -1;
+  const byEmail = emailA.localeCompare(emailB);
+  if (byEmail !== 0) return byEmail;
+  return a.ballotId.localeCompare(b.ballotId);
 }

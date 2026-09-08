@@ -45,7 +45,9 @@ import {
   auditPoll,
   describeVote,
   identifiedCount,
+  votesOnPlayer,
   type AuditRow,
+  type PlayerVotes,
 } from "@/lib/pollAudit";
 import { useSuperAdmin } from "@/useSuperAdmin";
 import { computeStats } from "@/lib/stats";
@@ -666,6 +668,9 @@ function Results({
               player={byId.get(row.playerId)}
               name={names.get(row.playerId) ?? "Sin nombre"}
               onSavePlayer={onSavePlayer}
+              votes={
+                showNames && audit !== null ? votesOnPlayer(audit, row.playerId) : null
+              }
             />
           ))}
         </ul>
@@ -848,11 +853,14 @@ function ResultRow({
   player,
   name,
   onSavePlayer,
+  votes,
 }: {
   row: CrowdPlayer;
   player: Player | undefined;
   name: string;
   onSavePlayer: (player: Player) => void;
+  /** Everybody's vote on this one, or `null` for everybody but the one account. */
+  votes: PlayerVotes | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -962,6 +970,80 @@ function ResultRow({
           )}
         </div>
       )}
+
+      {/* Its own toggle rather than more inside the one above, because the two
+          answer different questions: that one is what the crowd thinks, this
+          one is who is in the crowd. Folding them together would put a column
+          of email addresses behind a link that says "cosas más que opinaron". */}
+      {votes !== null && <WhoVoted votes={votes} />}
     </li>
+  );
+}
+
+/**
+ * Everybody's vote on one player, for the one account that may see them.
+ *
+ * Sits under the crowd row it belongs to, so the question it answers starts
+ * where it actually starts: the median looks wrong, and you want the name on
+ * the number that dragged it. `lib/pollAudit.ts` sorts them low to high for
+ * exactly that — the ends of the range shown above are the first and last
+ * lines here.
+ */
+function WhoVoted({ votes }: { votes: PlayerVotes }) {
+  const [open, setOpen] = useState(false);
+
+  if (votes.rows.length === 0) {
+    return (
+      <p className="mt-2 pl-11 text-xs text-muted-foreground">
+        {votes.pending === 0
+          ? "Nadie opinó de este todavía."
+          : `Nadie llegó hasta este: ${votes.pending} ${votes.pending === 1 ? "respuesta" : "respuestas"} se cortaron antes.`}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 pl-11">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-xs text-amber-500/90 underline-offset-2 hover:underline"
+        onClick={() => setOpen((was) => !was)}
+      >
+        <ShieldCheck className="h-3 w-3" />
+        {open ? "Ocultar quién lo votó" : `Quién lo votó (${votes.rows.length})`}
+      </button>
+
+      {open && (
+        <>
+          <ul className="mt-1.5 space-y-0.5">
+            {votes.rows.map((one) => (
+              <li key={one.ballotId} className="flex items-baseline gap-2 text-xs">
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {(one.identity?.email ?? "") === "" ? (
+                    <span className="italic">Sin identificar</span>
+                  ) : (
+                    one.identity?.email
+                  )}
+                </span>
+                <span
+                  className={`tabular shrink-0 ${one.status === "rated" ? "text-foreground" : "text-muted-foreground"}`}
+                >
+                  {one.status === "rated"
+                    ? describeVote(one.vote)
+                    : AUDIT_STATUS[one.status]}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {votes.pending > 0 && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Otr{votes.pending === 1 ? "a" : "as"} {votes.pending}{" "}
+              {votes.pending === 1 ? "respuesta se cortó" : "respuestas se cortaron"}{" "}
+              antes de llegar a este.
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
