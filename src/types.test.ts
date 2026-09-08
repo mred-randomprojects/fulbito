@@ -307,7 +307,8 @@ describe("the 1–10 to 0–100 migration", () => {
     // transit. Losing it must cost nothing.
     let player = withPlayer({ rating: 7, roleRatings: { GK: 9 } });
     for (let i = 0; i < 5; i++) {
-      const { ratingScale: _dropped, ...stripped } = player;
+      const stripped: Record<string, unknown> = { ...player };
+      delete stripped.ratingScale;
       player = normalizeAppData({ players: [stripped] }).players[0];
     }
     assert.equal(player.rating, 70);
