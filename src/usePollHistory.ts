@@ -14,20 +14,27 @@ import type { PlayerId } from "@/types";
 /**
  * Every encuesta you ever sent, fetched once and read from a player's ficha.
  *
+ * **This is the super admin's view, and the gate is the whole hook.** The
+ * results page gives whoever sent an encuesta a median and a range, and
+ * deliberately not the numbers behind them — the ficha's swarm *is* those
+ * numbers, one dot each, so it belongs on the same side of the line as
+ * "Quién lo votó": `superAdminSees` in `lib/superAdmin.ts`, the right account
+ * and the switch actually on. Off, and nothing is fetched and nothing is
+ * drawn; `firestore.rules` is still the thing that decides what comes back.
+ *
  * The ficha is opened dozens of times a night and the answer barely changes
  * between two of them, so the whole archive is fetched once per session and
- * held in this module. That is also what makes it affordable to hang off a
- * dialog: the first ficha you open pays for a round trip, and every other one
- * is a `useMemo` over data already in hand.
+ * held in this module. That is what makes it affordable to hang off a dialog:
+ * the first ficha you open pays for a round trip, and every other one is a
+ * `useMemo` over data already in hand.
  *
- * Three things it is careful about:
+ * Two more things it is careful about:
  *
- * - **Nothing happens for somebody who never signed in.** `loadCloud` is what
- *   downloads the Firebase SDK, and a local-first app must not pay for it to
- *   open a player's ficha. No uid, no fetch, no memo — see `cloud/firebase.ts`.
- * - **The memo is keyed by the account *and* by whether names were asked
- *   for.** Signing out or flicking the super admin switch has to invalidate
- *   it, or a screen would keep showing addresses it is no longer allowed to.
+ * - **Nothing happens for somebody who is not that account.** `loadCloud` is
+ *   what downloads the Firebase SDK, and a local-first app must not pay for it
+ *   to open a player's ficha. And the first ficha opened with the gate shut
+ *   throws the module cache away, so signing out does not leave a pile of
+ *   addresses sitting in memory behind a panel that no longer draws them.
  * - **A failure is not remembered.** The memo drops itself on a rejection, so
  *   "Probá de nuevo" is a real button rather than one that replays the same
  *   error for the rest of the session. Same bargain as `loadCloud` itself.
@@ -41,13 +48,7 @@ export type PollHistoryState =
 
 export interface PollHistoryView {
   state: PollHistoryState;
-  /** Whether the dots can carry an address at all. */
-  named: boolean;
   refresh: () => void;
-}
-
-function keyOf(uid: string, named: boolean): string {
-  return `${uid}|${named}`;
 }
 
 let memo: { key: string; polls: Promise<PollRecord[]> } | null = null;
@@ -61,7 +62,7 @@ let memo: { key: string; polls: Promise<PollRecord[]> } | null = null;
  */
 let settled: { key: string; polls: PollRecord[] } | null = null;
 
-async function fetchArchive(uid: string, named: boolean): Promise<PollRecord[]> {
+async function fetchArchive(uid: string): Promise<PollRecord[]> {
   const { db } = await loadCloud();
   const polls = await listMyPolls(db, uid);
   return Promise.all(
@@ -69,10 +70,12 @@ async function fetchArchive(uid: string, named: boolean): Promise<PollRecord[]> 
       const [order, ballots, identities] = await Promise.all([
         fetchPollPlayerIds(db, poll.id),
         fetchBallotEntries(db, poll.id),
-        // Refused by the rules for anybody but the one address, and that is
-        // the correct outcome rather than an error: the rest of this reads
-        // exactly the same, with nobody's name on it.
-        named ? fetchIdentities(db, poll.id).catch(() => []) : [],
+        // The rules refuse this to anybody but the one address, and a refusal
+        // is a result rather than an error: unpublished rules leave the same
+        // chart with nobody's name on it, which is the honest version of "we
+        // could not put names to them" and the same fallback the results page
+        // makes.
+        fetchIdentities(db, poll.id).catch(() => []),
       ]);
       return {
         id: poll.id,
@@ -86,9 +89,10 @@ async function fetchArchive(uid: string, named: boolean): Promise<PollRecord[]> 
   );
 }
 
-function archive(key: string, uid: string, named: boolean): Promise<PollRecord[]> {
+function archive(uid: string): Promise<PollRecord[]> {
+  const key = uid;
   if (memo === null || memo.key !== key) {
-    const polls = fetchArchive(uid, named);
+    const polls = fetchArchive(uid);
     memo = { key, polls };
     polls.then(
       (loaded) => {
@@ -102,14 +106,15 @@ function archive(key: string, uid: string, named: boolean): Promise<PollRecord[]
   return memo.polls;
 }
 
-/** What the encuestas ever said about one player. */
+/** What the encuestas ever said about one player — for the one account. */
 export function usePollHistory(playerId: PlayerId | undefined): PollHistoryView {
   const { available, user } = useCloudAuth();
   const admin = useSuperAdmin();
   const uid = user?.uid ?? null;
-  const named = admin.on;
+  /** Recomputed every render against the live session, like `superAdminSees`. */
+  const allowed = available && uid !== null && admin.on;
 
-  const key = uid === null ? "" : keyOf(uid, named);
+  const key = allowed && uid !== null ? uid : "";
   const [polls, setPolls] = useState<PollRecord[] | null>(() =>
     settled !== null && settled.key === key ? settled.polls : null,
   );
@@ -118,11 +123,16 @@ export function usePollHistory(playerId: PlayerId | undefined): PollHistoryView 
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (uid === null) return;
+    if (!allowed || uid === null) {
+      // The gate is shut: whatever was fetched under it goes with it.
+      memo = null;
+      settled = null;
+      return;
+    }
     let alive = true;
     setPolls(settled !== null && settled.key === key ? settled.polls : null);
     setFailed(false);
-    archive(key, uid, named).then(
+    archive(uid).then(
       (loaded) => {
         if (alive) setPolls(loaded);
       },
@@ -133,7 +143,7 @@ export function usePollHistory(playerId: PlayerId | undefined): PollHistoryView 
     return () => {
       alive = false;
     };
-  }, [key, uid, named, attempt]);
+  }, [allowed, key, uid, attempt]);
 
   const refresh = useCallback(() => {
     memo = null;
@@ -148,10 +158,10 @@ export function usePollHistory(playerId: PlayerId | undefined): PollHistoryView 
   }, [polls, playerId]);
 
   let state: PollHistoryState;
-  if (!available || uid === null) state = { kind: "off" };
+  if (!allowed) state = { kind: "off" };
   else if (failed) state = { kind: "failed" };
   else if (history === null) state = { kind: "loading" };
   else state = { kind: "ready", history };
 
-  return { state, named, refresh };
+  return { state, refresh };
 }

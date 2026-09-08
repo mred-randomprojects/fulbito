@@ -19,14 +19,19 @@ import { RATING_MAX, RATING_MIN, type Player } from "@/types";
  * this panel exists for is not "what is his median" — the ficha already shows
  * a number, and the results page shows the crowd's — it is "who is the one who
  * thinks he is a 40". So every dot answers to a hover, a tap and a focus, and
- * says who put it. Addresses only exist for the one account that may see them
- * (`lib/superAdmin.ts`); for everybody else a dot is a number and an encuesta,
- * which is what an anonymous answer is.
+ * says who put it.
  *
- * Nothing is drawn below `MIN_VOTERS`. One answer on a chart is one person's
- * opinion read straight off the screen, and that is exactly what the floor on
- * the results page exists to prevent — a second screen that quietly opts out
- * of it would make the floor a decoration.
+ * **Which is why the whole panel is the super admin's, not just the names on
+ * it.** What the owner of an encuesta is given is a median and a range; the
+ * numbers behind them are deliberately not on that screen, and a swarm is
+ * those numbers with a dot drawn round each one. Gating the addresses and
+ * leaving the values would have been the same disclosure wearing a mask. The
+ * gate is `usePollHistory`, which fetches nothing at all when it is shut.
+ *
+ * Nothing is drawn below `MIN_VOTERS` either. Two answers is where the app
+ * everywhere else starts calling a pile a number, and one dot is not a
+ * distribution — it is a fact about one person, and the results page already
+ * spells that one out under "Quién lo votó".
  */
 
 /** The drawing, in user units. The SVG scales; these do not. */
@@ -58,7 +63,7 @@ function x(value: number): number {
 }
 
 export function PollVotesPanel({ player }: { player: Player }) {
-  const { state, named, refresh } = usePollHistory(player.id);
+  const { state, refresh } = usePollHistory(player.id);
   /** Only a mouse hovers; a finger pins. See the handlers below. */
   const [hovered, setHovered] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
@@ -142,7 +147,7 @@ export function PollVotesPanel({ player }: { player: Player }) {
         <p className="mt-2 text-xs text-muted-foreground">
           {crowd.votes === 0
             ? "Todavía no le puso número nadie."
-            : `Va un voto solo, y con uno no se dibuja nada: con ${MIN_VOTERS} te muestro la nubecita.`}
+            : `Va un voto solo, y con uno no hay nube que dibujar: con ${MIN_VOTERS} te la muestro.`}
         </p>
       ) : (
         <>
@@ -227,7 +232,7 @@ export function PollVotesPanel({ player }: { player: Player }) {
                   onClick={() => setPinned((was) => (was === vote.key ? null : vote.key))}
                 >
                   <title>
-                    {named && vote.who !== "" ? `${vote.value} — ${vote.who}` : `${vote.value}`}
+                    {vote.who === "" ? `${vote.value}` : `${vote.value} — ${vote.who}`}
                   </title>
                 </circle>
               );
@@ -238,22 +243,16 @@ export function PollVotesPanel({ player }: { player: Player }) {
           <p className="mt-1 min-h-8 text-xs leading-relaxed">
             {active === null ? (
               <span className="text-muted-foreground">
-                {named
-                  ? "Tocá un punto (o pasale el mouse) y te digo quién le puso ese número."
-                  : "Cada punto es una respuesta. Llegan sin nombre, así que quién puso cuál no lo sabe nadie."}
+                Tocá un punto (o pasale el mouse) y te digo quién le puso ese número.
               </span>
             ) : (
               <>
                 <span className="tabular font-semibold">{active.value}</span>
                 <span className="text-muted-foreground"> · </span>
-                {named ? (
-                  active.who === "" ? (
-                    <span className="italic text-muted-foreground">Sin identificar</span>
-                  ) : (
-                    <span className="break-all">{active.who}</span>
-                  )
+                {active.who === "" ? (
+                  <span className="italic text-muted-foreground">Sin identificar</span>
                 ) : (
-                  <span className="text-muted-foreground">respuesta anónima</span>
+                  <span className="break-all">{active.who}</span>
                 )}
                 <span className="block text-muted-foreground">
                   {active.pollTitle === "" ? "Encuesta sin nombre" : active.pollTitle}

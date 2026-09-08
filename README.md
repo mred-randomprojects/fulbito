@@ -80,11 +80,10 @@ any other app, full screen and with no signal needed.
   from a troll — the person answering is told so before they start. From two
   opinions up it shows the median beside
   the number *you* gave, plus how much they disagreed, and adopting it is a tap
-  you have to make. Each player's ficha keeps the whole pile:
-  every vote he ever got as one dot sitting on the number that person put, so
-  where the room agreed there is a little mountain — and a dot tells you which
-  encuesta it came from, or who put it if you are the account that may see
-  that. Your own rating is never shown to whoever is answering —
+  you have to make. On the same one account, and only with the
+  switch on, each player's ficha adds the whole pile: every vote he ever got as
+  one dot sitting on the number that person put, so where the room agreed there
+  is a little mountain, and a dot says who put it and in which encuesta. Your own rating is never shown to whoever is answering —
   seeing it would anchor them and ruin the answer.
 - **Share without leaking ratings.** A PNG of the pitch, a PNG of the torneito,
   or a plain-text list for the group chat. Ratings are excluded from all of

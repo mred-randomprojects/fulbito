@@ -16,12 +16,14 @@
  *    `auditPoll`, and it is why this takes a poll's `order` rather than
  *    trusting the keys on the ballots.
  * 2. **The floor is `MIN_VOTERS`, counted across every poll together.** Below
- *    it there is a count and nothing else, exactly as on the results page —
- *    one answer shown as a dot on a chart is one person's opinion read back
- *    off the screen, and it stays that whichever screen it is drawn on.
+ *    it there is a count and nothing else, the same word the rest of the app
+ *    uses for "not enough people to say anything yet": one dot is not a
+ *    distribution, it is a fact about one person, and `votesOnPlayer` is where
+ *    a fact about one person is read.
  * 3. **Names come from `identities`, which is one account's to see.** Pass an
- *    empty list and every dot is anonymous, which is the correct view for
- *    anybody who is not the address in `lib/superAdmin.ts`.
+ *    empty list and every dot is anonymous — what an unpublished set of rules
+ *    leaves behind. Who may ask for them at all is `usePollHistory`, and the
+ *    address is `lib/superAdmin.ts`.
  *
  * Only the overall goes in. The puestos and the atributos are answered by a
  * fraction of the people who answer the overall, so a swarm of them is three

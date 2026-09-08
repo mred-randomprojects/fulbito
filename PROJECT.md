@@ -216,9 +216,9 @@ and what is still owed on each row),
 under a result panel and a note that are always there), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
-they belong to, who they will not play with, and — once an encuesta has asked
-about them — `PollVotesPanel`, the swarm of everything the room ever voted on
-them), `SettingsPage` (sync, backup,
+they belong to, who they will not play with, and — for the super admin, once
+an encuesta has asked about them — `PollVotesPanel`, the swarm of everything
+the room ever voted on them), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
 dialog, `InstallPanel` is the offer to install and renders nothing at all when
 there is nothing to offer, `AdminPanel` is the super admin switch and renders
@@ -485,16 +485,21 @@ quoting different numbers is worse than no second screen:
   `lib/pollHistory.ts` takes each poll's `order` rather than trusting ballot
   keys — which is also why `fetchPollPlayerIds` exists: the ids of a poll's
   list, without the faces the ficha has no use for.
+- **The whole panel is this account's, not just the names on it.** What the
+  owner of an encuesta gets is a median and a range; the numbers behind them
+  are deliberately not on that screen, and a swarm *is* those numbers with a
+  dot drawn round each one — so gating the addresses and leaving the values
+  would have been the same disclosure wearing a mask. `usePollHistory` is the
+  gate: `superAdminSees`, the right account and the switch actually on, and
+  with it shut nothing is fetched and nothing is drawn.
 - **`MIN_VOTERS` is the floor here too**, counted across every poll together.
-  One answer drawn as a dot is one person's opinion read straight off the
-  screen, and a screen that quietly opted out would make the floor a
-  decoration.
-- **Names are the super admin's, exactly as above.** `usePollHistory` only
-  asks for `identities` when the switch is on, and a refusal leaves the same
-  chart with nobody's name on it.
-- **Nothing is fetched for somebody who never signed in**, and the whole
-  archive is fetched once a session rather than once a ficha — the ficha is
-  opened dozens of times a night.
+  One dot is not a distribution — it is a fact about one person, and
+  "Quién lo votó" on the results page is where a fact about one person is
+  read.
+- **Nothing is fetched for anybody else**, and the archive is fetched once a
+  session rather than once a ficha — the ficha is opened dozens of times a
+  night — and the first ficha opened with the gate shut throws that cache
+  away, so signing out does not leave a pile of addresses in memory.
 
 The switch itself (`AdminPanel`, `useSuperAdmin`, `cloud/adminPrefs.ts`) is
 off by default, lives in this browser rather than on the account, and grants
