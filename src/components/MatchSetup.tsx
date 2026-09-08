@@ -3,7 +3,14 @@ import { HeartCrack, Minus, Plus, Scale, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formationsForSize, generateFormation, type Formation } from "@/lib/formations";
-import { KIT_IDS, KITS, type BalanceBasis, type KitId, type TeamConfig } from "@/types";
+import {
+  HANDICAP_LIMIT,
+  KIT_IDS,
+  KITS,
+  type BalanceBasis,
+  type KitId,
+  type TeamConfig,
+} from "@/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -197,16 +204,16 @@ export function MatchSetup({
               <span className="text-emerald-400">Partido parejo</span>
             ) : (
               <span style={{ color: KITS[handicap > 0 ? teamA.kit : teamB.kit].fill }}>
-                {(handicap > 0 ? teamA : teamB).name} +{Math.abs(handicap).toFixed(2)}
+                {(handicap > 0 ? teamA : teamB).name} +{Math.abs(handicap).toFixed(1)}
               </span>
             )}
           </span>
         </div>
         <input
           type="range"
-          min={-1.5}
-          max={1.5}
-          step={0.25}
+          min={-HANDICAP_LIMIT / 2}
+          max={HANDICAP_LIMIT / 2}
+          step={2.5}
           value={handicap}
           onChange={(e) => onHandicapChange(Number(e.target.value))}
           className="w-full"

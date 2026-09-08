@@ -148,7 +148,7 @@ function Token({ token }: { token: PitchToken }) {
         )}
         {token.rating !== undefined && (
           <span className="tabular absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-black/85 px-1 text-[10px] font-bold text-white shadow ring-1 ring-white/20">
-            {token.rating.toFixed(1)}
+            {token.rating.toFixed(0)}
           </span>
         )}
       </span>

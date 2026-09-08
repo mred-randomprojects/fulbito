@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { AppData, Player, PlayerId, Team, TeamId } from "./types.js";
 import { mergeAppData } from "./mergeAppData.js";
+import { RATING_SCALE } from "./types.js";
 
 function player(id: string, rating: number, updatedAt: string): Player {
   return {
@@ -9,6 +10,7 @@ function player(id: string, rating: number, updatedAt: string): Player {
     firstName: id,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating,
     roleRatings: {},

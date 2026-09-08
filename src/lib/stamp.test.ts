@@ -4,6 +4,7 @@ import { stampAfter, stampAtLeast } from "./stamp.js";
 import { mergeAppData } from "../mergeAppData.js";
 import { removePlayer, upsertPlayer } from "../appDataOps.js";
 import { EMPTY_APP_DATA, type AppData, type Player, type PlayerId } from "../types.js";
+import { RATING_SCALE } from "../types.js";
 
 function player(id: string, updatedAt: string, rating = 6): Player {
   return {
@@ -11,6 +12,7 @@ function player(id: string, updatedAt: string, rating = 6): Player {
     firstName: id,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating,
     roleRatings: {},

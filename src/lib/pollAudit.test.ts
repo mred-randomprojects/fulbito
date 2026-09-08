@@ -120,13 +120,13 @@ describe("describeVote", () => {
   it("writes the overall, then the puestos, then the atributos", () => {
     assert.equal(
       describeVote({
+        ...emptyVote(),
         played: true,
-        skipped: false,
-        overall: 7,
-        roleRatings: { DEF: 8 },
-        attributes: { pace: 6 },
+        overall: 70,
+        roleRatings: { DEF: 80 },
+        attributes: { pace: 60 },
       }),
-      "7 · DEF 8 · Pique 6",
+      "70 · DEF 80 · Pique 60",
     );
   });
 

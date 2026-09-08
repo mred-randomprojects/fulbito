@@ -4,6 +4,7 @@ import { planTeamMatch } from "./teamMatch.js";
 import { resolveFormation } from "./formations.js";
 import { findSplits } from "./balance.js";
 import type { Player, PlayerId } from "../types.js";
+import { RATING_SCALE } from "../types.js";
 
 let counter = 0;
 function player(overrides: Partial<Player> = {}): Player {
@@ -13,8 +14,9 @@ function player(overrides: Partial<Player> = {}): Player {
     firstName: `P${counter}`,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
-    rating: 5,
+    rating: 50,
     roleRatings: {},
     attributes: {},
     avoid: [],
@@ -152,7 +154,7 @@ describe("planTeamMatch", () => {
   });
 
   it("puts the best keeper in goal rather than whoever was listed first", () => {
-    const keeper = player({ rating: 4, roleRatings: { GK: 10 } });
+    const keeper = player({ rating: 40, roleRatings: { GK: 100 } });
     const a = [...squadOf(4), keeper];
     const plan = planTeamMatch({
       a,

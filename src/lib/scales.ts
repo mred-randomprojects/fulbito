@@ -3,10 +3,16 @@ import { ATTRIBUTES, ROLES, type AttributeKey, type Role } from "../types.js";
 /**
  * What the numbers actually mean.
  *
- * A 1-10 scale with nothing attached to it is worse than useless: two people
- * rating the same squad will disagree about what a 6 is, and the whole model
+ * A 0-100 scale with nothing attached to it is worse than useless: two people
+ * rating the same squad will disagree about what a 60 is, and the whole model
  * rests on those numbers being comparable. Anchoring the ends — and the middle
- * — is what makes one person's 7 mean roughly the same as another's.
+ * — is what makes one person's 70 mean roughly the same as another's.
+ *
+ * The bands are wide on purpose. A hundred steps exist so that a *median* can
+ * land on 67 rather than being forced to 7, and so that somebody who cares can
+ * say "68, not 70" — not so that anybody has to have an opinion about the
+ * difference between a 63 and a 64. Five bands is still the number of
+ * distinctions a person actually holds about their mates.
  */
 
 export interface ScaleAnchor {
@@ -18,11 +24,11 @@ export interface ScaleAnchor {
 
 /** Anchors for the overall rating. */
 export const OVERALL_SCALE: ScaleAnchor[] = [
-  { from: 1, to: 2, label: "Patadura. Va por la birra de después." },
-  { from: 3, to: 4, label: "Corre, mete, pero no la ve." },
-  { from: 5, to: 6, label: "Un jugador de picado normal. La mayoría va acá." },
-  { from: 7, to: 8, label: "De los que hacen la diferencia." },
-  { from: 9, to: 10, label: "El crack del grupo. Todos lo quieren en su equipo." },
+  { from: 0, to: 20, label: "Patadura. Va por la birra de después." },
+  { from: 21, to: 40, label: "Corre, mete, pero no la ve." },
+  { from: 41, to: 60, label: "Un jugador de picado normal. La mayoría va acá." },
+  { from: 61, to: 80, label: "De los que hacen la diferencia." },
+  { from: 81, to: 100, label: "El crack del grupo. Todos lo quieren en su equipo." },
 ];
 
 export function describeOverall(rating: number): string {
@@ -33,9 +39,9 @@ export function describeOverall(rating: number): string {
 export interface Rubric {
   /** What the attribute or position actually measures. */
   what: string;
-  /** What a 1 looks like. */
+  /** What a 0 looks like. */
   low: string;
-  /** What a 10 looks like. */
+  /** What a 100 looks like. */
   high: string;
 }
 
@@ -61,7 +67,7 @@ export const ATTRIBUTE_RUBRICS: Record<AttributeKey, Rubric> = {
     high: "Te hace un caño y se va.",
   },
   teamplay: {
-    what: "Si juega con los diez o juega para la tribuna. Casi que es sí o no: la mayoría anda por 6 o 7, y los que te hacen renegar caen solos abajo de 3. Ojo que este te baja la gambeta: al que se la come, la gambeta no le sirve al equipo.",
+    what: "Si juega con los diez o juega para la tribuna. Casi que es sí o no: la mayoría anda por 60 o 70, y los que te hacen renegar caen solos abajo de 30. Ojo que este te baja la gambeta: al que se la come, la gambeta no le sirve al equipo.",
     low: "Comilón. La agarra y no la larga hasta que la pierde. O solo se la pasa a los dos amigos.",
     high: "Siempre la da al que está mejor parado. Con él la pelota circula.",
   },

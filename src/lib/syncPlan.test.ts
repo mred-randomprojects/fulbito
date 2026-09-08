@@ -12,6 +12,7 @@ import type {
 import { DEFAULT_TEAM_A, DEFAULT_TEAM_B } from "../types.js";
 import { mergeAppData } from "../mergeAppData.js";
 import { isEmptyPlan, planSize, planSync, sameVersions } from "./syncPlan.js";
+import { RATING_SCALE } from "../types.js";
 
 function player(id: string, rating: number, updatedAt: string): Player {
   return {
@@ -19,6 +20,7 @@ function player(id: string, rating: number, updatedAt: string): Player {
     firstName: id,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating,
     roleRatings: {},
@@ -35,6 +37,7 @@ function match(id: string, updatedAt: string): Match {
     id: id as MatchId,
     name: "Picado",
     date: "2026-01-01",
+    ratingScale: RATING_SCALE,
     teamA: { ...DEFAULT_TEAM_A },
     teamB: { ...DEFAULT_TEAM_B },
     squad: [],

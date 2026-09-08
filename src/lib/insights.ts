@@ -1,4 +1,5 @@
 import {
+  RATING_MAX,
   ROLES,
   ROLE_LABELS,
   ROLE_LABELS_PLURAL,
@@ -22,13 +23,13 @@ export interface BalanceSummary {
 }
 
 /**
- * Thresholds are in rating points per player on the 1–10 scale. A tenth of a
- * point per player is noise; half a point per player is a team you can feel
+ * Thresholds are in rating points per player on the 0–100 scale. A point and a
+ * half per player is noise; four and a half per player is a team you can feel
  * losing to.
  */
-const SLIGHT = 0.15;
-const CLEAR = 0.45;
-const LOPSIDED = 0.9;
+const SLIGHT = 1.5;
+const CLEAR = 4.5;
+const LOPSIDED = 9;
 
 /**
  * The word for a gap of this size, in rating points per player.
@@ -98,7 +99,7 @@ export function comparisons(
       hint: "El total dividido por la cantidad. Es la comparación justa cuando van disparejos en número.",
       a: a.average,
       b: b.average,
-      scale: 10,
+      scale: RATING_MAX,
     },
     {
       key: "best",
@@ -106,7 +107,7 @@ export function comparisons(
       hint: "El que te gana el partido solo.",
       a: a.best,
       b: b.best,
-      scale: 10,
+      scale: RATING_MAX,
     },
     {
       key: "worst",
@@ -114,7 +115,7 @@ export function comparisons(
       hint: "Por donde te la van a ir a buscar.",
       a: a.worst,
       b: b.worst,
-      scale: 10,
+      scale: RATING_MAX,
     },
     {
       key: "spread",
@@ -141,7 +142,7 @@ export function comparisons(
           : `${lineA.count} contra ${lineB.count} — esquemas distintos, así que acá se comparan promedios.`,
       a: lineA.average,
       b: lineB.average,
-      scale: 10,
+      scale: RATING_MAX,
     });
   }
 
@@ -195,8 +196,8 @@ export function insights(
     out.push({
       side: "none",
       text: hit
-        ? `Ventaja aplicada: ${target} quedaron arriba por ${Math.abs(handicap).toFixed(2)} por jugador, como pediste.`
-        : `Pediste ${Math.abs(handicap).toFixed(2)} de ventaja por jugador para ${target}, pero lo mejor que se consigue es ${Math.abs(summary.edge).toFixed(2)}.`,
+        ? `Ventaja aplicada: ${target} quedaron arriba por ${Math.abs(handicap).toFixed(1)} por jugador, como pediste.`
+        : `Pediste ${Math.abs(handicap).toFixed(1)} de ventaja por jugador para ${target}, pero lo mejor que se consigue es ${Math.abs(summary.edge).toFixed(1)}.`,
     });
   }
 

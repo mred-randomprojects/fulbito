@@ -4,6 +4,7 @@ import { EMPTY_APP_DATA, type AppData, type Player, type PlayerId } from "./type
 import { mergeAppData } from "./mergeAppData.js";
 import { removePlayer, upsertPlayer } from "./appDataOps.js";
 import { isEmptyPlan, planSync, type SyncPlan } from "./lib/syncPlan.js";
+import { RATING_SCALE } from "./types.js";
 
 /**
  * The promise the whole sync feature is judged on, tested end to end.
@@ -30,6 +31,7 @@ function player(id: string, rating: number): Player {
     firstName: id,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating,
     roleRatings: {},

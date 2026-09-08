@@ -949,7 +949,7 @@ function FairnessBar({
       <span className="text-xs text-muted-foreground">
         El cruce más disparejo se lleva{" "}
         <span className="tabular font-medium text-foreground">
-          {option.worstGap.toFixed(2)}
+          {option.worstGap.toFixed(1)}
         </span>{" "}
         por jugador.
       </span>
@@ -1197,7 +1197,7 @@ function TeamCardRow({
           {role}
         </span>
         <span className="tabular w-7 text-right text-xs font-medium text-muted-foreground">
-          {rating.toFixed(1)}
+          {rating.toFixed(0)}
         </span>
       </button>
     </li>
@@ -1230,7 +1230,7 @@ function buildText(
       // gets rearranged in the first two minutes anyway.
       const marker = formations[index].slots[slot]?.role === "GK" ? "🧤" : "•";
       const rating = includeRatings
-        ? ` (${team.evaluation.slotRatings[slot].toFixed(1)})`
+        ? ` (${team.evaluation.slotRatings[slot].toFixed(0)})`
         : "";
       lines.push(`  ${marker} ${playerDisplayName(player)}${rating}`);
     });

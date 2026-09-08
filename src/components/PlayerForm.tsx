@@ -57,6 +57,7 @@ import {
 import {
   ATTRIBUTES,
   ATTRIBUTE_LABELS,
+  RATING_SCALE,
   ROLES,
   ROLE_LABELS,
   clampRating,
@@ -91,7 +92,8 @@ function blankPlayer(): Player {
     lastName: "",
     nickname: "",
     avatar: "",
-    rating: 6,
+    ratingScale: RATING_SCALE,
+    rating: 60,
     roleRatings: {},
     attributes: {},
     avoid: [],
@@ -981,13 +983,13 @@ function AvoidPicker({
   );
 }
 
-/** The 1-10 scale, spelled out, so everyone's 7 means roughly the same thing. */
+/** The 0-100 scale, spelled out, so everyone's 70 means roughly the same. */
 function ScaleLegend() {
   return (
     <ul className="mt-3 space-y-1 border-t border-primary/20 pt-2.5">
       {OVERALL_SCALE.map((anchor) => (
         <li key={anchor.from} className="flex gap-2 text-[11px] leading-snug">
-          <span className="tabular w-8 shrink-0 font-semibold text-primary/80">
+          <span className="tabular w-14 shrink-0 font-semibold text-primary/80">
             {anchor.from}–{anchor.to}
           </span>
           <span className="text-muted-foreground">{anchor.label}</span>

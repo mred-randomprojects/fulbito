@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { PlayerId } from "../types.js";
+import { RATING_SCALE, type PlayerId } from "../types.js";
 import {
   EMPTY_BALLOT,
   ballotProgress,
+  emptyVote,
   ballotSummary,
   countedVotes,
   isSubmittable,
@@ -93,9 +94,9 @@ describe("numbers imply played", () => {
 });
 
 describe("setting a rating", () => {
-  it("clamps to the same 1..10 the rest of the app uses", () => {
-    assert.equal(voteFor(setOverall(EMPTY_BALLOT, NANO, 99), NANO).overall, 10);
-    assert.equal(voteFor(setOverall(EMPTY_BALLOT, NANO, 0), NANO).overall, 1);
+  it("clamps to the same 0..100 the rest of the app uses", () => {
+    assert.equal(voteFor(setOverall(EMPTY_BALLOT, NANO, 999), NANO).overall, 100);
+    assert.equal(voteFor(setOverall(EMPTY_BALLOT, NANO, -5), NANO).overall, 0);
   });
 
   it("clears one field without touching the others", () => {
@@ -200,19 +201,21 @@ describe("voteRating", () => {
   });
 
   it("keeps a real one, clamped", () => {
-    assert.equal(voteRating(7), 7);
-    assert.equal(voteRating(-3), 1);
+    assert.equal(voteRating(70, RATING_SCALE), 70);
+    assert.equal(voteRating(-3, RATING_SCALE), 0);
+  });
+
+  it("reads a number with no scale beside it as one from the old 1..10", () => {
+    // Nothing about a 7 says which scale it was written on, so the marker is
+    // the only thing that can — and its absence is itself the answer.
+    assert.equal(voteRating(7), 70);
+    assert.equal(voteRating(10), 100);
   });
 });
 
 describe("normalizeVote", () => {
   it("turns junk into a blank vote rather than throwing", () => {
-    assert.deepEqual(normalizeVote(null), {
-      played: null,
-      skipped: false,
-      roleRatings: {},
-      attributes: {},
-    });
+    assert.deepEqual(normalizeVote(null), emptyVote());
     assert.deepEqual(normalizeVote("nope"), normalizeVote(undefined));
   });
 
@@ -220,14 +223,30 @@ describe("normalizeVote", () => {
     const vote = normalizeVote({
       played: true,
       skipped: false,
-      overall: 42,
-      roleRatings: { GK: 9, WINGER: 7 },
-      attributes: { pace: 8, vibes: 10 },
+      scale: RATING_SCALE,
+      overall: 420,
+      roleRatings: { GK: 90, WINGER: 70 },
+      attributes: { pace: 80, vibes: 100 },
       extra: "ignored",
     });
-    assert.equal(vote.overall, 10);
-    assert.deepEqual(vote.roleRatings, { GK: 9 });
-    assert.deepEqual(vote.attributes, { pace: 8 });
+    assert.equal(vote.overall, 100);
+    assert.deepEqual(vote.roleRatings, { GK: 90 });
+    assert.deepEqual(vote.attributes, { pace: 80 });
+  });
+
+  it("brings a ballot sent on the old scale up to this one", () => {
+    // A poll left open across the change collects both kinds, and the medians
+    // have to be taken over one of them. No `scale` means 1..10.
+    const vote = normalizeVote({
+      played: true,
+      overall: 7,
+      roleRatings: { GK: 9 },
+      attributes: { pace: 4 },
+    });
+    assert.equal(vote.scale, RATING_SCALE);
+    assert.equal(vote.overall, 70);
+    assert.deepEqual(vote.roleRatings, { GK: 90 });
+    assert.deepEqual(vote.attributes, { pace: 40 });
   });
 
   it("answers the gate for a doc that arrived with numbers and no answer", () => {

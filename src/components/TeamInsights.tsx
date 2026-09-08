@@ -68,7 +68,7 @@ export function TeamInsights({
                   </span>{" "}
                   por{" "}
                   <span className="tabular font-medium text-foreground">
-                    {Math.abs(summary.edge - handicap).toFixed(2)}
+                    {Math.abs(summary.edge - handicap).toFixed(1)}
                   </span>{" "}
                   puntos por jugador.
                 </>

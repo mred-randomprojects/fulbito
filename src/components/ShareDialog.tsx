@@ -208,7 +208,7 @@ function buildText(
     evaluation.lineup.forEach((player, index) => {
       if (player == null) return;
       const rating = includeRatings
-        ? ` (${evaluation.slotRatings[index].toFixed(1)})`
+        ? ` (${evaluation.slotRatings[index].toFixed(0)})`
         : "";
       // Who is in goal is the one bit of shape worth spelling out; the rest
       // gets rearranged in the first two minutes anyway.

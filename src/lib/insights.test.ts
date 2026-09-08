@@ -4,6 +4,7 @@ import type { Player, PlayerId } from "../types.js";
 import { evaluateSquad } from "./balance.js";
 import { resolveFormation } from "./formations.js";
 import { comparisons, insights, summarise } from "./insights.js";
+import { RATING_SCALE } from "../types.js";
 
 let counter = 0;
 function player(rating: number, extras: Partial<Player> = {}): Player {
@@ -13,6 +14,7 @@ function player(rating: number, extras: Partial<Player> = {}): Player {
     firstName: `P${counter}`,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating,
     roleRatings: {},
@@ -31,8 +33,8 @@ const squad = (ratings: number[]) =>
 
 describe("summarise", () => {
   it("calls identical teams dead even", () => {
-    const a = squad([7, 7, 7, 7, 7]);
-    const b = squad([7, 7, 7, 7, 7]);
+    const a = squad([70, 70, 70, 70, 70]);
+    const b = squad([70, 70, 70, 70, 70]);
     const result = summarise(a, b, "total");
     assert.equal(result.verdict, "even");
     assert.equal(result.favoured, null);
@@ -40,8 +42,8 @@ describe("summarise", () => {
   });
 
   it("names the favoured side once the gap is real", () => {
-    const a = squad([9, 9, 9, 9, 9]);
-    const b = squad([4, 4, 4, 4, 4]);
+    const a = squad([90, 90, 90, 90, 90]);
+    const b = squad([40, 40, 40, 40, 40]);
     const result = summarise(a, b, "total");
     assert.equal(result.verdict, "lopsided");
     assert.equal(result.favoured, "A");
@@ -49,8 +51,8 @@ describe("summarise", () => {
   });
 
   it("treats a met handicap as fair rather than as an imbalance", () => {
-    const a = squad([9, 9, 9, 9, 9]);
-    const b = squad([5, 5, 5, 5, 5]);
+    const a = squad([90, 90, 90, 90, 90]);
+    const b = squad([50, 50, 50, 50, 50]);
 
     const withoutHandicap = summarise(a, b, "average", 0);
     assert.equal(withoutHandicap.verdict, "lopsided");
@@ -66,8 +68,8 @@ describe("summarise", () => {
 
 describe("comparisons", () => {
   it("includes only the lines that at least one team fields", () => {
-    const a = squad([7, 7, 7, 7, 7]);
-    const b = squad([7, 7, 7, 7, 7]);
+    const a = squad([70, 70, 70, 70, 70]);
+    const b = squad([70, 70, 70, 70, 70]);
     const keys = comparisons(a, b).map((c) => c.key);
     assert.ok(keys.includes("line-GK"));
     assert.ok(keys.includes("total"));
@@ -76,8 +78,8 @@ describe("comparisons", () => {
   });
 
   it("keeps every scale positive so bars never divide by zero", () => {
-    const a = squad([1, 1, 1, 1, 1]);
-    const b = squad([1, 1, 1, 1, 1]);
+    const a = squad([10, 10, 10, 10, 10]);
+    const b = squad([10, 10, 10, 10, 10]);
     for (const row of comparisons(a, b)) {
       assert.ok(row.scale > 0, row.key);
     }
@@ -86,17 +88,17 @@ describe("comparisons", () => {
 
 describe("insights", () => {
   it("says so plainly when there is nothing to separate the teams", () => {
-    const a = squad([7, 7, 7, 7, 7]);
-    const b = squad([7, 7, 7, 7, 7]);
+    const a = squad([70, 70, 70, 70, 70]);
+    const b = squad([70, 70, 70, 70, 70]);
     const notes = insights(a, b, "Claro", "Oscuro", "total");
     assert.equal(notes.length, 1);
     assert.match(notes[0].text, /Más parejo|nivel general/);
   });
 
   it("flags the numerical advantage when sides are uneven", () => {
-    const a = squad([7, 7, 7, 7, 7]);
+    const a = squad([70, 70, 70, 70, 70]);
     const b = evaluateSquad(
-      Array.from({ length: 6 }, () => player(7)),
+      Array.from({ length: 6 }, () => player(70)),
       resolveFormation("6-2-2-1", 6),
     );
     const notes = insights(a, b, "Claro", "Oscuro", "average");
@@ -105,17 +107,17 @@ describe("insights", () => {
 
   it("calls out a decisive keeper mismatch", () => {
     const a = evaluateSquad(
-      [player(6, { roleRatings: { GK: 10 } }), player(6), player(6), player(6), player(6)],
+      [player(60, { roleRatings: { GK: 100 } }), player(60), player(60), player(60), player(60)],
       formation5,
     );
-    const b = squad([6, 6, 6, 6, 6]);
+    const b = squad([60, 60, 60, 60, 60]);
     const notes = insights(a, b, "Claro", "Oscuro", "total");
     assert.ok(notes.some((n) => /arquero/i.test(n.text)));
   });
 
   it("warns when the split rests on overall ratings alone", () => {
-    const a = squad([7, 7, 7, 7, 7]);
-    const b = squad([7, 7, 7, 7, 7]);
+    const a = squad([70, 70, 70, 70, 70]);
+    const b = squad([70, 70, 70, 70, 70]);
     const notes = insights(a, b, "Claro", "Oscuro", "total");
     assert.ok(notes.some((n) => /nivel general/.test(n.text)));
   });

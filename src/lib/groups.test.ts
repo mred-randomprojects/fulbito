@@ -16,6 +16,7 @@ import {
   worstGap,
   type GroupSplitOption,
 } from "./groups.js";
+import { RATING_SCALE } from "../types.js";
 
 let counter = 0;
 function player(rating: number, extras: Partial<Player> = {}): Player {
@@ -25,6 +26,7 @@ function player(rating: number, extras: Partial<Player> = {}): Player {
     firstName: `P${counter}`,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating,
     roleRatings: {},

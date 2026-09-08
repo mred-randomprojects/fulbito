@@ -10,7 +10,7 @@ sides every week? Save them once and bring both into a match in a tap.
 
 The interface is in Argentinian Spanish — that is a product decision, not a
 localisation layer, so strings live inline rather than in a message catalogue.
-The rating rubrics that anchor the 1-10 scale are in `src/lib/scales.ts`, and
+The rating rubrics that anchor the 0-100 scale are in `src/lib/scales.ts`, and
 that file is the reference for the voice. Code, comments and this README stay in
 English.
 
@@ -260,7 +260,7 @@ no secrets.
   matches.
 - **Anything that moves money.** No alias, no QR, no payment link. The app says
   who owes what; the transfer happens where it always happened.
-- **Ratings that learn from results.** The 1-10 numbers stay hand-entered, or
+- **Ratings that learn from results.** The 0-100 numbers stay hand-entered, or
   adopted from an encuesta on purpose. Moving them from who won on Thursday
   would turn one bad night into a downgrade, and nobody asked the app to have
   opinions.

@@ -208,7 +208,7 @@ function drawTeamCard(
   ctx.fillRect(r.x, r.y, r.width, CARD_HEADER);
   ctx.restore();
 
-  const badge = team.total == null ? "" : team.total.toFixed(1);
+  const badge = team.total == null ? "" : team.total.toFixed(0);
   ctx.fillStyle = team.text;
   ctx.textAlign = "left";
   ctx.font = "700 26px ui-sans-serif, system-ui, -apple-system, sans-serif";

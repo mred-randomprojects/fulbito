@@ -14,6 +14,7 @@ import { SaveIndicator } from "./components/SaveIndicator";
 import {
   DEFAULT_TEAM_A,
   DEFAULT_TEAM_B,
+  RATING_SCALE,
   newMatchId,
   type Match,
   type MatchId,
@@ -29,6 +30,7 @@ export default function App() {
     const today = todayIso();
     const match: Match = {
       id: newMatchId(),
+      ratingScale: RATING_SCALE,
       name: defaultMatchName(today),
       date: today,
       teamA: { ...DEFAULT_TEAM_A },

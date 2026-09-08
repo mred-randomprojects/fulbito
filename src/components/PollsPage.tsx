@@ -505,7 +505,9 @@ function PickRow({
       >
         <PlayerAvatar player={player} size={28} />
         <span className="flex-1 truncate text-sm">{playerDisplayName(player)}</span>
-        <span className="tabular text-xs text-muted-foreground">{player.rating}</span>
+        <span className="tabular text-xs text-muted-foreground">
+          {player.rating.toFixed(0)}
+        </span>
       </button>
     </li>
   );
@@ -923,7 +925,7 @@ function ResultRow({
             <>
               <p className="tabular text-sm">
                 {player !== undefined && (
-                  <span className="text-muted-foreground">{player.rating} → </span>
+                  <span className="text-muted-foreground">{player.rating.toFixed(0)} → </span>
                 )}
                 <span className="font-semibold">{crowd.median}</span>
               </p>

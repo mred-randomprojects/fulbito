@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createAutosaver, type Clock } from "./autosave.js";
 import { hasName, type Player, type PlayerId } from "../types.js";
+import { RATING_SCALE } from "../types.js";
 
 /** A clock whose time only moves when a test says so. */
 function fakeClock(): Clock & { tick(): void; timers(): number } {
@@ -164,6 +165,7 @@ function draft(fields: Partial<Player>): Player {
     firstName: "",
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating: 6,
     roleRatings: {},

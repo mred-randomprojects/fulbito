@@ -22,7 +22,7 @@
  *    data loss wearing a valid state. Going the other way is still explicit
  *    and still lossless: saying "no lo conozco" or hitting omitir stops the
  *    numbers counting but keeps them, so undoing costs nothing.
- * 3. **A rating that will not parse disappears; it does not become a 5.**
+ * 3. **A rating that will not parse disappears; it does not become a 50.**
  *    `clampRating` defaults a broken number to the middle of the scale, which
  *    is right for a player somebody is editing and wrong for a vote nobody
  *    cast. Here everything is optional, and optional never punishes anybody —
@@ -31,8 +31,10 @@
 
 import {
   ATTRIBUTES,
+  RATING_SCALE,
   ROLES,
   clampRating,
+  toCurrentScale,
   type AttributeKey,
   type PlayerId,
   type Role,
@@ -86,6 +88,18 @@ export interface PlayerVote {
   played: boolean | null;
   /** They hit omitir: not now, which is not the same as "no lo conozco". */
   skipped: boolean;
+  /**
+   * Which scale the numbers below are on — `RATING_SCALE`, always, in memory.
+   *
+   * On the *vote* rather than on the ballot document, which looks redundant
+   * twenty times over and is not. `firestore.rules` pins a ballot to
+   * `hasOnly(['votes'])`, so a sibling field would be refused by any project
+   * whose rules have not been republished — and the failure mode of that is an
+   * encuesta nobody can answer. The contents of `votes` are unconstrained, so
+   * putting the marker inside costs a few bytes and needs no rule change at
+   * all. See `normalizeVote`.
+   */
+  scale: number;
   overall?: number;
   roleRatings: Partial<Record<Role, number>>;
   attributes: Partial<Record<AttributeKey, number>>;
@@ -98,7 +112,13 @@ export interface Ballot {
 export const EMPTY_BALLOT: Ballot = { votes: {} };
 
 export function emptyVote(): PlayerVote {
-  return { played: null, skipped: false, roleRatings: {}, attributes: {} };
+  return {
+    played: null,
+    skipped: false,
+    scale: RATING_SCALE,
+    roleRatings: {},
+    attributes: {},
+  };
 }
 
 /** The vote for a player, or a blank one. Never `undefined`. */
@@ -306,11 +326,11 @@ function str(value: unknown, fallback = ""): string {
 
 /**
  * Decision 3: a vote that will not parse leaves no vote, rather than becoming
- * the 5 that `clampRating` would hand back. Nobody said 5.
+ * the 50 that `clampRating` would hand back. Nobody said 50.
  */
-export function voteRating(value: unknown): number | undefined {
+export function voteRating(value: unknown, scale?: number): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  return clampRating(value);
+  return toCurrentScale(value, scale);
 }
 
 export function normalizeVote(raw: unknown): PlayerVote {
@@ -320,18 +340,23 @@ export function normalizeVote(raw: unknown): PlayerVote {
   if (typeof raw.played === "boolean") vote.played = raw.played;
   if (raw.skipped === true) vote.skipped = true;
 
-  const overall = voteRating(raw.overall);
+  // Absent on every ballot sent before the scale changed, which is what says
+  // these numbers are 1–10. A poll left open across the change collects both
+  // kinds, and the medians have to be taken over one of them.
+  const scale = typeof raw.scale === "number" ? raw.scale : undefined;
+
+  const overall = voteRating(raw.overall, scale);
   if (overall !== undefined) vote.overall = overall;
 
   if (isRecord(raw.roleRatings)) {
     for (const role of ROLES) {
-      const value = voteRating(raw.roleRatings[role]);
+      const value = voteRating(raw.roleRatings[role], scale);
       if (value !== undefined) vote.roleRatings[role] = value;
     }
   }
   if (isRecord(raw.attributes)) {
     for (const key of ATTRIBUTES) {
-      const value = voteRating(raw.attributes[key]);
+      const value = voteRating(raw.attributes[key], scale);
       if (value !== undefined) vote.attributes[key] = value;
     }
   }

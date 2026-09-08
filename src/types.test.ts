@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { normalizeAppData, type PlayerId } from "./types.js";
+import {
+  HANDICAP_LIMIT,
+  RATING_DEFAULT,
+  RATING_MAX,
+  RATING_SCALE,
+  normalizeAppData,
+  type PlayerId,
+} from "./types.js";
 
 /**
  * `normalizeAppData` is the only door into the app's data, so the interesting
@@ -216,5 +223,92 @@ describe("normalizing teams", () => {
   it("survives teams that are not a list", () => {
     assert.deepEqual(normalizeAppData({ teams: "nope" }).teams, []);
     assert.deepEqual(normalizeAppData({ teams: [null, 3] }).teams, []);
+  });
+});
+
+/**
+ * The scale change, which is the one migration this app has ever had.
+ *
+ * Ratings ran 1–10 and now run 0–100. There is no clever way to tell the two
+ * apart from the numbers — 8 is a real rating on both — so every record says
+ * which one it was written on, and the absence of that marker is itself the
+ * answer. These tests are the whole safety net for a change that rewrites
+ * every number in everybody's roster, so they are deliberately fussy.
+ */
+describe("the 1–10 to 0–100 migration", () => {
+  it("puts a zero on the end of everything an old record holds", () => {
+    const player = withPlayer({
+      rating: 7,
+      roleRatings: { GK: 9, DEF: 4 },
+      attributes: { pace: 6, teamplay: 10 },
+    });
+    assert.equal(player.rating, 70);
+    assert.deepEqual(player.roleRatings, { GK: 90, DEF: 40 });
+    assert.deepEqual(player.attributes, { pace: 60, teamplay: 100 });
+  });
+
+  it("leaves a record that already says 0–100 exactly alone", () => {
+    const player = withPlayer({
+      ratingScale: RATING_SCALE,
+      rating: 67,
+      roleRatings: { GK: 90 },
+      attributes: { pace: 8 },
+    });
+    assert.equal(player.rating, 67);
+    assert.deepEqual(player.roleRatings, { GK: 90 });
+    // The case a "small numbers are old ones" heuristic would have ruined: a
+    // patadura's 8 is a real 8, not a 7 that forgot to grow.
+    assert.deepEqual(player.attributes, { pace: 8 });
+  });
+
+  it("stamps the scale on the way out, so it only ever happens once", () => {
+    const once = withPlayer({ rating: 7 });
+    assert.equal(once.ratingScale, RATING_SCALE);
+    // The second pass is the one that matters: normalisation runs on every
+    // load, every merge and every snapshot from the cloud.
+    const twice = normalizeAppData({ players: [once] }).players[0];
+    assert.equal(twice.rating, 70);
+    const thrice = normalizeAppData({ players: [twice] }).players[0];
+    assert.equal(thrice.rating, 70);
+  });
+
+  it("cannot push anybody past the top of the new scale", () => {
+    assert.equal(withPlayer({ rating: 10 }).rating, RATING_MAX);
+    // A hand-edited blob claiming something absurd still lands in range.
+    assert.equal(withPlayer({ rating: 500 }).rating, RATING_MAX);
+    assert.equal(withPlayer({ rating: -20 }).rating, 0);
+  });
+
+  it("defaults a missing rating to the middle on either scale", () => {
+    assert.equal(withPlayer({}).rating, RATING_DEFAULT);
+    assert.equal(withPlayer({ ratingScale: RATING_SCALE }).rating, RATING_DEFAULT);
+  });
+
+  it("survives a scale marker that is nonsense", () => {
+    // Anything that is not the current scale is treated as the old one, which
+    // is the safe way to be wrong: the numbers stay in range either way.
+    assert.equal(withPlayer({ ratingScale: 7, rating: 6 }).rating, 60);
+    assert.equal(withPlayer({ ratingScale: "cien", rating: 6 }).rating, 60);
+  });
+
+  it("moves a match's handicap too, because it is in rating points", () => {
+    // A stored 1.5 was a real shove on the old scale and would be a rounding
+    // error on this one.
+    assert.equal(withMatch({ handicap: 1.5 }).handicap, 15);
+    assert.equal(withMatch({ ratingScale: RATING_SCALE, handicap: 15 }).handicap, 15);
+    assert.equal(withMatch({ handicap: 0 }).handicap, 0);
+  });
+
+  it("keeps a handicap inside the limit, however it got there", () => {
+    assert.equal(withMatch({ handicap: 99 }).handicap, HANDICAP_LIMIT);
+    assert.equal(withMatch({ handicap: -99 }).handicap, -HANDICAP_LIMIT);
+    // The old clamp was ±3, so the biggest old value migrates to exactly ±30.
+    assert.equal(withMatch({ handicap: 3 }).handicap, HANDICAP_LIMIT);
+  });
+
+  it("stamps the scale on a match, so its handicap only moves once", () => {
+    const once = withMatch({ handicap: 1.5 });
+    assert.equal(once.ratingScale, RATING_SCALE);
+    assert.equal(normalizeAppData({ matches: [once] }).matches[0].handicap, 15);
   });
 });

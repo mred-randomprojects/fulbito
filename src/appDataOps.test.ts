@@ -19,6 +19,7 @@ import {
   upsertPlayer,
   upsertTeam,
 } from "./appDataOps.js";
+import { RATING_SCALE } from "./types.js";
 
 function player(id: string, firstName = id): Player {
   return {
@@ -26,6 +27,7 @@ function player(id: string, firstName = id): Player {
     firstName,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating: 6,
     roleRatings: {},
@@ -42,6 +44,7 @@ function match(id: string, overrides: Partial<Match> = {}): Match {
     id: id as MatchId,
     name: id,
     date: "2026-01-01",
+    ratingScale: RATING_SCALE,
     teamA: { ...DEFAULT_TEAM_A },
     teamB: { ...DEFAULT_TEAM_B },
     squad: [],

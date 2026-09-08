@@ -13,6 +13,7 @@ import {
 } from "./balance.js";
 import { buildAvoidIndex } from "./avoid.js";
 import { defaultFormation, resolveFormation } from "./formations.js";
+import { RATING_SCALE } from "../types.js";
 
 let counter = 0;
 function player(
@@ -25,6 +26,7 @@ function player(
     firstName: `P${counter}`,
     lastName: "",
     nickname: "",
+    ratingScale: RATING_SCALE,
     avatar: "",
     rating,
     roleRatings: {},
@@ -68,8 +70,8 @@ describe("forEachCombination", () => {
 
 describe("bestAssignment", () => {
   it("puts the specialist keeper in goal", () => {
-    const keeper = player(5, { roleRatings: { GK: 10 } });
-    const outfield = [player(7), player(7), player(7), player(7)];
+    const keeper = player(50, { roleRatings: { GK: 100 } });
+    const outfield = [player(70), player(70), player(70), player(70)];
     const formation = defaultFormation(5);
     const { slotToPlayer } = bestAssignment([...outfield, keeper], formation.slots);
 
@@ -81,9 +83,9 @@ describe("bestAssignment", () => {
   it("finds the true optimum, not a greedy approximation", () => {
     // Greedy by slot order would grab the all-rounder for the keeper's jersey
     // and leave the specialist stranded outfield.
-    const specialist = player(4, { roleRatings: { GK: 10 } });
-    const allRounder = player(9);
-    const rest = [player(6), player(6), player(6)];
+    const specialist = player(40, { roleRatings: { GK: 100 } });
+    const allRounder = player(90);
+    const rest = [player(60), player(60), player(60)];
     const formation = defaultFormation(5);
     const assignment = bestAssignment(
       [specialist, allRounder, ...rest],
@@ -100,16 +102,16 @@ describe("bestAssignment", () => {
   });
 
   it("never parks the best outfielder in goal", () => {
-    // Regression test for a real lineup this produced: a 9 rated 10 as a
-    // forward ended up keeping goal while a 6 played up front, because the two
-    // arrangements tied on total strength.
-    const star = player(9, { roleRatings: { FWD: 10 } });
+    // Regression test for a real lineup this produced: a 90 rated 100 as a
+    // forward ended up keeping goal while a 60 played up front, because the
+    // two arrangements tied on total strength.
+    const star = player(90, { roleRatings: { FWD: 100 } });
     const squad = [
       star,
-      player(6, { roleRatings: { DEF: 8 } }),
-      player(7, { roleRatings: { MID: 8 } }),
-      player(4),
-      player(6, { roleRatings: { FWD: 7 } }),
+      player(60, { roleRatings: { DEF: 80 } }),
+      player(70, { roleRatings: { MID: 80 } }),
+      player(40),
+      player(60, { roleRatings: { FWD: 70 } }),
     ];
     const formation = resolveFormation("5-1-2-1", 5);
     const { slotToPlayer } = bestAssignment(squad, formation.slots);
@@ -117,18 +119,18 @@ describe("bestAssignment", () => {
     const keeper = squad[slotToPlayer[gkSlot]];
 
     assert.notEqual(keeper.id, star.id, "the best player must not be in goal");
-    assert.equal(keeper.rating, 4, "the weakest player goes in goal");
+    assert.equal(keeper.rating, 40, "the weakest player goes in goal");
   });
 
   it("breaks ties by playing people where they are rated", () => {
     // Two arrangements worth exactly the same overall; the readable one wins.
-    const forward = player(9, { roleRatings: { FWD: 10 } });
+    const forward = player(90, { roleRatings: { FWD: 100 } });
     const squad = [
       forward,
-      player(6, { roleRatings: { DEF: 8 } }),
-      player(7, { roleRatings: { MID: 8 } }),
-      player(4),
-      player(6, { roleRatings: { FWD: 7 } }),
+      player(60, { roleRatings: { DEF: 80 } }),
+      player(70, { roleRatings: { MID: 80 } }),
+      player(40),
+      player(60, { roleRatings: { FWD: 70 } }),
     ];
     const formation = resolveFormation("5-1-2-1", 5);
     const { slotToPlayer } = bestAssignment(squad, formation.slots);
@@ -137,7 +139,7 @@ describe("bestAssignment", () => {
   });
 
   it("assigns every player exactly once", () => {
-    const players = [player(5), player(6), player(7), player(8), player(9), player(4)];
+    const players = [player(50), player(60), player(70), player(80), player(90), player(40)];
     const formation = defaultFormation(6);
     const { slotToPlayer } = bestAssignment(players, formation.slots);
     assert.equal(new Set(slotToPlayer).size, players.length);
@@ -146,7 +148,7 @@ describe("bestAssignment", () => {
 
   it("refuses a squad that does not fill the formation", () => {
     assert.throws(
-      () => bestAssignment([player(5)], defaultFormation(5).slots),
+      () => bestAssignment([player(50)], defaultFormation(5).slots),
       /one player per slot/,
     );
   });
@@ -186,7 +188,7 @@ describe("findSplits", () => {
   const formation5 = resolveFormation("5-1-2-1", 5);
 
   it("splits ten equal players into two dead-even teams", () => {
-    const players = Array.from({ length: 10 }, () => player(7));
+    const players = Array.from({ length: 10 }, () => player(70));
     const result = findSplits({
       players,
       sizeA: 5,
@@ -202,8 +204,8 @@ describe("findSplits", () => {
   });
 
   it("separates two stars rather than stacking them", () => {
-    const stars = [player(10), player(10)];
-    const rest = Array.from({ length: 8 }, () => player(5));
+    const stars = [player(100), player(100)];
+    const rest = Array.from({ length: 8 }, () => player(50));
     const result = findSplits({
       players: [...stars, ...rest],
       sizeA: 5,
@@ -215,12 +217,12 @@ describe("findSplits", () => {
       handicap: 0,
     });
     const best = result.options[0];
-    const starsInA = best.teamA.filter((p) => p.rating === 10).length;
+    const starsInA = best.teamA.filter((p) => p.rating === 100).length;
     assert.equal(starsInA, 1, "one star each side");
   });
 
   it("finds the genuinely optimal split, matching brute force", () => {
-    const ratings = [9, 8.5, 8, 7, 6.5, 6, 5, 4.5, 4, 3];
+    const ratings = [90, 85, 80, 70, 65, 60, 50, 45, 40, 30];
     const players = ratings.map((r) => player(r));
     const result = findSplits({
       players,
@@ -275,7 +277,7 @@ describe("findSplits", () => {
   });
 
   it("returns options that differ by more than a single swap", () => {
-    const players = Array.from({ length: 12 }, (_, i) => player(3 + i * 0.5));
+    const players = Array.from({ length: 12 }, (_, i) => player(30 + i * 5));
     const formation6 = resolveFormation("6-2-2-1", 6);
     const result = findSplits({
       players,
@@ -302,7 +304,7 @@ describe("findSplits", () => {
   it("never offers a split and its mirror image as two options", () => {
     // Which team is called A is arbitrary; the same split with the shirts
     // swapped is not a second option.
-    const players = Array.from({ length: 10 }, (_, i) => player(2 + i * 0.7));
+    const players = Array.from({ length: 10 }, (_, i) => player(20 + i * 7));
     const result = findSplits({
       players,
       sizeA: 5,
@@ -328,7 +330,7 @@ describe("findSplits", () => {
   });
 
   it("handles uneven sides", () => {
-    const players = Array.from({ length: 11 }, () => player(6));
+    const players = Array.from({ length: 11 }, () => player(60));
     const result = findSplits({
       players,
       sizeA: 5,
@@ -344,7 +346,7 @@ describe("findSplits", () => {
   });
 
   it("equalises averages rather than totals when asked to", () => {
-    const players = Array.from({ length: 11 }, () => player(6));
+    const players = Array.from({ length: 11 }, () => player(60));
     const byAverage = findSplits({
       players,
       sizeA: 5,
@@ -356,9 +358,9 @@ describe("findSplits", () => {
       handicap: 0,
     });
     // Not exactly zero: the fixed goalkeeper discount is amortised over five
-    // players on one side and six on the other, which is worth ~0.03 of a
+    // players on one side and six on the other, which is worth ~0.3 of a
     // rating point. Every player here is identical, so no split can do better.
-    assert.ok(Math.abs(byAverage.options[0].edge) < 0.05);
+    assert.ok(Math.abs(byAverage.options[0].edge) < 0.5);
     assert.ok(
       byAverage.options[0].evalA.total < byAverage.options[0].evalB.total,
       "the six-a-side team carries more total talent by construction",
@@ -366,7 +368,7 @@ describe("findSplits", () => {
   });
 
   it("aims at a deliberate handicap when one is set", () => {
-    const players = Array.from({ length: 10 }, (_, i) => player(2 + i * 0.8));
+    const players = Array.from({ length: 10 }, (_, i) => player(20 + i * 8));
     const fair = findSplits({
       players,
       sizeA: 5,
@@ -385,21 +387,21 @@ describe("findSplits", () => {
       formationB: formation5,
       pins: {},
       basis: "average",
-      handicap: 1,
+      handicap: 10,
     });
-    assert.ok(Math.abs(fair.options[0].edge) < 0.2);
+    assert.ok(Math.abs(fair.options[0].edge) < 2);
     assert.ok(
-      Math.abs(stacked.options[0].edge - 1) < Math.abs(fair.options[0].edge - 1),
+      Math.abs(stacked.options[0].edge - 10) < Math.abs(fair.options[0].edge - 10),
       "the handicapped split should land closer to the +1 target",
     );
-    assert.ok(stacked.options[0].edge > 0.5);
+    assert.ok(stacked.options[0].edge > 5);
   });
 
   it("rejects team sizes that do not add up", () => {
     assert.throws(
       () =>
         findSplits({
-          players: [player(5), player(5), player(5)],
+          players: [player(50), player(50), player(50)],
           sizeA: 2,
           sizeB: 2,
           formationA: resolveFormation("gen-2", 2),
@@ -413,7 +415,7 @@ describe("findSplits", () => {
   });
 
   it("rejects more pins than a team has room for", () => {
-    const players = Array.from({ length: 10 }, () => player(6));
+    const players = Array.from({ length: 10 }, () => player(60));
     const pins: Partial<Record<PlayerId, TeamKey>> = {};
     for (const p of players.slice(0, 6)) pins[p.id] = "A";
     assert.throws(
@@ -436,7 +438,7 @@ describe("findSplits", () => {
     // The search runs on the main thread, so an unbounded one is a frozen tab.
     // Thirty players at fifteen a side is nothing like fulbito, but somebody
     // will tap "All" on a big roster and the app must survive it.
-    const players = Array.from({ length: 30 }, (_, i) => player(2 + (i % 9)));
+    const players = Array.from({ length: 30 }, (_, i) => player(20 + (i % 9) * 10));
     const formation15 = resolveFormation("gen-15", 15);
     const started = Date.now();
     const result = findSplits({
@@ -456,11 +458,11 @@ describe("findSplits", () => {
     assert.equal(result.options[0].teamA.length, 15);
     assert.equal(result.options[0].teamB.length, 15);
     // Still has to produce something defensible, not just something fast.
-    assert.ok(Math.abs(result.options[0].edge) < 0.5);
+    assert.ok(Math.abs(result.options[0].edge) < 5);
   });
 
   it("assigns everyone exactly once even on the greedy path", () => {
-    const players = Array.from({ length: 24 }, (_, i) => player(3 + (i % 7)));
+    const players = Array.from({ length: 24 }, (_, i) => player(30 + (i % 7) * 10));
     const formation12 = resolveFormation("gen-12", 12);
     const result = findSplits({
       players,
@@ -481,7 +483,7 @@ describe("findSplits", () => {
   });
 
   it("falls back to local search on a squad too large to enumerate", () => {
-    const players = Array.from({ length: 22 }, (_, i) => player(3 + (i % 8)));
+    const players = Array.from({ length: 22 }, (_, i) => player(30 + (i % 8) * 10));
     const formation11 = resolveFormation("11-4-4-2", 11);
     let seed = 42;
     const random = () => {
@@ -501,23 +503,23 @@ describe("findSplits", () => {
     });
     assert.equal(result.exhaustive, false);
     assert.ok(result.options.length > 0);
-    assert.ok(Math.abs(result.options[0].edge) < 0.35);
+    assert.ok(Math.abs(result.options[0].edge) < 3.5);
   });
 });
 
 describe("strengthEdge", () => {
   it("is expressed per player, so uneven sides stay comparable", () => {
     const five = evaluateSquad(
-      Array.from({ length: 5 }, () => player(6)),
+      Array.from({ length: 5 }, () => player(60)),
       resolveFormation("5-1-2-1", 5),
     );
     const six = evaluateSquad(
-      Array.from({ length: 6 }, () => player(6)),
+      Array.from({ length: 6 }, () => player(60)),
       resolveFormation("6-2-2-1", 6),
     );
     // Near zero rather than exactly zero: one keeper discount spread over five
     // players is slightly heavier than the same discount spread over six.
-    assert.ok(Math.abs(strengthEdge(five, six, "average")) < 0.05);
+    assert.ok(Math.abs(strengthEdge(five, six, "average")) < 0.5);
     // Same players, but six of them carry more total talent than five.
     assert.ok(strengthEdge(five, six, "total") < 0);
   });
@@ -532,7 +534,7 @@ describe("findSplits with avoid preferences", () => {
 
   /** Ten identical players, so nothing but the preference can decide a split. */
   function evenSquad(): Player[] {
-    return Array.from({ length: 10 }, () => player(6));
+    return Array.from({ length: 10 }, () => player(60));
   }
 
   function split(players: Player[], avoid: ReturnType<typeof buildAvoidIndex>) {
@@ -602,7 +604,7 @@ describe("findSplits with avoid preferences", () => {
     // is worth about eight points here, and a broken preference costs a
     // hundred, so the preference has to win — that ratio is the whole design.
     const teamOf2 = defaultFormation(2);
-    const players = [player(10), player(10), player(2), player(2)];
+    const players = [player(100), player(100), player(20), player(20)];
     const [starA, starB, weakA, weakB] = players;
     starA.avoid = [weakA.id, weakB.id];
 
@@ -643,12 +645,12 @@ describe("findSplits with avoid preferences", () => {
     // With the impossible trio out of the way, the remaining seven should
     // still be arranged to even the two sides up.
     const players = [
-      player(6),
-      player(6),
-      player(6),
-      player(10),
-      player(10),
-      ...Array.from({ length: 5 }, () => player(4)),
+      player(60),
+      player(60),
+      player(60),
+      player(100),
+      player(100),
+      ...Array.from({ length: 5 }, () => player(40)),
     ];
     const [a, b, c] = players;
     a.avoid = [b.id, c.id];
@@ -673,7 +675,7 @@ describe("findSplits with avoid preferences", () => {
     // Above the exhaustive budget the split comes from local hill-climbing,
     // which decides what an improvement is from `cost` alone — so the penalty
     // has to live inside that number rather than beside it.
-    const players = Array.from({ length: 24 }, () => player(6));
+    const players = Array.from({ length: 24 }, () => player(60));
     players[0].avoid = [players[1].id];
 
     const result = findSplits({

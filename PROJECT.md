@@ -90,7 +90,32 @@ enters the app without going through `normalizeAppData` — a hand-edited
 
 - **`Player`** — name, nickname, avatar (a data URL, centre-cropped and
   re-encoded on upload), one required `rating`, optional `roleRatings` and
-  `attributes`, `avoid`, `tags`, notes, `updatedAt`.
+  `attributes`, `avoid`, `tags`, notes, `ratingScale`, `updatedAt`.
+- **Ratings run 0 to 100**, and they used to run 1 to 10. The reason is the
+  encuesta: the median of ten people's integers lands on a 7 or a 7.5 and
+  nothing in between, so a room that thinks somebody is a notch above the other
+  7 has no way to say it. A hundred steps is the smallest scale where that is a
+  number rather than a rounding argument, and where two sides come out 68.4
+  against 67.9 instead of tying. `RATING_MIN`, `RATING_MAX` and
+  `RATING_DEFAULT` in `types.ts` are the only place the ends are written down;
+  anything comparing a rating to a bare literal is a bug waiting for the next
+  change of mind.
+- **`Player.ratingScale` / `Match.ratingScale`** — which scale that record's
+  numbers were written on, and the whole of the migration. **Absent means
+  1–10.** It has to be a marker rather than a heuristic because a number cannot
+  say which scale it belongs to: 8 is a real rating on both, so "small values
+  must be old ones" would quietly turn a patadura into an 80. And it lives on
+  each *record* rather than once on the blob because a record is what travels —
+  sync moves one player at a time, a backup exported in 2025 can be imported in
+  2027, and a Firestore document written by a phone that has not reloaded yet
+  lands beside one written by a laptop that has. `normalizePlayer` and
+  `normalizeMatch` convert on the way in and stamp the current scale on the way
+  out, so it happens exactly once however many times a record is read. A
+  `PlayerVote` carries the same marker as `scale`, inline in the vote rather
+  than on the ballot document, because `firestore.rules` pins a ballot to
+  `hasOnly(['votes'])` — a sibling field would be refused by any project whose
+  rules had not been republished, and the failure mode of that is an encuesta
+  nobody can answer.
 - **`Player.avoid`** — ids this player would rather not share a side with,
   stored only on whoever said it and read as symmetric. See `lib/avoid.ts`.
 - **`Player.tags`** — which crews this player belongs to: the laburo, the
@@ -160,7 +185,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/lineupImage.ts` | Drawing the shareable PNG of the pitch on a canvas |
 | `lib/tournamentImage.ts` | Drawing the shareable PNG of the whole torneito |
 | `lib/canvas.ts` | The canvas drawing both of those share: photos, chips, corners |
-| `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number means |
+| `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number on the 0–100 scale means |
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/pwa.ts` | Whether to offer to install the app, and whether this is a device that will never ask |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
@@ -205,6 +230,16 @@ is not using the app. `SaveIndicator` floats over all the others. `SquadPicker` 
 the match screen and Repartir, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.
+
+`RatingControl` is every rating input in the app — ten taps for the answer, and
+a slider that only appears once there is a number to argue with. The taps came
+first and stay first because the case they were built for has not changed: at
+the side of a pitch, on a phone, with cold hands, you want one confident tap
+and to be done, and nobody has ever wanted to tell a 63 from a 64 in that
+moment. The fine row is for the other moment — sitting down, deciding whether
+El Gordo is really the same 70 as Juan — and hiding it while the value is unset
+is what keeps "unset" a first-class state instead of a slider parked at zero
+pretending to be one.
 
 `TagFilter` is the row of crew chips above the roster and above the squad list;
 `useTagFilter` holds the ticks. The screen owns that state, not the list —
@@ -763,7 +798,7 @@ touched anything and the two of them must go quiet.
   is the obvious next thing to read off the same matches.
 - **Anything that moves money.** No alias, no QR, no payment link: the app
   says who owes what, and the transfer happens where it always happened.
-- **Rating people from their results.** The 1-10 numbers are still entirely
+- **Rating people from their results.** The 0-100 numbers are still entirely
   hand-entered or adopted from an encuesta by a deliberate tap. Nudging them
   from the *record* — from who won on Thursday — would quietly turn one bad
   night into a downgrade, and nobody asked the app to have opinions. An

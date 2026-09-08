@@ -46,7 +46,7 @@ export const ROLE_SHORT: Record<Role, string> = {
   FWD: "DEL",
 };
 
-/** Fine-grained attributes. All optional, all 1..10. */
+/** Fine-grained attributes. All optional, all 0..100. */
 export const ATTRIBUTES = [
   "pace",
   "shooting",
@@ -80,11 +80,18 @@ export interface Player {
   nickname: string;
   /** Square JPEG data URL, downscaled on upload. Empty string when unset. */
   avatar: string;
-  /** The one required number: overall level, 1..10. */
+  /**
+   * Which scale the numbers below are on. Always `RATING_SCALE` in memory —
+   * `normalizePlayer` converts anything older on the way in — and written out
+   * so the record stays self-describing wherever it ends up. See
+   * `toCurrentScale`.
+   */
+  ratingScale: number;
+  /** The one required number: overall level, 0..100. */
   rating: number;
-  /** Optional per-role overrides, e.g. a 6 outfield who is a 9 in goal. */
+  /** Optional per-role overrides, e.g. a 60 outfield who is a 90 in goal. */
   roleRatings: Partial<Record<Role, number>>;
-  /** Optional fine-grained attributes, 1..10. */
+  /** Optional fine-grained attributes, 0..100. */
   attributes: Partial<Record<AttributeKey, number>>;
   foot?: Foot;
   /**
@@ -292,8 +299,14 @@ export interface Match {
    */
   respectAvoids: boolean;
   /**
-   * Strength edge, in rating points per player, that team A is *meant* to have.
-   * 0 is a fair game; nudge it to deliberately stack one side.
+   * Which scale `handicap` is on. Same story as `Player.ratingScale`, and it
+   * is here for the same reason: a stored 1.5 is a shove on the old scale and
+   * a rounding error on this one, and only the record can say which it meant.
+   */
+  ratingScale: number;
+  /**
+   * Strength edge, in rating points per player, that team A is *meant* to
+   * have. 0 is a fair game; nudge it to deliberately stack one side.
    */
   handicap: number;
   /** The scoreline, once it is known. See `MatchResult`. */
@@ -453,9 +466,77 @@ export function playerInitials(player: Player): string {
   return nick.slice(0, 2).toUpperCase() || "?";
 }
 
+/* ------------------------------------------------------------------ */
+/* The scale                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Ratings run 0 to 100.
+ *
+ * They used to run 1 to 10, and the reason for the change is the encuesta: a
+ * median of ten people's integers lands on a 7 or a 7.5 and nothing in
+ * between, so a room that genuinely thinks somebody is a bit better than the
+ * other 7 has no way to say it. A hundred steps is the smallest scale where
+ * "he's a notch above" is a number rather than a rounding argument, and where
+ * two sides can come out 68.4 against 67.9 instead of tying at 7.
+ *
+ * Every threshold in the app is expressed against these three, so moving the
+ * scale again is editing this block and nothing else. Anything comparing a
+ * rating to a bare literal is a bug waiting for the next change of mind.
+ */
+export const RATING_MIN = 0;
+export const RATING_MAX = 100;
+
+/** What an unrated player is worth: the middle, not the bottom. */
+export const RATING_DEFAULT = 50;
+
+/**
+ * The scale a stored record was written on.
+ *
+ * Written on every record from now on, and **absent means 1–10** — the old
+ * scale, from before this existed. That marker is not decoration and it is not
+ * a heuristic that could be replaced by "small numbers must be old ones":
+ * 8 is a perfectly good rating on both scales, so a number cannot say which
+ * one it was written against and only the record itself can.
+ *
+ * It lives on each record rather than once on the blob because a record is
+ * what travels. Sync moves one player at a time; a backup file exported in
+ * 2025 can be imported in 2027; a Firestore document written by a phone that
+ * has not reloaded yet lands next to one written by a laptop that has. Each of
+ * those arrives on its own and has to be able to say what it means.
+ */
+export const RATING_SCALE = 100;
+
+/** A rating from a record written on `scale`, brought onto the current one. */
+export function toCurrentScale(value: number, scale: number | undefined): number {
+  if (scale === RATING_SCALE) return clampRating(value);
+  // The only other scale that has ever existed. 1..10 maps onto 10..100, so a
+  // 7 becomes a 70 and nobody's roster changes shape — the numbers are the
+  // same opinions with a zero on the end.
+  return clampRating(value * 10);
+}
+
 export function clampRating(value: number): number {
-  if (!Number.isFinite(value)) return 5;
-  return Math.min(10, Math.max(1, value));
+  if (!Number.isFinite(value)) return RATING_DEFAULT;
+  return Math.min(RATING_MAX, Math.max(RATING_MIN, value));
+}
+
+/**
+ * The most one side can be handed, in rating points per player.
+ *
+ * Three tenths of the scale. Past that the optimiser is not balancing a game
+ * any more, it is being told the answer.
+ */
+export const HANDICAP_LIMIT = 30;
+
+export function clampHandicap(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(HANDICAP_LIMIT, Math.max(-HANDICAP_LIMIT, value));
+}
+
+/** A handicap written on `scale`, brought onto the current one. */
+export function toHandicapScale(value: number, scale: number | undefined): number {
+  return scale === RATING_SCALE ? value : value * 10;
 }
 
 /* ------------------------------------------------------------------ */
@@ -480,25 +561,31 @@ function strArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
-function normalizeRoleRatings(value: unknown): Partial<Record<Role, number>> {
+function normalizeRoleRatings(
+  value: unknown,
+  scale: number | undefined,
+): Partial<Record<Role, number>> {
   const out: Partial<Record<Role, number>> = {};
   if (!isRecord(value)) return out;
   for (const role of ROLES) {
     const raw = value[role];
     if (typeof raw === "number" && Number.isFinite(raw)) {
-      out[role] = clampRating(raw);
+      out[role] = toCurrentScale(raw, scale);
     }
   }
   return out;
 }
 
-function normalizeAttributes(value: unknown): Partial<Record<AttributeKey, number>> {
+function normalizeAttributes(
+  value: unknown,
+  scale: number | undefined,
+): Partial<Record<AttributeKey, number>> {
   const out: Partial<Record<AttributeKey, number>> = {};
   if (!isRecord(value)) return out;
   for (const key of ATTRIBUTES) {
     const raw = value[key];
     if (typeof raw === "number" && Number.isFinite(raw)) {
-      out[key] = clampRating(raw);
+      out[key] = toCurrentScale(raw, scale);
     }
   }
   return out;
@@ -530,15 +617,19 @@ function normalizePlayer(raw: unknown): Player | null {
   if (!isRecord(raw)) return null;
   const id = str(raw.id);
   if (id === "") return null;
+  // Absent on everything written before the scale changed, which is exactly
+  // what tells us the numbers below are 1–10 and need a zero on the end.
+  const scale = typeof raw.ratingScale === "number" ? raw.ratingScale : undefined;
   const player: Player = {
     id: id as PlayerId,
     firstName: str(raw.firstName),
     lastName: str(raw.lastName),
     nickname: str(raw.nickname),
     avatar: str(raw.avatar),
-    rating: clampRating(num(raw.rating, 5)),
-    roleRatings: normalizeRoleRatings(raw.roleRatings),
-    attributes: normalizeAttributes(raw.attributes),
+    ratingScale: RATING_SCALE,
+    rating: toCurrentScale(num(raw.rating, scale === RATING_SCALE ? RATING_DEFAULT : 5), scale),
+    roleRatings: normalizeRoleRatings(raw.roleRatings, scale),
+    attributes: normalizeAttributes(raw.attributes, scale),
     avoid: normalizeAvoid(raw.avoid, id),
     tags: normalizeTagList(strArray(raw.tags)),
     notes: str(raw.notes),
@@ -647,7 +738,13 @@ function normalizeMatch(raw: unknown): Match | null {
     // default to honouring the preference: someone who bothered to write down
     // that two people do not mix meant it for every match, not just new ones.
     respectAvoids: raw.respectAvoids !== false,
-    handicap: Math.min(3, Math.max(-3, num(raw.handicap, 0))),
+    ratingScale: RATING_SCALE,
+    handicap: clampHandicap(
+      toHandicapScale(
+        num(raw.handicap, 0),
+        typeof raw.ratingScale === "number" ? raw.ratingScale : undefined,
+      ),
+    ),
     result: normalizeResult(raw.result),
     // Absent on any match saved before the cancha had a price on it, which is
     // the same state as a match nobody has put one on yet.

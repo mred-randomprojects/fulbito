@@ -146,7 +146,7 @@ function drawBanner(
   const label =
     info.total == null
       ? `${info.name} · ${info.count}`
-      : `${info.name} · ${info.count} · ${info.total.toFixed(1)}`;
+      : `${info.name} · ${info.count} · ${info.total.toFixed(0)}`;
   ctx.font = "600 28px ui-sans-serif, system-ui, -apple-system, sans-serif";
   const width = ctx.measureText(label).width + 44;
   roundRect(ctx, cx - width / 2, cy - 22, width, 44, 22);
@@ -275,7 +275,7 @@ function drawTeam(
       ctx.fill();
       ctx.fillStyle = "#ffffff";
       ctx.font = `700 ${Math.round(radius * 0.34)}px ui-sans-serif, system-ui, sans-serif`;
-      ctx.fillText(rating.toFixed(1), bx, by + 1);
+      ctx.fillText(rating.toFixed(0), bx, by + 1);
     }
 
     // Name chip.

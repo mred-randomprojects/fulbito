@@ -1,5 +1,7 @@
 import {
   ATTRIBUTES,
+  RATING_MAX,
+  RATING_MIN,
   clampRating,
   type AttributeKey,
   type Player,
@@ -16,8 +18,8 @@ export const ROLE_TRUST = 0.7;
 
 /**
  * Maximum pull that fine-grained attributes exert, at full coverage. Attributes
- * are a refinement, never a replacement: someone rated 8 overall with mediocre
- * attributes is still roughly an 8, because the overall rating encodes things
+ * are a refinement, never a replacement: someone rated 80 overall with mediocre
+ * attributes is still roughly an 80, because the overall rating encodes things
  * the attribute list does not (game sense, finishing under pressure, ...).
  */
 export const ATTR_PULL = 0.4;
@@ -31,8 +33,8 @@ export const ATTR_PULL = 0.4;
  * average keeper: we genuinely do not know, so we should not pretend the club's
  * best forward is also its best goalkeeper.
  *
- * The flat-discount version of this was subtly wrong. It kept a 9 worth more in
- * goal than a 4, which let the optimiser park a star between the sticks to hide
+ * The flat-discount version of this was subtly wrong. It kept a 90 worth more in
+ * goal than a 40, which let the optimiser park a star between the sticks to hide
  * a weak player from outfield — the arrangements tied on total, and it produced
  * lineups nobody would ever play. Regression to the mean removes the incentive:
  * the weakest player in goal now costs the team least, which is also what
@@ -41,7 +43,7 @@ export const ATTR_PULL = 0.4;
  * This still cannot distort a squad where nobody is rated in goal, because both
  * sides field exactly one keeper and are judged by the same function.
  */
-export const GK_PRIOR = 5.5;
+export const GK_PRIOR = 55;
 
 /**
  * How far an unrated player's goalkeeping regresses to `GK_PRIOR`. 0.6 says the
@@ -108,7 +110,7 @@ export const HOG_FLOOR = 0.3;
  *
  * Deliberately one-directional: sharing the ball generously does not invent
  * gambeta the player does not have, it only stops the gambeta they do have
- * from being wasted. At a teamplay of 10 this returns the rating untouched,
+ * from being wasted. At the top of the teamplay scale this returns the rating untouched,
  * exactly, so nobody who fills the whole form in is quietly taxed for it.
  */
 export function teamAdjustedDribbling(
@@ -116,7 +118,7 @@ export function teamAdjustedDribbling(
   teamplay: number | undefined,
 ): number {
   if (teamplay === undefined) return dribbling;
-  const shortfall = (10 - clampRating(teamplay)) / 9;
+  const shortfall = (RATING_MAX - clampRating(teamplay)) / (RATING_MAX - RATING_MIN);
   return clampRating(dribbling * (1 - (1 - HOG_FLOOR) * shortfall));
 }
 

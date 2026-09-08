@@ -139,8 +139,8 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
               <dt className="font-medium">{title}</dt>
               <dd className="text-xs leading-relaxed text-muted-foreground">
                 {rubric.what}{" "}
-                <span className="text-foreground/70">1 = {rubric.low}</span> ·{" "}
-                <span className="text-foreground/70">10 = {rubric.high}</span>
+                <span className="text-foreground/70">0 = {rubric.low}</span> ·{" "}
+                <span className="text-foreground/70">100 = {rubric.high}</span>
               </dd>
             </div>
           ))}
