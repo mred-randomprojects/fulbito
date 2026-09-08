@@ -226,6 +226,28 @@ export async function fetchPoll(db: Firestore, pollId: string): Promise<Poll | n
 }
 
 /**
+ * Who was on a poll's list, and nothing else about them.
+ *
+ * The ficha needs the list as an authority — a ballot may only speak about
+ * somebody the encuesta actually asked about, see `lib/pollHistory.ts` — and
+ * it has no use at all for the names or the faces. The ids are the document
+ * ids, so this reads exactly what `fetchPoll` reads and keeps a hundredth of
+ * it: Firestore has no way to ask for the keys of a collection without its
+ * values, and the alternative — an array of ids on the poll document — would
+ * be a new field on a create that `firestore.rules` would have to be
+ * republished to accept, which is a poll nobody can send in exchange for
+ * bandwidth nobody notices.
+ */
+export async function fetchPollPlayerIds(
+  db: Firestore,
+  pollId: string,
+): Promise<PlayerId[]> {
+  const { collection, getDocs } = await import("firebase/firestore");
+  const snap = await getDocs(collection(db, POLLS, pollId, PLAYERS));
+  return snap.docs.map((entry) => entry.id as PlayerId);
+}
+
+/**
  * The one ballot id this account is ever allowed to write, creating it on the
  * first visit and handing back the same one on every visit after.
  *

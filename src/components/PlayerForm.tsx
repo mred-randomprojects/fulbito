@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlayerAvatar } from "./PlayerAvatar";
+import { PollVotesPanel } from "./PollVotesPanel";
 import { RatingControl } from "./RatingControl";
 import { createAutosaver } from "@/lib/autosave";
 import { browserClock } from "@/lib/browserClock";
@@ -522,6 +523,12 @@ export function PlayerForm({
               read — an empty table of zeroes on a brand new player says
               nothing and takes up the room the form needs. */}
           {stats.played > 0 && <RecordPanel stats={stats} />}
+
+          {/* What other people said he was worth, next to what you said.
+              Only ever there for a player who already exists — a jugador
+              nuevo has been on no encuesta — and it fetches nothing at all
+              for anybody who never signed in. See `usePollHistory`. */}
+          {player !== undefined && <PollVotesPanel player={draft} />}
 
           <Disclosure
             open={showRoles}

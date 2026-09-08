@@ -193,6 +193,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
 | `lib/crowd.ts` | What a pile of answers says a player is worth, and when there are enough of them |
 | `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, and the same pile turned sideways onto one player |
+| `lib/pollHistory.ts` | Every encuesta ever sent, stacked and read from one player's side |
+| `lib/voteSwarm.ts` | Where each dot lands when a pile of votes is drawn as a little mountain |
 | `lib/superAdmin.ts` | The one address that may see who voted, and that the switch alone is not a permission |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
@@ -202,6 +204,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 | `cloud/firebase.ts` | Whether this build has a cloud at all, and loading the SDK if so |
 | `cloud/polls.ts` | Encuestas in Firestore: sending one out, answering it, reading the answers |
+| `usePollHistory.ts` | Fetching that archive once a session, and whether a dot may carry a name |
 | `cloud/auth.tsx` | Who is signed in, and — separately — whether they agreed to sync |
 | `cloud/syncPrefs.ts` | The account's own yes or no, and deleting the cloud copy; `cloud/prefs.ts` mirrors it locally |
 | `cloud/adminPrefs.ts` | Whether the super admin switch is on in this browser; `useSuperAdmin.ts` reads it against the session |
@@ -213,7 +216,9 @@ and what is still owed on each row),
 under a result panel and a note that are always there), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
-they belong to, and who they will not play with), `SettingsPage` (sync, backup,
+they belong to, who they will not play with, and — once an encuesta has asked
+about them — `PollVotesPanel`, the swarm of everything the room ever voted on
+them), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
 dialog, `InstallPanel` is the offer to install and renders nothing at all when
 there is nothing to offer, `AdminPanel` is the super admin switch and renders
@@ -459,6 +464,37 @@ is where the question actually starts: you notice a median looks wrong and
 so the ends of the range the crowd row already prints are its first and last
 lines, and it counts the ballots that never reached that player rather than
 listing them.
+
+#### The same answers again, on the ficha
+
+`PollVotesPanel` puts every vote a player ever got on his own ficha, as a
+*beeswarm*: one dot per answer, sitting on the number that person actually put,
+and a dot that would overlap its neighbour climbs a row instead of moving
+sideways. So a room that agreed builds a little mountain, and the mountain is
+made of the votes rather than of a bin somebody chose — which matters at a
+hundred steps and ten voters, where a histogram's answer depends mostly on
+where its bin edges happen to fall, filing a 59 and a 61 apart while a 61 and a
+64 share a column. Hover, tap or focus a dot and it says who put it.
+
+Four things it does not get to decide for itself, because a second screen
+quoting different numbers is worse than no second screen:
+
+- **The poll's list is still the authority.** A ballot naming somebody the
+  encuesta never asked about contributes nothing, and that poll is not counted
+  as having asked. Same rule as `aggregateBallots`, and the reason
+  `lib/pollHistory.ts` takes each poll's `order` rather than trusting ballot
+  keys — which is also why `fetchPollPlayerIds` exists: the ids of a poll's
+  list, without the faces the ficha has no use for.
+- **`MIN_VOTERS` is the floor here too**, counted across every poll together.
+  One answer drawn as a dot is one person's opinion read straight off the
+  screen, and a screen that quietly opted out would make the floor a
+  decoration.
+- **Names are the super admin's, exactly as above.** `usePollHistory` only
+  asks for `identities` when the switch is on, and a refusal leaves the same
+  chart with nobody's name on it.
+- **Nothing is fetched for somebody who never signed in**, and the whole
+  archive is fetched once a session rather than once a ficha — the ficha is
+  opened dozens of times a night.
 
 The switch itself (`AdminPanel`, `useSuperAdmin`, `cloud/adminPrefs.ts`) is
 off by default, lives in this browser rather than on the account, and grants
