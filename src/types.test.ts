@@ -284,11 +284,50 @@ describe("the 1–10 to 0–100 migration", () => {
     assert.equal(withPlayer({ ratingScale: RATING_SCALE }).rating, RATING_DEFAULT);
   });
 
+  it("refuses to migrate a number the old scale could never have held", () => {
+    // The bug this exists to stop, and it was a real one. A tab running the
+    // previous build reads a migrated 70, clamps it to its own maximum of 10,
+    // and writes it back with no marker on it. Read as old-scale that becomes
+    // 100 — and so does every other rating, because everything ≥ 10 clamps to
+    // the same place. Ratings were pinned to 1..10 for the whole life of that
+    // scale, so anything above 10 is provably already converted.
+    assert.equal(withPlayer({ rating: 70 }).rating, 70);
+    assert.equal(withPlayer({ rating: 100 }).rating, 100);
+    assert.deepEqual(withPlayer({ roleRatings: { GK: 90 } }).roleRatings, { GK: 90 });
+    assert.deepEqual(withPlayer({ attributes: { pace: 45 } }).attributes, { pace: 45 });
+    // 10 itself stays ambiguous and the marker still decides: it is the top of
+    // the old scale and a real, if dismal, rating on the new one.
+    assert.equal(withPlayer({ rating: 10 }).rating, RATING_MAX);
+    assert.equal(withPlayer({ ratingScale: RATING_SCALE, rating: 10 }).rating, 10);
+  });
+
+  it("is idempotent even with the marker stripped off every time", () => {
+    // Belt and braces: normalisation runs on every load, every merge and every
+    // cloud snapshot, and the marker is the thing most likely to be lost in
+    // transit. Losing it must cost nothing.
+    let player = withPlayer({ rating: 7, roleRatings: { GK: 9 } });
+    for (let i = 0; i < 5; i++) {
+      const { ratingScale: _dropped, ...stripped } = player;
+      player = normalizeAppData({ players: [stripped] }).players[0];
+    }
+    assert.equal(player.rating, 70);
+    assert.deepEqual(player.roleRatings, { GK: 90 });
+  });
+
+  it("will not run a handicap past the old clamp twice either", () => {
+    assert.equal(withMatch({ handicap: 15 }).handicap, 15);
+    assert.equal(withMatch({ handicap: -15 }).handicap, -15);
+    // At or under the old limit the marker still decides.
+    assert.equal(withMatch({ handicap: 3 }).handicap, HANDICAP_LIMIT);
+  });
+
   it("survives a scale marker that is nonsense", () => {
     // Anything that is not the current scale is treated as the old one, which
     // is the safe way to be wrong: the numbers stay in range either way.
     assert.equal(withPlayer({ ratingScale: 7, rating: 6 }).rating, 60);
     assert.equal(withPlayer({ ratingScale: "cien", rating: 6 }).rating, 60);
+    // ...but the range veto still overrules it, marker or no marker.
+    assert.equal(withPlayer({ ratingScale: "cien", rating: 64 }).rating, 64);
   });
 
   it("moves a match's handicap too, because it is in rating points", () => {

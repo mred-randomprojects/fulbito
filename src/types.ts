@@ -507,9 +507,40 @@ export const RATING_DEFAULT = 50;
  */
 export const RATING_SCALE = 100;
 
-/** A rating from a record written on `scale`, brought onto the current one. */
+/**
+ * The top of the scale ratings used to be written on, and the reason a second
+ * migration is impossible rather than merely unlikely.
+ *
+ * `clampRating` pinned every stored number to 1..10 on the way in, for the
+ * whole life of that scale. So a stored value above 10 **cannot** be an
+ * old-scale rating, whatever its record does or does not say about itself.
+ */
+const OLD_RATING_MAX = 10;
+
+/**
+ * A rating from a record written on `scale`, brought onto the current one.
+ *
+ * Two things decide, and the order matters. The marker is the authority — it
+ * is the only thing that can tell an old 8 from a new one. But the *range* is
+ * a veto over it, and that veto is what this function was missing.
+ *
+ * A record whose marker has gone missing gets read as old-scale, and a marker
+ * can go missing for a reason that has nothing to do with the record being
+ * old: any writer that does not know the field exists drops it. That is not
+ * hypothetical. A tab still running the previous build reads a migrated 70,
+ * clamps it to its own maximum of 10, writes it back without a marker, and the
+ * next load multiplies it again — 7 became 70 became 100, for everybody at
+ * once, because every value ≥ 10 clamps to exactly the same place.
+ *
+ * Hence the veto: 1..10 maps onto 10..100 and **never needs clamping**, so a
+ * migration that would clamp is not a migration, it is a number being
+ * destroyed. Refusing it costs nothing real — the only values it declines to
+ * touch are ones the old scale could not have held — and it makes the whole
+ * operation idempotent by construction rather than by bookkeeping.
+ */
 export function toCurrentScale(value: number, scale: number | undefined): number {
   if (scale === RATING_SCALE) return clampRating(value);
+  if (value > OLD_RATING_MAX) return clampRating(value);
   // The only other scale that has ever existed. 1..10 maps onto 10..100, so a
   // 7 becomes a 70 and nobody's roster changes shape — the numbers are the
   // same opinions with a zero on the end.
@@ -534,9 +565,14 @@ export function clampHandicap(value: number): number {
   return Math.min(HANDICAP_LIMIT, Math.max(-HANDICAP_LIMIT, value));
 }
 
+/** The old clamp on `Match.handicap`. Same veto as `toCurrentScale`. */
+const OLD_HANDICAP_LIMIT = 3;
+
 /** A handicap written on `scale`, brought onto the current one. */
 export function toHandicapScale(value: number, scale: number | undefined): number {
-  return scale === RATING_SCALE ? value : value * 10;
+  if (scale === RATING_SCALE) return value;
+  if (Math.abs(value) > OLD_HANDICAP_LIMIT) return value;
+  return value * 10;
 }
 
 /* ------------------------------------------------------------------ */
