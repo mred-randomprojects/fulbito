@@ -257,7 +257,7 @@ function EmptyRoster({ onAdd }: { onAdd: () => void }) {
       <Users className="mx-auto mb-3 h-10 w-10 text-muted-foreground/60" />
       <h2 className="text-lg font-medium">Todavía no hay nadie</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Cargá a todos los que van. Con el nombre y un nivel del 1 al 10 ya
+        Cargá a todos los que van. Con el nombre y un nivel del 0 al 100 ya
         arrancás; los puestos y los atributos vienen después, y solo para los
         que de verdad mueven la aguja.
       </p>
@@ -269,7 +269,7 @@ function EmptyRoster({ onAdd }: { onAdd: () => void }) {
         <ul className="space-y-1.5 text-left text-xs text-muted-foreground">
           <li className="flex items-start gap-2">
             <Star className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" />
-            Poné el 1 al 10 a ojo. Ser parejo con el criterio importa mucho
+            Poné el nivel del 0 al 100 a ojo. Ser parejo con el criterio importa mucho
             más que ser exacto.
           </li>
           <li className="flex items-start gap-2">

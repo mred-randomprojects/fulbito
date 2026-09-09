@@ -1,5 +1,6 @@
 import {
   RATING_MAX,
+  RATING_MIN,
   ROLES,
   ROLE_LABELS,
   ROLE_LABELS_PLURAL,
@@ -14,22 +15,28 @@ export interface BalanceSummary {
   /** Signed strength edge of A over B, in rating points per player. */
   edge: number;
   verdict: Verdict;
-  /** "A" when team A is favoured, "B" when B is, null when it is a coin flip. */
+  /** Favoured relative to the requested handicap; null inside the even band. */
   favoured: "A" | "B" | null;
-  /** 0..100, how even the game looks. 100 = dead level. */
+  /** 0..100 balance index, not a win probability. 100 = dead level. */
   fairness: number;
   /** Mean evidence behind the two ratings, 0..1. */
   confidence: number;
 }
 
 /**
- * Thresholds are in rating points per player on the 0–100 scale. A point and a
- * half per player is noise; four and a half per player is a team you can feel
- * losing to.
+ * Conservative product heuristics, not measured match-outcome probabilities.
+ * On the 0–100 scale, gaps below 5 points per player are effectively even;
+ * 5 starts a slight advantage, 10 a clear one, and 20 a lopsided matchup.
+ * Keep every rating-gap threshold relative to the range, including the more
+ * specific observations below. Confidence and weighting fractions are separate.
  */
-const SLIGHT = 1.5;
-const CLEAR = 4.5;
-const LOPSIDED = 9;
+const RATING_RANGE = RATING_MAX - RATING_MIN;
+const SLIGHT = RATING_RANGE * 0.05;
+const CLEAR = RATING_RANGE * 0.1;
+const LOPSIDED = RATING_RANGE * 0.2;
+const LINE_GAP = RATING_RANGE * 0.06;
+const SPREAD_GAP = RATING_RANGE * 0.055;
+const STAR_GAP = RATING_RANGE * 0.08;
 
 /**
  * The word for a gap of this size, in rating points per player.
@@ -193,11 +200,12 @@ export function insights(
   if (handicap !== 0) {
     const target = handicap > 0 ? nameA : nameB;
     const hit = Math.abs(summary.edge - handicap) < SLIGHT;
+    const actual = summary.edge === 0
+      ? "quedaron iguales"
+      : `${summary.edge > 0 ? nameA : nameB} quedaron arriba por ${Math.abs(summary.edge).toFixed(1)} puntos por jugador`;
     out.push({
       side: "none",
-      text: hit
-        ? `Ventaja aplicada: ${target} quedaron arriba por ${Math.abs(handicap).toFixed(1)} por jugador, como pediste.`
-        : `Pediste ${Math.abs(handicap).toFixed(1)} de ventaja por jugador para ${target}, pero lo mejor que se consigue es ${Math.abs(summary.edge).toFixed(1)}.`,
+      text: `Pediste ${Math.abs(handicap).toFixed(1)} puntos de ventaja por jugador para ${target}; ${actual}. ${hit ? "Quedó cerca de lo pedido." : "Este reparto se aleja de lo pedido."}`,
     });
   }
 
@@ -212,7 +220,7 @@ export function insights(
     .sort((x, y) => Math.abs(y.gap) - Math.abs(x.gap));
 
   for (const entry of lineGaps.slice(0, 2)) {
-    if (Math.abs(entry.gap) < 0.6) continue;
+    if (Math.abs(entry.gap) < LINE_GAP) continue;
     const stronger = entry.gap > 0 ? nameA : nameB;
     out.push({
       side: entry.gap > 0 ? "A" : "B",
@@ -224,7 +232,7 @@ export function insights(
   }
 
   const spreadGap = a.spread - b.spread;
-  if (Math.abs(spreadGap) > 0.55) {
+  if (Math.abs(spreadGap) > SPREAD_GAP) {
     const topHeavy = spreadGap > 0 ? nameA : nameB;
     const even = spreadGap > 0 ? nameB : nameA;
     out.push({
@@ -234,7 +242,7 @@ export function insights(
   }
 
   const starGap = a.best - b.best;
-  if (Math.abs(starGap) > 0.8) {
+  if (Math.abs(starGap) > STAR_GAP) {
     const withStar = starGap > 0 ? nameA : nameB;
     out.push({
       side: starGap > 0 ? "A" : "B",

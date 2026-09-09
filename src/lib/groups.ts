@@ -184,8 +184,8 @@ export interface GroupingRequest {
  * the only way a hand-swapped split can keep showing honest numbers.
  *
  * It computes the same three figures `findGroupSplits` puts on every option,
- * from the same functions, so a `worstGap` of 0.3 means what it has always
- * meant. `groups.test.ts` checks the two agree on a split the search itself
+ * from the same functions, so a `worstGap` of 3 rating points per player means
+ * the same on both paths. `groups.test.ts` checks they agree on a split the search itself
  * produced, because two ways of scoring the same thing is exactly the sort of
  * pair that drifts apart quietly.
  */

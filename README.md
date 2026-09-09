@@ -26,11 +26,15 @@ any other app, full screen and with no signal needed.
 - **A roster you build once.** Name, photo, and one overall rating per player.
   That is a complete player — everything else is optional.
 - **Detail where you actually have an opinion.** Add a position rating for the
-  6 outfield who is a 9 in goal; add attributes for the one who is quick but
+  60 outfield who is a 90 in goal; add attributes for the one who is quick but
   cannot finish. Missing data never costs a player anything.
 - **Balanced teams, worked out properly.** For the squad sizes this is built
   for, *every* legal split is checked and scored — not shuffled until it looks
   close. Six genuinely different options, none of them a mirror of another.
+- **Balance labels on the 0–100 scale.** Less than 5 points per player
+  reads as effectively even; slight, clear and lopsided advantages start at 5,
+  10 and 20. The gauge and verdict use the same colour. These are practical
+  heuristics, not measured probabilities of winning.
 - **Teams that live between games.** Los Pibes against the ones from the
   laburo, week after week. Save each side once and the match screen brings both
   in at a tap: it anota the two planteles, sizes the sides, picks a shape that
@@ -139,12 +143,10 @@ Every player has one overall rating, and that is the floor of what is known.
 - A **position rating**, where set, moves the player decisively in that position
   (70% of the way) while keeping the overall rating as a prior.
 - **Attributes** then nudge the result, in proportion to how many are filled in.
-  Nothing filled in means no nudge, so a bare player is worth exactly their
-  overall rating.
-- Putting an **unrated player in goal** costs them a point. Goalkeeping is the
-  one position general ability does not imply. Because every side fields exactly
-  one keeper, this cancels out when nobody is rated — it only bites when
-  comparing a known keeper against a guess.
+  Nothing filled in means no attribute nudge.
+- An **unrated player's goalkeeping** moves 60% of the way from their overall
+  rating towards 55. General ability does not imply goalkeeping ability, so
+  an explicit goalkeeper rating replaces this estimate.
 
 A team is scored at its **best possible arrangement** — found exactly, by
 bitmask DP over the formation's slots — so a specialist keeper only counts if
@@ -155,13 +157,13 @@ gap between each side's best player. Below roughly 8-a-side every combination is
 enumerated; above that it falls back to multi-start local search and says so.
 
 Splitting into **three or more teams** scores every pair of teams and averages
-it — over two teams that is exactly the same number, so a gap of 0.3 a player
+it — over two teams that is exactly the same number, so a gap of 3 points a player
 means the same thing on both screens. Twelve into three fours is enumerated
 whole; twenty into four fives is half a billion partitions after symmetry, so
 that falls back to local search and says so.
 
-Two people who would rather not share a side cost the split a hundred points a
-pair — far more than any imbalance two teams can produce — so it reads as a hard
+Two people who would rather not share a side cost the split 1,000 points a
+pair — far more than any imbalance under the default weights — so it reads as a hard
 rule wherever one is satisfiable, and as "the least bad of a bad set" when three
 people all avoid each other. A lock still beats it: pins are the hard constraint.
 

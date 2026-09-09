@@ -513,7 +513,7 @@ export function PlayerForm({
               label="Nivel general"
               hint={`El único número del que no se puede zafar. ${describeOverall(draft.rating)}`}
               value={draft.rating}
-              onChange={(value) => update({ rating: value ?? 6 })}
+              onChange={(value) => update({ rating: value ?? draft.rating })}
             />
             <ScaleLegend />
           </div>

@@ -60,7 +60,9 @@ export function TeamInsights({
             </p>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {summary.favoured == null ? (
-                "Ninguno de los dos saca ventaja real."
+                handicap === 0
+                  ? "Ninguno de los dos saca ventaja real."
+                  : "El reparto quedó cerca de la ventaja que pediste."
               ) : (
                 <>
                   <span className="font-medium text-foreground">
@@ -70,12 +72,12 @@ export function TeamInsights({
                   <span className="tabular font-medium text-foreground">
                     {Math.abs(summary.edge - handicap).toFixed(1)}
                   </span>{" "}
-                  puntos por jugador.
+                  puntos por jugador{handicap === 0 ? "." : " respecto a la ventaja pedida."}
                 </>
               )}
             </p>
           </div>
-          <FairnessDial value={summary.fairness} />
+          <FairnessDial value={summary.fairness} tone={verdictTone} />
         </div>
 
         <div className="mt-4 flex items-center gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
@@ -244,16 +246,18 @@ function CompareRow({
 }
 
 /** Circular gauge for the headline fairness number. */
-function FairnessDial({ value }: { value: number }) {
+function FairnessDial({ value, tone }: { value: number; tone: string }) {
   const radius = 26;
   const circumference = 2 * Math.PI * radius;
   const dash = (value / 100) * circumference;
-  const stroke =
-    value >= 85 ? "hsl(142 72% 45%)" : value >= 55 ? "hsl(45 90% 55%)" : "hsl(0 72% 55%)";
-
   return (
-    <div className="relative h-16 w-16 shrink-0">
-      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
+    <div
+      className="relative h-16 w-16 shrink-0"
+      role="img"
+      aria-label={`Equilibrio: ${value} de 100. Es un índice, no una probabilidad de ganar.`}
+      title="Índice de equilibrio de 0 a 100, no una probabilidad de ganar."
+    >
+      <svg viewBox="0 0 64 64" className={cn("h-16 w-16 -rotate-90", tone)} aria-hidden="true">
         <circle
           cx="32"
           cy="32"
@@ -267,7 +271,7 @@ function FairnessDial({ value }: { value: number }) {
           cy="32"
           r={radius}
           fill="none"
-          stroke={stroke}
+          stroke="currentColor"
           strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray={`${dash} ${circumference}`}

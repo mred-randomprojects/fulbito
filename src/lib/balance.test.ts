@@ -606,11 +606,13 @@ describe("findSplits with avoid preferences", () => {
   it("outweighs balance when the two genuinely pull against each other", () => {
     // A 2 v 2 where one star will not play alongside either of the weak
     // players, so the only split that keeps everybody happy is the lopsided
-    // one: both tens on a side, both twos on the other. Separating the stars
-    // is worth about eight points here, and a broken preference costs a
-    // hundred, so the preference has to win — that ratio is the whole design.
+    // one: both 100s on a side, both 0s on the other. Explicit role ratings
+    // avoid shrinking the gap in goal. The balance cost exceeds the old
+    // 100-point penalty, but keeping people apart must still win.
     const teamOf2 = defaultFormation(2);
-    const players = [player(100), player(100), player(20), player(20)];
+    const players = [100, 100, 0, 0].map((rating) => player(rating, {
+      roleRatings: { GK: rating, DEF: rating, MID: rating, FWD: rating },
+    }));
     const [starA, starB, weakA, weakB] = players;
     starA.avoid = [weakA.id, weakB.id];
 

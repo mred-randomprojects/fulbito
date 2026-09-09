@@ -1,5 +1,5 @@
 import type { Player, PlayerId, Role, TeamKey, BalanceBasis } from "../types.js";
-import { ROLES } from "../types.js";
+import { RATING_MAX, RATING_MIN, ROLES } from "../types.js";
 import { effectiveRating } from "./rating.js";
 import { EMPTY_AVOID_INDEX, keepApart, type AvoidIndex } from "./avoid.js";
 import type { Formation } from "./formations.js";
@@ -29,7 +29,7 @@ export const MAX_EXACT_ASSIGNMENT = 10;
 
 /**
  * Per rating point, the nudge applied for standing in a position you were
- * explicitly rated for. At most 0.002 a slot — far below any real difference,
+ * explicitly rated for. At most 0.02 a slot — far below any real difference,
  * so it only ever separates arrangements that are otherwise identical. The
  * chosen lineup is re-scored without it, so it never reaches a displayed
  * number.
@@ -76,7 +76,7 @@ export function bestAssignment(
 
   // Arrangements tie surprisingly often — swapping two players who are equally
   // hurt by being out of position changes nothing — and an arbitrary winner is
-  // how a forward rated 10 up front ends up in midfield. `value` adds a
+  // how a forward rated 100 up front ends up in midfield. `value` adds a
   // hair's-breadth preference for putting the best-rated specialist in each
   // position, which decides those coin flips and nothing else.
   const value: number[][] = base.map((row, slot) =>
@@ -402,14 +402,14 @@ export class SplitError extends Error {}
  * What one unseparated pair costs a split.
  *
  * Everything else in `balanceCost` is measured in rating points per player, and
- * the worst imaginable imbalance — a team of tens against a team of ones, every
- * line lopsided — comes to under twenty. A hundred a pair therefore behaves as
+ * even teams of 100s against 0s cost only a few hundred with the default weights.
+ * Ten rating ranges (1,000 on the 0–100 scale) per pair therefore behaves as
  * a hard rule wherever one is satisfiable, while still being a *number*: when
  * three people all avoid each other and two of them must share a side no matter
  * what, the search keeps ranking by balance among the splits that break the
  * fewest preferences, instead of throwing up its hands.
  */
-export const AVOID_PENALTY = 100;
+export const AVOID_PENALTY = 10 * (RATING_MAX - RATING_MIN);
 
 /** Rough operation budget for exhaustive enumeration, tuned to stay under ~250ms. */
 const OPS_BUDGET = 40_000_000;

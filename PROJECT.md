@@ -100,6 +100,21 @@ enters the app without going through `normalizeAppData` — a hand-edited
   `RATING_DEFAULT` in `types.ts` are the only place the ends are written down;
   anything comparing a rating to a bare literal is a bug waiting for the next
   change of mind.
+- **Balance commentary uses the same scale as the ratings.** `lib/insights.ts`
+  treats a gap below 5 points per player as even, 5–under 10 as slight,
+  10–under 20 as clear, and 20 or more as lopsided. These are conservative
+  product heuristics, not calibrated predictions. Two-team and multi-team
+  verdicts share those thresholds, expressed as fractions of the rating range.
+  Position warnings start at 6 points; spread and star warnings require more
+  than 5.5 and 8 respectively. The balance index falls linearly from 100 at
+  zero deviation to 0 at 20; it is not a win probability. Its dial takes the
+  verdict's colour, rather than using separate thresholds. A handicap shifts
+  the target; commentary reports the actual edge and the side that has it.
+- **Keep-apart penalties scale with rating costs.** `AVOID_PENALTY` is ten
+  rating ranges (1,000 currently) per conflicting pair, shared by the two-team
+  and multi-team searches. It must outweigh a full-range imbalance under the
+  default weights. A penalty left at 100 could favour balancing over a
+  satisfiable preference.
 - **`Player.ratingScale` / `Match.ratingScale`** — which scale that record's
   numbers were written on, and the whole of the migration. **Absent means
   1–10.** It has to be a marker rather than a heuristic because a number cannot

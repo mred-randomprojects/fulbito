@@ -741,7 +741,7 @@ export function MatchBuilder({
 
                   {/* Only ever appears when the split genuinely could not keep a pair
                       apart, or when someone put them together by hand. The optimiser
-                      pays a hundred points a pair, so a solvable one never gets
+                      pays a thousand points a pair, so a solvable one never gets
                       here. */}
                   {lineupConflicts.length > 0 && (
                     <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">

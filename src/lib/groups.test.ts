@@ -404,20 +404,23 @@ describe("findGroupSplits — pins and avoids", () => {
   });
 
   it("pays the avoid penalty ahead of any balance gain", () => {
-    // Splitting the pair costs some balance, and the search should take that
-    // trade every time: one conflict is worth a hundred points.
-    const a = player(10, {});
-    const b = player(10, { avoid: [a.id] });
-    const players = [a, b, player(1), player(1), player(1), player(1)];
+    // One star avoids every weak player, so the clean split is lopsided.
+    // Full-range role ratings make this a regression for the old penalty of 100.
+    const players = [100, 100, 0, 0, 0, 0].map((rating) => player(rating, {
+      roleRatings: { GK: rating, DEF: rating, MID: rating, FWD: rating },
+    }));
+    players[0].avoid = players.slice(2).map((p) => p.id);
+    for (const sizes of [[2, 2], [2, 2, 2]]) {
+      const selected = players.slice(0, sizes.length * 2);
+      const result = findGroupSplits({
+        players: selected,
+        sizes,
+        basis: "total",
+        avoid: buildAvoidIndex(selected),
+      });
 
-    const result = findGroupSplits({
-      players,
-      sizes: [2, 2, 2],
-      basis: "total",
-      avoid: buildAvoidIndex(players),
-    });
-
-    assert.equal(result.options[0].conflicts, 0);
+      assert.equal(result.options[0].conflicts, 0);
+    }
   });
 });
 

@@ -6,9 +6,8 @@
  *
  * Three decisions, and the first is the one everything else hangs off:
  *
- * 1. **Median, not average.** One person who puts a 2 on somebody out of
- *    spite — or who reads the scale upside down — moves an average of five
- *    votes by more than a point. It moves the median by nothing. This is also
+ * 1. **Median, not average.** One person who puts a 20 when the other four
+ *    vote 80 drags the average down to 68; the median stays at 80. This is also
  *    what makes it safe to leave a player rating themselves in the list: it is
  *    one vote among several, and the middle of the pile does not care.
  * 2. **The floor is per field, not per player.** Five people can have an

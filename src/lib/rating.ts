@@ -12,7 +12,7 @@ import {
  * How much an explicit role rating displaces the overall rating when the
  * player is used in that role. 0 = ignore the role rating, 1 = trust it
  * completely. 0.7 keeps the overall rating as a prior without letting it
- * water down a deliberate "he's a 9 in goal".
+ * water down a deliberate "he's a 90 in goal".
  */
 export const ROLE_TRUST = 0.7;
 
@@ -95,11 +95,11 @@ export const ROLE_ATTRIBUTE_WEIGHTS: Record<
  * Dribbling is the one attribute whose value depends entirely on what happens
  * next. Beating two men and then finding the striker wins the game; beating
  * two men and then trying a third until you lose it hands the ball back, and
- * you did it while nine people stood still. So a 10 in gambeta from someone
- * who never releases the ball is not a 10 the team ever gets to use.
+ * you did it while nine people stood still. So a 100 in gambeta from someone
+ * who never releases the ball is not a 100 the team ever gets to use.
  *
  * 0.3 is the share that survives at the bottom of the scale, which is to say:
- * a 10 who never passes is a 3. That number is not from a model, it is the
+ * a 100 who never passes is a 30. That number is not from a model, it is the
  * exchange rate the person who asked for this attribute named, and it matches
  * what watching one of them for an hour feels like.
  */
@@ -243,7 +243,7 @@ export function detailLevel(player: Player): {
 /**
  * The role a player is genuinely better in than they are generally, or null.
  *
- * Only a rating at or above the overall counts. A player rated 8 who is a 3 in
+ * Only a rating at or above the overall counts. A player rated 80 who is a 30 in
  * goal has said something important — but "goalkeeper" is the opposite of what
  * it says, and labelling them one would be worse than saying nothing.
  */
