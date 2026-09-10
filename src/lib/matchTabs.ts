@@ -1,11 +1,12 @@
 /**
  * The tabs across the top of a match, and what each one has to say.
  *
- * A match is four different jobs — see who is on the pitch, pick who came,
- * set the sizes and kits, chase the money — and on a phone they used to be
- * one column you scrolled through, with the money at the very bottom. Tabs
- * put each job one tap away, which only works if the tabs themselves say
- * enough that you know which one to tap without visiting all four.
+ * A match is five different jobs — see who is on the pitch, pick who came,
+ * set the sizes and kits, write down how each of them went, chase the money —
+ * and on a phone they used to be one column you scrolled through, with the
+ * money at the very bottom. Tabs put each job one tap away, which only works
+ * if the tabs themselves say enough that you know which one to tap without
+ * visiting all five.
  *
  * So each tab carries two optional signals, and the whole reason this is a
  * module rather than an array literal in the component is that deciding when
@@ -26,10 +27,19 @@
  * 4. **The size warning belongs on the tab where you fix it.** Sizes live in
  *    Ajustes, so that is where the dot goes, even though the banner
  *    explaining the greyed-out "armar" button stays next to the button.
+ * 5. **Nothing is ever missing from the uno x uno.** Most nights nobody
+ *    writes one, and that is the normal state rather than a job left half
+ *    done — so the badge counts what is there and never says what is not,
+ *    and there is no dot. "3/12" would turn an empty box into a chore, which
+ *    is the same mistake decision 2 refuses to make about the cancha.
+ *
+ * The order is the order of the night, which is why the uno x uno sits
+ * between Ajustes and Pagos rather than on the end: it and the money are both
+ * afterwards jobs, and it is the one you do first.
  */
 
-/** The four jobs, in the order they appear. */
-export type MatchTabId = "cancha" | "jugadores" | "ajustes" | "pagos";
+/** The five jobs, in the order they appear. */
+export type MatchTabId = "cancha" | "jugadores" | "ajustes" | "unoxuno" | "pagos";
 
 export interface MatchTab {
   id: MatchTabId;
@@ -54,6 +64,8 @@ export interface MatchTabsInput {
   conflictCount: number;
   /** `sizeA + sizeB - squadSize`; anything but 0 blocks the split. */
   sizeMismatch: number;
+  /** How many of tonight's players have something written about them. */
+  reviewCount: number;
   /** What the pitch cost. 0 until somebody says. */
   courtCost: number;
   /** How many are chipping in, i.e. the squad minus the comped ones. */
@@ -68,6 +80,7 @@ export function matchTabs({
   benchCount,
   conflictCount,
   sizeMismatch,
+  reviewCount,
   courtCost,
   payers,
   paidCount,
@@ -96,6 +109,15 @@ export function matchTabs({
       badge: null,
       // Decision 4.
       alert: sizeMismatch !== 0,
+    },
+    {
+      id: "unoxuno",
+      // The Argentinian sports-press name for exactly this: the write-up of
+      // each player, one by one, after the game.
+      label: "Uno x uno",
+      // Decision 5.
+      badge: reviewCount > 0 ? String(reviewCount) : null,
+      alert: false,
     },
     {
       id: "pagos",

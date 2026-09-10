@@ -8,6 +8,7 @@
  */
 
 import { clampCourtCost, type PaymentBook } from "./lib/court.js";
+import type { ReviewBook } from "./lib/reviews.js";
 import { normalizeTagList } from "./lib/tags.js";
 import { byMatchOrder } from "./lib/matchOrder.js";
 
@@ -336,6 +337,17 @@ export interface Match {
    * out instead. `lib/matchNotes.ts` is the only thing that reads this.
    */
   notes: string;
+  /**
+   * El uno x uno: one free-text line per player about how *they* went, keyed
+   * by who it is about. Absent means nothing written about that one.
+   *
+   * On the match rather than on the player because it is a fact about a night
+   * and not about a person — one bad Thursday is not a downgrade, and
+   * `Player.notes` is where the standing opinion lives. Stored exactly as
+   * typed, for the same reason `notes` above is. `lib/reviews.ts` is the only
+   * thing that reads this.
+   */
+  reviews: ReviewBook;
   updatedAt: string;
 }
 
@@ -720,6 +732,23 @@ function normalizePayments(value: unknown): PaymentBook {
   return out;
 }
 
+/**
+ * Stored uno x uno lines.
+ *
+ * Anything that is not a string is dropped rather than coerced: `String(null)`
+ * would put the word "null" in somebody's box, and a review nobody wrote is
+ * exactly what "absent" already means. `""` is dropped for the same reason
+ * `setReview` drops it — it is the absent state wearing a key.
+ */
+function normalizeReviews(value: unknown): ReviewBook {
+  const out: ReviewBook = {};
+  if (!isRecord(value)) return out;
+  for (const [key, review] of Object.entries(value)) {
+    if (typeof review === "string" && review !== "") out[key as PlayerId] = review;
+  }
+  return out;
+}
+
 export const DEFAULT_TEAM_A: TeamConfig = {
   name: "Claros",
   kit: "light",
@@ -789,6 +818,9 @@ function normalizeMatch(raw: unknown): Match | null {
     // Absent on any match saved before notes existed, which is the same state
     // as a match nobody has written anything on.
     notes: str(raw.notes),
+    // Absent on any match saved before the uno x uno existed, which is the
+    // same state as a match nobody has written one on.
+    reviews: normalizeReviews(raw.reviews),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
 }

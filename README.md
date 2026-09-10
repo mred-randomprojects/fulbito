@@ -102,10 +102,17 @@ any other app, full screen and with no signal needed.
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.
 - **Notas del partido.** One free-text box on every match, sitting with the
-  score and above the four tabs rather than buried in one of them: quién trajo
+  score and above the five tabs rather than buried in one of them: quién trajo
   la pelota, quién se lesionó, por qué el 8-1 no cuenta. The first line of it
   shows on the list of partidos, so what you wrote down is there without
   opening anything. Nothing to save — the box is the note.
+- **El uno x uno.** A box per player on every match, for how each of them
+  actually went: "no cruzó la mitad", "de 5 es otro jugador". It reads side by
+  side — each one under the shirt they played in, in the order the formation
+  put them — because that is how you remember a game. It stays on the match it
+  was written on, so a bad Thursday is a bad Thursday and not a downgrade, and
+  it never leaves: not the text for the group chat, not either PNG, not
+  anybody's rating.
 - **Who paid the cancha, and who is still owing.** Put in what the pitch cost
   and it works out what each one puts. Bancar somebody is one extra tap: they
   come out of the reparto and the rest cover it, so a fútbol 5 with one on the
@@ -263,6 +270,14 @@ no secrets.
 - **Head-to-head history.** Each player has a record; pairs do not. "Wins 80% of
   the time he is on your side" is the obvious next thing to read off the same
   matches.
+- **The uno x uno from the player's side.** Every line lives on the match it
+  was written on, and that is the only place it shows. Stacking somebody's own
+  across every match onto their ficha is the obvious next step, and needs
+  nothing new stored.
+- **Asking the group how the game went.** An encuesta asks what a player is
+  worth, in numbers, once. There is nothing that asks what people thought of a
+  particular night, and nowhere for anonymous comments about a match to be read
+  by the people who played it.
 - **Anything that moves money.** No alias, no QR, no payment link. The app says
   who owes what; the transfer happens where it always happened.
 - **Ratings that learn from results.** The 0-100 numbers stay hand-entered, or

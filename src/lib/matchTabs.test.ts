@@ -9,6 +9,7 @@ const BASE: MatchTabsInput = {
   benchCount: 10,
   conflictCount: 0,
   sizeMismatch: 0,
+  reviewCount: 0,
   courtCost: 0,
   payers: 10,
   paidCount: 0,
@@ -21,10 +22,10 @@ function tab(input: Partial<MatchTabsInput>, id: MatchTabId): MatchTab {
 }
 
 describe("matchTabs", () => {
-  it("always offers the same four, in order", () => {
+  it("always offers the same five, in the order of the night", () => {
     assert.deepEqual(
       matchTabs(BASE).map((t) => t.id),
-      ["cancha", "jugadores", "ajustes", "pagos"],
+      ["cancha", "jugadores", "ajustes", "unoxuno", "pagos"],
     );
   });
 
@@ -94,5 +95,23 @@ describe("the money badge", () => {
     const pagos = tab({ courtCost: 30000, payers: 0, paidCount: 0 }, "pagos");
     assert.equal(pagos.badge, null);
     assert.equal(pagos.alert, false);
+  });
+});
+
+describe("the uno x uno", () => {
+  it("says nothing on a match nobody has written one on", () => {
+    // Decision 5. Most nights nobody writes one, and that is the normal state
+    // rather than a job half done — "0/10" would turn it into a chore, which
+    // is the mistake decision 2 refuses to make about the cancha.
+    assert.equal(tab({ reviewCount: 0 }, "unoxuno").badge, null);
+  });
+
+  it("counts what is written, and only what is written", () => {
+    assert.equal(tab({ reviewCount: 3, squadSize: 12 }, "unoxuno").badge, "3");
+  });
+
+  it("never asks for attention", () => {
+    assert.equal(tab({ reviewCount: 0 }, "unoxuno").alert, false);
+    assert.equal(tab({ reviewCount: 9 }, "unoxuno").alert, false);
   });
 });

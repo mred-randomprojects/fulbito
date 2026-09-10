@@ -48,6 +48,7 @@ export default function App() {
       courtCost: 0,
       payments: {},
       notes: "",
+      reviews: {},
       updatedAt: new Date().toISOString(),
     };
     app.saveMatch(match);

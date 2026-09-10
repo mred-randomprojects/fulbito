@@ -20,6 +20,7 @@ import { MatchSetup } from "./MatchSetup";
 import { CourtPanel } from "./CourtPanel";
 import { ResultPanel } from "./ResultPanel";
 import { MatchNotes } from "./MatchNotes";
+import { ReviewsPanel } from "./ReviewsPanel";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { TeamInsights } from "./TeamInsights";
@@ -35,6 +36,7 @@ import { computeStats } from "@/lib/stats";
 import { nextPaymentState, splitCourt } from "@/lib/court";
 import { matchTabs, type MatchTabId } from "@/lib/matchTabs";
 import { hasNote } from "@/lib/matchNotes";
+import { countReviews, reviewOrder, setReview } from "@/lib/reviews";
 import { pickKit } from "@/lib/kits";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
@@ -262,6 +264,14 @@ export function MatchBuilder({
       patch({ payments });
     },
     [match.payments, patch],
+  );
+
+  /** One line of the uno x uno. Emptying the box takes the key with it — see `lib/reviews.ts`. */
+  const writeReview = useCallback(
+    (id: PlayerId, review: string) => {
+      patch({ reviews: setReview(match.reviews, id, review) });
+    },
+    [match.reviews, patch],
   );
 
   /**
@@ -568,12 +578,28 @@ export function MatchBuilder({
     [match.courtCost, match.payments, squadPlayers],
   );
 
+  /**
+   * The uno x uno, side by side. Built from the *stored* lineups rather than
+   * from the resolved ones, so it is the same question `lib/reviews.ts` is
+   * tested on — the resolution to people happens in the panel.
+   */
+  const reviewGroups = useMemo(
+    () =>
+      reviewOrder({
+        squad: match.squad,
+        lineupA: match.lineupA,
+        lineupB: match.lineupB,
+      }),
+    [match.squad, match.lineupA, match.lineupB],
+  );
+
   const tabs = matchTabs({
     squadSize: match.squad.length,
     hasLineup,
     benchCount: unassigned.length,
     conflictCount: lineupConflicts.length,
     sizeMismatch: mismatch,
+    reviewCount: countReviews(match.reviews, match.squad),
     courtCost: match.courtCost,
     payers: courtSplit.payers,
     paidCount: courtSplit.paidCount,
@@ -866,6 +892,20 @@ export function MatchBuilder({
                   onBasisChange={(basis) => patch({ basis })}
                   onRespectAvoidsChange={(respectAvoids) => patch({ respectAvoids })}
                   onHandicapChange={(handicap) => patch({ handicap })}
+                />
+              </div>
+            )}
+
+            {tab === "unoxuno" && (
+              <div className="mx-auto w-full max-w-3xl">
+                <ReviewsPanel
+                  groups={reviewGroups}
+                  playersById={playersById}
+                  teamA={match.teamA}
+                  teamB={match.teamB}
+                  reviews={match.reviews}
+                  onChange={writeReview}
+                  onViewPlayer={form.view}
                 />
               </div>
             )}

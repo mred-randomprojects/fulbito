@@ -113,6 +113,36 @@ describe("normalizing the note", () => {
   });
 });
 
+describe("normalizing the uno x uno", () => {
+  it("has nothing written on a match saved before it existed", () => {
+    assert.deepEqual(withMatch({}).reviews, {});
+  });
+
+  it("keeps the lines exactly as they were typed", () => {
+    assert.deepEqual(withMatch({ reviews: { p1: "  no cruzó la mitad  " } }).reviews, {
+      p1: "  no cruzó la mitad  ",
+    });
+  });
+
+  it("drops anything that is not a string rather than coercing it", () => {
+    // `String(null)` would put the word "null" in somebody's box, and a review
+    // nobody wrote is exactly what "absent" already means.
+    assert.deepEqual(
+      withMatch({ reviews: { p1: "bien", p2: 7, p3: null, p4: { a: 1 } } }).reviews,
+      { p1: "bien" },
+    );
+  });
+
+  it("drops an empty line, which is the absent state wearing a key", () => {
+    assert.deepEqual(withMatch({ reviews: { p1: "" } }).reviews, {});
+  });
+
+  it("survives a reviews field that is not a record", () => {
+    assert.deepEqual(withMatch({ reviews: ["bien"] }).reviews, {});
+    assert.deepEqual(withMatch({ reviews: "bien" }).reviews, {});
+  });
+});
+
 describe("normalizing the cancha", () => {
   it("has no price and owes nobody on a match saved before it existed", () => {
     assert.equal(withMatch({}).courtCost, 0);
