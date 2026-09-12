@@ -21,10 +21,11 @@ const PLACEHOLDER = "Anotá algo: cómo estuvo, quién trajo la pelota…";
  * sentence explaining what happened, and it has to be there whichever of the
  * four jobs you came back for.
  *
- * It is about the *game*. What each of them did is the uno x uno, which is a
- * tab — see `ReviewsPanel` — because it is a box per player rather than a
- * sentence, and because it is a thing you write once afterwards rather than
- * the line you want in front of you whichever tab you came back for.
+ * It is about the *game*. What each of them did is the uno x uno, which lives
+ * behind a tap on the player on the cancha — see `PitchPlayerCard` — because
+ * it is a box per player rather than a sentence, and a thing you write looking
+ * at him rather than the line you want in front of you whichever tab you came
+ * back for.
  *
  * There is no edit mode and no save button, in a screen where nothing else has
  * one either: the box is the note. Empty, it is a dashed line with a

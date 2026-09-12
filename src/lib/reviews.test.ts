@@ -1,21 +1,30 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  countReviews,
-  reviewOrder,
+  hasReview,
+  reviewHistory,
+  reviewOf,
   setReview,
-  writtenReviews,
   type ReviewBook,
+  type ReviewedMatch,
 } from "./reviews.js";
-import type { PlayerId } from "../types.js";
+import type { MatchId, PlayerId } from "../types.js";
 
 const id = (s: string) => s as PlayerId;
 const A = id("a");
 const B = id("b");
-const C = id("c");
-const D = id("d");
 
 const book = (entries: Record<string, string>): ReviewBook => ({ ...entries }) as ReviewBook;
+
+function match(
+  mid: string,
+  date: string,
+  squad: PlayerId[],
+  reviews: Record<string, string>,
+  name = "Picado",
+): ReviewedMatch {
+  return { id: mid as MatchId, name, date, squad, reviews: book(reviews) };
+}
 
 describe("writing a review", () => {
   it("keeps the text exactly as it was typed", () => {
@@ -35,8 +44,8 @@ describe("writing a review", () => {
     // Somebody who typed a word and deleted it leaves `"  "` behind. It stays
     // — see above — and `hasNote` is what stops it counting.
     const next = setReview({}, A, "  ");
-    assert.equal(next[A], "  ");
-    assert.equal(countReviews(next, [A]), 0);
+    assert.equal(reviewOf(next, A), "  ");
+    assert.equal(hasReview(next, A), false);
   });
 
   it("leaves everybody else alone", () => {
@@ -51,98 +60,55 @@ describe("writing a review", () => {
     setReview(before, A, "dos");
     assert.equal(before[A], "uno");
   });
-});
 
-describe("counting what is written", () => {
-  it("counts only people who are playing tonight", () => {
-    // Decision 1: the same rule `splitCourt` applies to the money — the
-    // numbers on screen are about the people on screen.
-    assert.equal(countReviews(book({ a: "uno", z: "de otro partido" }), [A]), 1);
-  });
-
-  it("keeps a review for somebody taken off the list", () => {
-    // Unticking a name by mistake must not cost the paragraph: it stops
-    // counting, it does not disappear.
-    const stored = book({ a: "no cruzó la mitad" });
-    assert.equal(countReviews(stored, []), 0);
-    assert.equal(stored[A], "no cruzó la mitad");
-  });
-
-  it("does not count whitespace", () => {
-    assert.equal(countReviews(book({ a: "   ", b: "\n" }), [A, B]), 0);
-  });
-
-  it("counts a duplicated id once", () => {
-    assert.equal(countReviews(book({ a: "uno" }), [A, A]), 1);
-  });
-
-  it("returns them in squad order, with the text", () => {
-    assert.deepEqual(writtenReviews(book({ b: "dos", a: "uno" }), [A, B]), [
-      { id: A, review: "uno" },
-      { id: B, review: "dos" },
-    ]);
+  it("reads an empty box for somebody nothing was written about", () => {
+    assert.equal(reviewOf({}, A), "");
+    assert.equal(hasReview({}, A), false);
   });
 });
 
-describe("the order the uno x uno is read in", () => {
-  it("is one plain list before anybody has been placed", () => {
-    // Decision 4: there are no sides to sort into yet, and calling the whole
-    // squad "Afuera" would be a lie about a match nobody has armado.
-    assert.deepEqual(reviewOrder({ squad: [A, B], lineupA: [], lineupB: [] }), [
-      { key: "all", ids: [A, B] },
-    ]);
+describe("a player's history", () => {
+  it("is empty for somebody nobody has written about", () => {
+    assert.deepEqual(reviewHistory(A, [match("m1", "2026-09-01", [A], {})]), []);
   });
 
-  it("splits into the two sides once there is a lineup, in formation order", () => {
+  it("reads newest first, in the order Partidos uses", () => {
+    // Decision 4: sorted here, not trusted from the caller, so the ficha and
+    // the list of partidos cannot disagree about which Tuesday came first.
+    const older = match("m1", "2026-08-25", [A], { a: "flojo" });
+    const newer = match("m2", "2026-09-01", [A], { a: "otro jugador" });
     assert.deepEqual(
-      reviewOrder({ squad: [A, B, C, D], lineupA: [C, A], lineupB: [D, B] }),
-      [
-        { key: "A", ids: [C, A] },
-        { key: "B", ids: [D, B] },
-      ],
+      reviewHistory(A, [older, newer]).map((e) => e.review),
+      ["otro jugador", "flojo"],
     );
   });
 
-  it("puts whoever did not make it onto the pitch last", () => {
-    assert.deepEqual(reviewOrder({ squad: [A, B, C], lineupA: [A], lineupB: [B] }), [
-      { key: "A", ids: [A] },
-      { key: "B", ids: [B] },
-      { key: "bench", ids: [C] },
+  it("carries the match it was written on", () => {
+    const entries = reviewHistory(A, [
+      match("m1", "2026-09-01", [A], { a: "bien" }, "Jueves de laburo"),
+    ]);
+    assert.deepEqual(entries, [
+      { matchId: "m1", name: "Jueves de laburo", date: "2026-09-01", review: "bien" },
     ]);
   });
 
-  it("skips empty slots", () => {
-    assert.deepEqual(reviewOrder({ squad: [A], lineupA: [null, A, null], lineupB: [] }), [
-      { key: "A", ids: [A] },
-    ]);
+  it("only lists matches they were anotado in", () => {
+    // Decision 1: the line is kept on the match, but a night they were not
+    // there for is not part of their history.
+    const gone = match("m1", "2026-09-01", [B], { a: "no cruzó la mitad" });
+    assert.deepEqual(reviewHistory(A, [gone]), []);
+    assert.equal(gone.reviews[A], "no cruzó la mitad");
   });
 
-  it("heads no group it has nobody for", () => {
-    // Only one side placed: one side and a bench, not an empty column with a
-    // name on it.
-    assert.deepEqual(reviewOrder({ squad: [A, B], lineupA: [A], lineupB: [] }), [
-      { key: "A", ids: [A] },
-      { key: "bench", ids: [B] },
-    ]);
+  it("skips whitespace", () => {
+    assert.deepEqual(reviewHistory(A, [match("m1", "2026-09-01", [A], { a: "   " })]), []);
   });
 
-  it("leaves out a lineup entry who is not in the squad", () => {
-    // Somebody desanotado after being placed, or a hand-edited blob.
-    assert.deepEqual(reviewOrder({ squad: [A], lineupA: [A, C], lineupB: [] }), [
-      { key: "A", ids: [A] },
-    ]);
-  });
-
-  it("files somebody in both lineups under A, once", () => {
-    // The same side `planTeamMatch` picks, so the two headings still add up to
-    // the squad.
-    assert.deepEqual(reviewOrder({ squad: [A, B], lineupA: [A], lineupB: [A, B] }), [
-      { key: "A", ids: [A] },
-      { key: "B", ids: [B] },
-    ]);
-  });
-
-  it("says nothing about a match with nobody in it", () => {
-    assert.deepEqual(reviewOrder({ squad: [], lineupA: [], lineupB: [] }), []);
+  it("is about this player only", () => {
+    const m = match("m1", "2026-09-01", [A, B], { a: "bien", b: "mal" });
+    assert.deepEqual(
+      reviewHistory(B, [m]).map((e) => e.review),
+      ["mal"],
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera,
   Check,
@@ -6,6 +6,7 @@ import {
   ClipboardPaste,
   HeartCrack,
   Loader2,
+  NotebookPen,
   Search,
   Trash2,
   Trophy,
@@ -31,6 +32,8 @@ import { pickImageType, pickPastedImage } from "@/lib/clipboard";
 import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
 import { listedBy } from "@/lib/avoid";
+import { reviewHistory, type ReviewEntry } from "@/lib/reviews";
+import { formatMatchDate } from "@/lib/dates";
 import {
   addTag,
   hasTag,
@@ -67,6 +70,7 @@ import {
   playerDisplayName,
   type AttributeKey,
   type Foot,
+  type Match,
   type Player,
   type PlayerId,
   type Role,
@@ -82,6 +86,8 @@ interface Props {
   roster: Player[];
   /** Everybody's record, read from the matches. Missing means never played. */
   statsById: ReadonlyMap<PlayerId, PlayerStats>;
+  /** Every match, for the uno x uno written about this player over time. */
+  matches: readonly Match[];
   onSave: (player: Player) => void;
   onDelete?: (player: Player) => void;
 }
@@ -132,6 +138,7 @@ export function PlayerForm({
   player,
   roster,
   statsById,
+  matches,
   onSave,
   onDelete,
 }: Props) {
@@ -362,6 +369,7 @@ export function PlayerForm({
   const avoidCount =
     draft.avoid.filter((id) => inRoster.has(id)).length + listedByOthers.length;
   const stats = statsById.get(draft.id) ?? emptyStats();
+  const reviews = useMemo(() => reviewHistory(draft.id, matches), [draft.id, matches]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -524,6 +532,11 @@ export function PlayerForm({
               nothing and takes up the room the form needs. */}
           {stats.played > 0 && <RecordPanel stats={stats} />}
 
+          {/* What you wrote about him, night by night. Read off the matches
+              like the record above it, and absent until there is a line to
+              show — see `lib/reviews.ts`. */}
+          {reviews.length > 0 && <ReviewHistory entries={reviews} />}
+
           {/* What other people said he was worth, next to what you said.
               Only ever there for a player who already exists — a jugador
               nuevo has been on no encuesta — and it fetches nothing at all
@@ -670,6 +683,41 @@ function isTextField(target: EventTarget | null): boolean {
     return true;
   }
   return target instanceof HTMLElement && target.isContentEditable;
+}
+
+/**
+ * El uno x uno, night by night.
+ *
+ * Newest first, each line under the match it was written on, and the whole
+ * thing read-only: a line is edited where it was written, by tapping the
+ * player on that match's cancha, because the match is the thing it is about.
+ * Editing it here would need the ficha to write to a match, and the ficha
+ * writes to exactly one record.
+ */
+function ReviewHistory({ entries }: { entries: ReviewEntry[] }) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/25 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <NotebookPen className="h-4 w-4 shrink-0 text-primary/70" />
+        <p className="text-sm font-medium">El uno x uno</p>
+        <span className="tabular ml-auto text-xs text-muted-foreground">
+          {entries.length} {entries.length === 1 ? "partido" : "partidos"}
+        </span>
+      </div>
+      <ol className="space-y-2.5">
+        {entries.map((entry) => (
+          <li key={entry.matchId} className="border-l-2 border-primary/30 pl-2.5">
+            <p className="text-[11px] text-muted-foreground">
+              {formatMatchDate(entry.date)} · {entry.name}
+            </p>
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+              {entry.review}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 /**

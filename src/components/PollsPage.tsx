@@ -467,6 +467,7 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
         }
         roster={players}
         statsById={statsById}
+        matches={matches}
         onSave={onSavePlayer}
       />
     </Page>

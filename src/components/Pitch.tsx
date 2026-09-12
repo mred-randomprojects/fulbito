@@ -1,3 +1,4 @@
+import { NotebookPen } from "lucide-react";
 import { StaticAvatar } from "./PlayerAvatar";
 import { useLongPress } from "@/useLongPress";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,12 @@ export interface PitchToken {
   selected?: boolean;
   dimmed?: boolean;
   badge?: string;
+  /**
+   * Something is written about this player tonight — the uno x uno. A small
+   * pen on the shirt, so "who did I already write about" is readable off the
+   * pitch without opening anybody.
+   */
+  noted?: boolean;
   onClick?: () => void;
   /**
    * Open this player's ficha. Absent on an empty slot, which is a position
@@ -114,9 +121,9 @@ export function Pitch({ tokens, labelA, labelB, className }: Props) {
 /**
  * One shirt on the grass.
  *
- * Its own component only so that it can call a hook: the tap belongs to the
- * swap, so the ficha is a held finger, and `useLongPress` cannot be called
- * from inside a `map` whose length changes with the formation.
+ * Its own component only so that it can call a hook: the tap opens the
+ * player's card, so the ficha is a held finger, and `useLongPress` cannot be
+ * called from inside a `map` whose length changes with the formation.
  */
 function Token({ token }: { token: PitchToken }) {
   const press = useLongPress({
@@ -149,6 +156,14 @@ function Token({ token }: { token: PitchToken }) {
         {token.rating !== undefined && (
           <span className="tabular absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-black/85 px-1 text-[10px] font-bold text-white shadow ring-1 ring-white/20">
             {token.rating.toFixed(0)}
+          </span>
+        )}
+        {token.noted === true && (
+          <span
+            className="absolute -bottom-1 -left-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/85 text-white shadow ring-1 ring-white/20"
+            aria-label="Con uno x uno"
+          >
+            <NotebookPen className="h-2.5 w-2.5" />
           </span>
         )}
       </span>

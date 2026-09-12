@@ -785,6 +785,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
         }
         roster={players}
         statsById={statsById}
+        matches={matches}
         onSave={(player) => {
           onSavePlayer(player);
           // Only the nuevo flow anota. Opening a ficha to see what somebody is

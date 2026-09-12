@@ -163,13 +163,15 @@ enters the app without going through `normalizeAppData` — a hand-edited
   trimming as you go makes a space impossible to type; whether that adds up to
   a note at all is decided on the way out. See `lib/matchNotes.ts`.
 - **`Match.reviews`** — el uno x uno: one free-text line per player about how
-  *they* went, keyed by who it is about. On the match rather than on the
-  player, because a review is a fact about a night and not about a person —
-  one bad Thursday is not a downgrade, and `Player.notes` is where the
-  standing opinion lives. Stored exactly as typed, same as `notes`; the key
-  goes when the box is emptied, so an untouched match carries no field per
-  player forever. It never leaves the app: not the shared text, not either
-  PNG. See `lib/reviews.ts`.
+  *they* went, keyed by who it is about. Written from the cancha, by tapping
+  the player; read back on their ficha as a history. On the match rather than
+  on the player, because a review is a fact about a night and not about a
+  person — one bad Thursday is not a downgrade, and `Player.notes` is where
+  the standing opinion lives — and the history is *read* off the matches on
+  every pass, the same bargain `lib/stats.ts` makes with results. Stored
+  exactly as typed, same as `notes`; the key goes when the box is emptied, so
+  an untouched match carries no field per player forever. It never leaves the
+  app: not the shared text, not either PNG. See `lib/reviews.ts`.
 - **`Match.courtCost` / `Match.payments`** — what the pitch cost in whole
   pesos, and one record per person: absent means they owe, `"paid"` means they
   put it in, `"comped"` means we bancamos them. Per match rather than global —
@@ -192,9 +194,10 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
-| `lib/matchTabs.ts` | Which of a match's five tabs is worth a count or a warning dot |
+| `lib/matchTabs.ts` | Which of a match's four tabs is worth a count or a warning dot |
+| `lib/pitchTap.ts` | What a tap on the cancha means: open the player's card, arm a move, or make one |
 | `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
-| `lib/reviews.ts` | What counts as a line of the uno x uno, and the order the sides are read in |
+| `lib/reviews.ts` | What counts as a line of the uno x uno, and one player's history of them |
 | `lib/matchFaces.ts` | Whose photo stands for a side on the list of partidos |
 | `lib/matchOrder.ts` | The order the partidos are in, on every device |
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
@@ -237,13 +240,16 @@ before each save, and a corrupt-blob stash that loading falls back through.
 
 Screens: `MatchesPage` (the list, with the face of each side's best player
 and what is still owed on each row),
-`MatchBuilder` (one screen in five tabs — Cancha, Jugadores, Ajustes, Uno x
-uno, Pagos — under a result panel and a note that are always there), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
+`MatchBuilder` (one screen in four tabs — Cancha, Jugadores, Ajustes, Pagos —
+under a result panel and a note that are always there; on the cancha, a tap on
+a player opens `PitchPlayerCard`, the uno x uno box with the move and the ficha
+under it), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
-`PlayersPage` + `PlayerForm` (the roster, each player's record, which crews
-they belong to, who they will not play with, and — for the super admin, once
-an encuesta has asked about them — `PollVotesPanel`, the swarm of everything
-the room ever voted on them), `SettingsPage` (sync, backup,
+`PlayersPage` + `PlayerForm` (the roster, each player's record, every line of
+uno x uno ever written about them, which crews they belong to, who they will
+not play with, and — for the super admin, once an encuesta has asked about
+them — `PollVotesPanel`, the swarm of everything the room ever voted on
+them), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
 dialog, `InstallPanel` is the offer to install and renders nothing at all when
 there is nothing to offer, `AdminPanel` is the super admin switch and renders
@@ -286,12 +292,11 @@ every screen a player appears on, and the rule for how is one sentence:
 > already spent, holding for half a second does.**
 
 The tap is spent nearly everywhere, and on something different each time: on
-the cancha it swaps two shirts, on the bench it sends somebody on, in the list
-of anotados it ticks them in or out, in a team card on Repartir it moves them
-between sides, on Encuestas it picks who goes on the list. Only the roster, the
-members of a saved team and the uno x uno had a tap going spare — on that last
-one because the box is its own target, so the face and the name beside it are
-free to open the ficha. So the gesture is
+the cancha and the bench it opens the player's card (which has "Ver ficha" on
+it, so on that one screen the ficha is also two taps away), in the list of
+anotados it ticks them in or out, in a team card on Repartir it moves them
+between sides, on Encuestas it picks who goes on the list. Only the roster and
+the members of a saved team had a tap going spare. So the gesture is
 `useLongPress`, and it is the same one everywhere — *including* on the two
 screens where the tap already works, which hold to the same thing rather than
 to nothing. A hold nobody handles is iOS offering to save the photo, and one
@@ -327,15 +332,12 @@ would be a second autosaver writing to the same roster. `usePlayerFormTarget`
 holds which job is running, and the reason it is a hook rather than a
 `useState` in five files is the invariant below.
 
-### The five tabs of a match
+### The four tabs of a match
 
-A match is five jobs — look at the pitch, pick who came, set the sizes and
-kits, write down how each of them went, chase the money — and they used to be
-one long column. On a phone that put the cancha's money at the very bottom, so
-`MatchTabsBar` puts each job one tap away instead. The order is the order of
-the night, which is why Uno x uno sits between Ajustes and Pagos rather than
-on the end: it and the money are both afterwards jobs, and it is the one you do
-first. Two consequences worth knowing:
+A match is four jobs — look at the pitch, pick who came, set the sizes and
+kits, chase the money — and they used to be one long column. On a phone that
+put the cancha's money at the very bottom, so `MatchTabsBar` puts each job one
+tap away instead. Two consequences worth knowing:
 
 - **The tabs only exist once the squad reaches two.** Below that the screen is
   still the intro layout: an explainer beside the picker, because there is no
@@ -347,19 +349,55 @@ first. Two consequences worth knowing:
 
 What each tab *says* — the counts and the amber dot — is `lib/matchTabs.ts`,
 not the component. The rules have a "yes, but" each: no bench count before
-there is a lineup, no money count before there is a price, nothing
-congratulatory about a cancha you bancaste to everybody, and nothing on the
-uno x uno that says what is *missing* — most nights nobody writes one, and
-"3/12" would turn an empty box into a chore.
+there is a lineup, no money count before there is a price, and nothing
+congratulatory about a cancha you bancaste to everybody.
 
-**El uno x uno** is `ReviewsPanel`, over `lib/reviews.ts`: a box per player for
-what you thought of each of them that night. Two things about it are decisions
-rather than layout. It is read **side by side** — each player under the shirt
-they played in, in formation order, because remembering a game means going down
-one team and then the other, and a match nobody has armado yet comes back as
-one plain list rather than a fake "Afuera". And a review for somebody taken off
-the squad **stops counting but is not deleted**: unticking a name by mistake
-must not cost the paragraph. Both are pinned in `reviews.test.ts`.
+### The tap on the cancha, and the uno x uno
+
+Three things want the tap on a player on the pitch: move him, write about him,
+look him up. It used to be two — the tap was the swap and the ficha was a held
+finger — and the uno x uno briefly lived as a fifth tab, a box per player in a
+list. It does not any more, because writing about somebody is something you do
+looking at him on the cancha, one at a time, not a form you fill in. So:
+
+- **A tap on a person opens `PitchPlayerCard`**: his face and shirt, the uno x
+  uno box, and under it "Cambiar de lugar" and "Ver ficha". Nothing is armed
+  by the tap. That is the rule with teeth, and it is why the card exists rather
+  than the box riding on the old selection: with tap-to-arm, going down the
+  team after the game — tap el Gordo, write, tap Juan, write — would have
+  swapped the two of them on the second tap, silently, under the box being
+  typed into.
+- **"Cambiar de lugar" arms him**, the card closes, a banner *above* the pitch
+  says who is being moved (above, because the shirt just tapped may be at the
+  top and the bottom of a phone's pitch is a scroll away), and the next tap is
+  the swap it always was — onto another player, into an empty shirt, or off
+  onto the bench. Tapping him again, or Cancelar, disarms.
+- **A tap on an empty shirt arms it straight away.** A position is not a
+  person: nothing to write about, no ficha behind it, so the tap can only mean
+  "put somebody here". That is how the bench has always come on, and it still
+  does. A slot holding the id of somebody since deleted from the roster draws
+  as empty and counts as empty here too — arming it is how the ghost gets
+  swapped out.
+- **A held finger still goes straight to the ficha**, for whoever has the
+  habit.
+- **A shirt with something written behind it wears a small pen**, on the pitch
+  and on the bench chip, so "who did I already write about" is readable off
+  the cancha without opening anybody.
+
+The rule itself — armed or not, same spot or not, person or not — is
+`lib/pitchTap.ts`, four cases and a test each. What counts as written, and
+that a line for somebody taken off the squad **stops showing but is not
+deleted** (unticking a name by mistake must not cost the paragraph), is
+`lib/reviews.ts`. The box does not take focus when the card opens: on a phone
+that is the keyboard covering half the screen for somebody who tapped to move
+him, and dismissing a keyboard you did not ask for is two taps and a curse.
+
+**On the ficha, the same lines come back as a history** — `ReviewHistory` in
+`PlayerForm`, newest first, each under the match it was written on, in the
+order Partidos uses and sorted by `reviewHistory` itself rather than trusted
+from the caller. Read-only: a line is edited where it was written, by tapping
+the player on that match's cancha, because the match is the thing it is about,
+and the ficha writes to exactly one record.
 
 ### Repartir, and why it is not a match
 
@@ -752,17 +790,17 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   either way and hiding the win on the rows with no photos would drop it from
   exactly the rows that have the least to look at.
 
-- **The note is not one of the five jobs.** `MatchNotes` sits with the
+- **The note is not one of the four jobs.** `MatchNotes` sits with the
   scoreboard, above `MatchTabsBar` and outside every tab, because a note filed
   under Ajustes is a note nobody reads again — and the sentence explaining what
-  happened is the thing you want first whichever of the five you came back for.
+  happened is the thing you want first whichever of the four you came back for.
   It is also on the row in Partidos, for the same reason the money is: what is
   worth writing down is worth seeing without opening anything. The uno x uno is
-  the opposite case and therefore a tab: a box per player is not something you
-  want in front of you while picking the teams, and it is written once
-  afterwards rather than glanced at every time. And neither has an edit mode or
-  a save button, because nothing else on that screen does: the box *is* the
-  note. Both grow from `GrowingTextarea` — a mirror of their own text laid
+  the opposite case: a box per player is not something you want in front of
+  you while picking the teams, so it lives behind a tap on the player, on the
+  cancha, and comes back on his ficha. Neither has an edit mode or a save
+  button, because nothing else on that screen does: the box *is* the note.
+  Both grow from `GrowingTextarea` — a mirror of their own text laid
   under the box in the same grid cell — rather than from an effect measuring
   `scrollHeight`. That mirror's typography is deliberately not a prop:
   `index.css` forces every textarea to 16px with `!important` so iOS stops
@@ -893,12 +931,6 @@ touched anything and the two of them must go quiet.
 - **Head-to-head history.** A player's own record exists, but "wins 80% of the
   time he is on your side" — and the pair-level stats behind it — does not. It
   is the obvious next thing to read off the same matches.
-- **The uno x uno read back from the player's side.** Every line lives on the
-  match it was written on, and that is the only place it is shown. Stacking a
-  player's own across every match onto their ficha is the obvious next step —
-  `lib/pollHistory.ts` does exactly that shape of thing for votes — and it is
-  the same read-never-store bargain `lib/stats.ts` makes, so nothing new has to
-  be stored for it.
 - **Asking the group how the game went.** An encuesta asks what a player is
   *worth*, once, in numbers. It does not ask what people thought of a
   particular night, and there is nowhere for anonymous comments about a match

@@ -1,12 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   ChevronLeft,
   CalendarDays,
   ChevronRight,
   HeartCrack,
   Info,
   Lock,
+  NotebookPen,
   Share2,
   Shuffle,
   Trash2,
@@ -20,7 +22,7 @@ import { MatchSetup } from "./MatchSetup";
 import { CourtPanel } from "./CourtPanel";
 import { ResultPanel } from "./ResultPanel";
 import { MatchNotes } from "./MatchNotes";
-import { ReviewsPanel } from "./ReviewsPanel";
+import { PitchPlayerCard, type PitchPlace, type PitchPlayerTarget } from "./PitchPlayerCard";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { TeamInsights } from "./TeamInsights";
@@ -36,7 +38,8 @@ import { computeStats } from "@/lib/stats";
 import { nextPaymentState, splitCourt } from "@/lib/court";
 import { matchTabs, type MatchTabId } from "@/lib/matchTabs";
 import { hasNote } from "@/lib/matchNotes";
-import { countReviews, reviewOrder, setReview } from "@/lib/reviews";
+import { hasReview, setReview } from "@/lib/reviews";
+import { decideTap } from "@/lib/pitchTap";
 import { pickKit } from "@/lib/kits";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
@@ -46,6 +49,7 @@ import { openDatePicker } from "@/lib/datePicker";
 import { useTagFilter } from "@/useTagFilter";
 import {
   KITS,
+  ROLE_LABELS,
   ROLE_SHORT,
   playerShortName,
   type KitId,
@@ -90,6 +94,11 @@ export function MatchBuilder({
   onBack,
 }: Props) {
   const [selection, setSelection] = useState<Selection | null>(null);
+  /**
+   * The player whose card is open, if any. See `PitchPlayerCard`: a tap on a
+   * person opens this, and only "Cambiar de lugar" on it arms `selection`.
+   */
+  const [card, setCard] = useState<{ target: PitchPlayerTarget; at: Selection } | null>(null);
   const [optionIndex, setOptionIndex] = useState(0);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -451,13 +460,51 @@ export function MatchBuilder({
   /* Tap-to-swap                                                       */
   /* ---------------------------------------------------------------- */
 
+  /** Who is standing where a tap landed — null for an empty shirt. */
+  const playerAt = useCallback(
+    (target: Selection): PlayerId | null =>
+      target.where === "unassigned"
+        ? target.id
+        : (target.team === "A" ? match.lineupA : match.lineupB)[target.slot] ?? null,
+    [match.lineupA, match.lineupB],
+  );
+
+  /** Which shirt a tapped slot is, for the card's subtitle. */
+  const placeOf = useCallback(
+    (target: Selection): PitchPlace => {
+      if (target.where === "unassigned") return { kind: "bench" };
+      const team = target.team === "A" ? match.teamA : match.teamB;
+      const formation = target.team === "A" ? formationA : formationB;
+      return { kind: "pitch", team, role: formation.slots[target.slot].role };
+    },
+    [match.teamA, match.teamB, formationA, formationB],
+  );
+
+  /**
+   * What a tap on the cancha does. The rule is `lib/pitchTap.ts`; this is the
+   * wiring: work out what was tapped, ask, act.
+   */
   const handleSelect = useCallback(
     (next: Selection) => {
-      if (selection == null) {
+      const id = playerAt(next);
+      const player = id == null ? undefined : playersById.get(id);
+      const tap = decideTap({
+        armed: selection != null,
+        sameSpot: selection != null && sameSelection(selection, next),
+        person: player !== undefined,
+      });
+
+      if (tap === "open-card") {
+        // `player` is defined whenever the rule says so; the narrowing is for
+        // the typechecker, not a second opinion.
+        if (player !== undefined) setCard({ target: { player, place: placeOf(next) }, at: next });
+        return;
+      }
+      if (tap === "arm") {
         setSelection(next);
         return;
       }
-      if (sameSelection(selection, next)) {
+      if (tap === "disarm" || selection == null) {
         setSelection(null);
         return;
       }
@@ -490,8 +537,21 @@ export function MatchBuilder({
       setSelection(null);
       setEdited(true);
     },
-    [selection, match.lineupA, match.lineupB, formationA, formationB, patch],
+    [selection, match.lineupA, match.lineupB, formationA, formationB, patch, playerAt, playersById, placeOf],
   );
+
+  /** What the banner above the pitch says while somebody is being moved. */
+  const swapHint = useMemo(() => {
+    if (selection == null) return null;
+    const id = playerAt(selection);
+    const player = id == null ? undefined : playersById.get(id);
+    if (player !== undefined) {
+      return `Tocá a otro jugador, o una camiseta vacía, para mover a ${playerShortName(player)}.`;
+    }
+    const place = placeOf(selection);
+    if (place.kind === "bench") return "Tocá una camiseta para ponerlo ahí.";
+    return `Tocá a alguien para ponerlo de ${ROLE_LABELS[place.role].toLowerCase()} en ${place.team.name}.`;
+  }, [selection, playerAt, playersById, placeOf]);
 
   /* ---------------------------------------------------------------- */
   /* Render                                                            */
@@ -578,28 +638,12 @@ export function MatchBuilder({
     [match.courtCost, match.payments, squadPlayers],
   );
 
-  /**
-   * The uno x uno, side by side. Built from the *stored* lineups rather than
-   * from the resolved ones, so it is the same question `lib/reviews.ts` is
-   * tested on — the resolution to people happens in the panel.
-   */
-  const reviewGroups = useMemo(
-    () =>
-      reviewOrder({
-        squad: match.squad,
-        lineupA: match.lineupA,
-        lineupB: match.lineupB,
-      }),
-    [match.squad, match.lineupA, match.lineupB],
-  );
-
   const tabs = matchTabs({
     squadSize: match.squad.length,
     hasLineup,
     benchCount: unassigned.length,
     conflictCount: lineupConflicts.length,
     sizeMismatch: mismatch,
-    reviewCount: countReviews(match.reviews, match.squad),
     courtCost: match.courtCost,
     payers: courtSplit.payers,
     paidCount: courtSplit.paidCount,
@@ -783,6 +827,24 @@ export function MatchBuilder({
                     </p>
                   )}
 
+                  {/* Above the pitch rather than under it, because the shirt
+                      just tapped may be at the top and the bottom of a phone's
+                      pitch is a scroll away. The pulsing ring on the shirt
+                      itself is the other half of the signal. */}
+                  {swapHint != null && (
+                    <p className="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
+                      <ArrowLeftRight className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="min-w-0 flex-1">{swapHint}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelection(null)}
+                        className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                      >
+                        Cancelar
+                      </button>
+                    </p>
+                  )}
+
                   <Pitch
                     tokens={tokens}
                     labelB={
@@ -806,9 +868,9 @@ export function MatchBuilder({
                   {hasLineup && (
                     <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
                       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      Tocá un jugador y después a otro — o una camiseta vacía — para
-                      cambiarlos de lugar. Los números se actualizan solos. Si lo
-                      mantenés apretado, te muestra su ficha.
+                      Tocá a un jugador para anotar cómo anduvo, cambiarlo de lugar
+                      o ver su ficha. Los números se actualizan solos. Si lo mantenés
+                      apretado, va derecho a la ficha.
                     </p>
                   )}
 
@@ -816,6 +878,7 @@ export function MatchBuilder({
                     <UnassignedStrip
                       players={unassigned}
                       selection={selection}
+                      reviews={match.reviews}
                       onSelect={(id) => handleSelect({ where: "unassigned", id })}
                       onView={form.view}
                       lockedTo={lockedTo}
@@ -896,20 +959,6 @@ export function MatchBuilder({
               </div>
             )}
 
-            {tab === "unoxuno" && (
-              <div className="mx-auto w-full max-w-3xl">
-                <ReviewsPanel
-                  groups={reviewGroups}
-                  playersById={playersById}
-                  teamA={match.teamA}
-                  teamB={match.teamB}
-                  reviews={match.reviews}
-                  onChange={writeReview}
-                  onViewPlayer={form.view}
-                />
-              </div>
-            )}
-
             {tab === "pagos" && (
               <div className="mx-auto w-full max-w-3xl">
                 <CourtPanel
@@ -924,6 +973,24 @@ export function MatchBuilder({
           </div>
         </>
       )}
+
+      <PitchPlayerCard
+        target={card?.target ?? null}
+        reviews={match.reviews}
+        onReviewChange={writeReview}
+        onMove={() => {
+          if (card == null) return;
+          setSelection(card.at);
+          setCard(null);
+        }}
+        onViewProfile={() => {
+          if (card == null) return;
+          const id = card.target.player.id;
+          setCard(null);
+          form.view(id);
+        }}
+        onClose={() => setCard(null)}
+      />
 
       <ShareDialog
         open={shareOpen}
@@ -948,6 +1015,7 @@ export function MatchBuilder({
         }
         roster={players}
         statsById={statsById}
+        matches={matches}
         onSave={(player) => {
           onSavePlayer(player);
           // Anotarlo belongs to "cargar a alguien nuevo" and to nothing else.
@@ -1062,6 +1130,7 @@ function buildTokens(
       chipText: kit.text,
       selected,
       badge: match.pins[player.id] != null ? "🔒" : undefined,
+      noted: hasReview(match.reviews, player.id),
       onClick: () => onSelect({ where: "pitch", team, slot: index }),
       onLongPress: () => onView(player.id),
     };
@@ -1151,12 +1220,14 @@ function TeamChip({
 function UnassignedStrip({
   players,
   selection,
+  reviews,
   onSelect,
   onView,
   lockedTo,
 }: {
   players: Player[];
   selection: Selection | null;
+  reviews: Match["reviews"];
   onSelect: (id: PlayerId) => void;
   onView: (id: PlayerId) => void;
   lockedTo: (id: PlayerId) => LockTarget | null;
@@ -1164,8 +1235,8 @@ function UnassignedStrip({
   return (
     <div className="rounded-xl border border-dashed border-border bg-card/40 p-3">
       <p className="mb-2 text-xs font-medium text-muted-foreground">
-        Afuera de la cancha. Tocá una camiseta en la cancha y después uno de
-        estos para que entre.
+        Afuera de la cancha. Tocá una camiseta vacía y después a uno de estos
+        para que entre.
       </p>
       <ul className="flex flex-wrap gap-2">
         {players.map((player) => (
@@ -1173,6 +1244,7 @@ function UnassignedStrip({
             key={player.id}
             player={player}
             selected={selection?.where === "unassigned" && selection.id === player.id}
+            noted={hasReview(reviews, player.id)}
             lock={lockedTo(player.id)}
             onSelect={() => onSelect(player.id)}
             onView={() => onView(player.id)}
@@ -1187,12 +1259,15 @@ function UnassignedStrip({
 function BenchChip({
   player,
   selected,
+  noted,
   lock,
   onSelect,
   onView,
 }: {
   player: Player;
   selected: boolean;
+  /** Something is written about them tonight. */
+  noted: boolean;
   lock: LockTarget | null;
   onSelect: () => void;
   onView: () => void;
@@ -1214,6 +1289,7 @@ function BenchChip({
         <PlayerAvatar player={player} size={24} ring={lock?.fill} ringWidth={2} />
         <span className="max-w-[110px] truncate">{playerShortName(player)}</span>
         {lock != null && <Lock className="h-3 w-3 text-muted-foreground" />}
+        {noted && <NotebookPen className="h-3 w-3 text-primary" aria-label="Con uno x uno" />}
       </button>
     </li>
   );

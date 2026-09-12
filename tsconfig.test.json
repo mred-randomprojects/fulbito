@@ -86,6 +86,8 @@
     "src/lib/matchNotes.test.ts",
     "src/lib/reviews.ts",
     "src/lib/reviews.test.ts",
+    "src/lib/pitchTap.ts",
+    "src/lib/pitchTap.test.ts",
     "src/lib/longPress.ts",
     "src/lib/longPress.test.ts",
     "src/lib/kits.ts",

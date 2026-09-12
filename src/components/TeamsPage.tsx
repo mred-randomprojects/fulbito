@@ -285,6 +285,7 @@ export function TeamsPage({
         }
         roster={players}
         statsById={statsById}
+        matches={matches}
         onSave={(player) => {
           onSavePlayer(player);
           // Only the nuevo flow adds anybody. Opening the ficha of somebody

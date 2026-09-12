@@ -173,6 +173,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
         player={editing}
         roster={players}
         statsById={statsById}
+        matches={matches}
         onSave={onSave}
         onDelete={(player) => onDelete(player.id)}
       />

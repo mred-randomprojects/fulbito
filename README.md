@@ -102,17 +102,20 @@ any other app, full screen and with no signal needed.
   the teams that played it, shows in the list of matches, and goes out with the
   shared text — because that message gets forwarded again after the game.
 - **Notas del partido.** One free-text box on every match, sitting with the
-  score and above the five tabs rather than buried in one of them: quién trajo
+  score and above the four tabs rather than buried in one of them: quién trajo
   la pelota, quién se lesionó, por qué el 8-1 no cuenta. The first line of it
   shows on the list of partidos, so what you wrote down is there without
   opening anything. Nothing to save — the box is the note.
-- **El uno x uno.** A box per player on every match, for how each of them
-  actually went: "no cruzó la mitad", "de 5 es otro jugador". It reads side by
-  side — each one under the shirt they played in, in the order the formation
-  put them — because that is how you remember a game. It stays on the match it
-  was written on, so a bad Thursday is a bad Thursday and not a downgrade, and
-  it never leaves: not the text for the group chat, not either PNG, not
-  anybody's rating.
+- **El uno x uno.** Tap a player on the cancha and write how he actually
+  went: "no cruzó la mitad", "de 5 es otro jugador". The same card is where
+  you move him — *cambiar de lugar*, then tap where he goes — and where his
+  ficha is, so the tap that used to be the swap is now the player, and the
+  swap is a deliberate second step that cannot happen under your thumb while
+  you are writing. A shirt with something written behind it wears a little
+  pen. Every line stays on the match it was written on, so a bad Thursday is a
+  bad Thursday and not a downgrade — and his ficha stacks them all up, newest
+  first, under the match each came from. None of it leaves: not the text for
+  the group chat, not either PNG, not anybody's rating.
 - **Who paid the cancha, and who is still owing.** Put in what the pitch cost
   and it works out what each one puts. Bancar somebody is one extra tap: they
   come out of the reparto and the rest cover it, so a fútbol 5 with one on the
@@ -127,7 +130,8 @@ any other app, full screen and with no signal needed.
   on the pitch, on the bench, in the list of anotados, in Repartir, in
   Encuestas — and their ficha opens right there, without losing whatever you
   were in the middle of arranging. The tap still does what it always did:
-  swap them, anotarlos, take them off. On a laptop it is the right-click.
+  open their card on the cancha, anotarlos, take them off. On a laptop it is
+  the right-click.
 - **Groups, for a plantel bigger than one game.** Tag a player with the crews
   they belong to — the laburo, the barrio, the ones who only turn up in
   summer — and the chips above the roster and above the squad list narrow it to
@@ -270,10 +274,6 @@ no secrets.
 - **Head-to-head history.** Each player has a record; pairs do not. "Wins 80% of
   the time he is on your side" is the obvious next thing to read off the same
   matches.
-- **The uno x uno from the player's side.** Every line lives on the match it
-  was written on, and that is the only place it shows. Stacking somebody's own
-  across every match onto their ficha is the obvious next step, and needs
-  nothing new stored.
 - **Asking the group how the game went.** An encuesta asks what a player is
   worth, in numbers, once. There is nothing that asks what people thought of a
   particular night, and nowhere for anonymous comments about a match to be read
