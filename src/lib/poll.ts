@@ -419,13 +419,13 @@ export function normalizePoll(raw: unknown): Poll {
  * A name and an address, filed under the ballot they belong to.
  *
  * This is the exception to "a ballot carries no uid", and it is deliberately
- * shaped so that the exception stays exactly one account wide:
+ * shaped so that the exception stays exactly as wide as `lib/superAdmin.ts`:
  *
  * - **It is a separate document, not a field.** A field on the ballot would be
  *   readable by whoever can read the ballot, and that is the poll's owner —
  *   the very person the anonymity is for. A sibling document can be locked to
- *   somebody else entirely, and in `firestore.rules` it is: only the address
- *   in `lib/superAdmin.ts` may read one.
+ *   somebody else entirely, and in `firestore.rules` it is: only the
+ *   addresses in `lib/superAdmin.ts` may read one.
  * - **It is keyed by the ballot id, not by uid.** That is what lets the owner
  *   delete it with the poll without ever being able to list or read one — they
  *   already know every ballot id, and no other id is derivable from it. A

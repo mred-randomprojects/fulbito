@@ -612,10 +612,10 @@ function Results({
         return;
       }
       // Fetched second and separately, because the medians must not depend on
-      // it: for any account but the one, `firestore.rules` refuses this and it
-      // is right to. Falling back to the ballots with nobody attached shows
-      // the same rows the results above were counted from, which is the honest
-      // version of "we could not put names to them".
+      // it: for any account but the super admins, `firestore.rules` refuses
+      // this and it is right to. Falling back to the ballots with nobody
+      // attached shows the same rows the results above were counted from,
+      // which is the honest version of "we could not put names to them".
       try {
         setAudit(auditPoll(ballots, await fetchIdentities(db, pollId), order));
         setAuditFailed(false);
@@ -724,7 +724,7 @@ function Results({
 /* ------------------------------------------------------------------ */
 
 /**
- * The encuesta with the names on, for the one account that may see them.
+ * The encuesta with the names on, for the super admins who may see them.
  *
  * Shown *under* the medians rather than instead of them, and that order is the
  * argument: the medians are what the encuesta is for, and this is a thing you
@@ -862,7 +862,7 @@ function ResultRow({
   player: Player | undefined;
   name: string;
   onSavePlayer: (player: Player) => void;
-  /** Everybody's vote on this one, or `null` for everybody but the one account. */
+  /** Everybody's vote on this one, or `null` for everybody but the super admins. */
   votes: PlayerVotes | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -984,7 +984,7 @@ function ResultRow({
 }
 
 /**
- * Everybody's vote on one player, for the one account that may see them.
+ * Everybody's vote on one player, for the super admins who may see them.
  *
  * Sits under the crowd row it belongs to, so the question it answers starts
  * where it actually starts: the median looks wrong, and you want the name on

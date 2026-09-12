@@ -20,10 +20,10 @@
  *    uses for "not enough people to say anything yet": one dot is not a
  *    distribution, it is a fact about one person, and `votesOnPlayer` is where
  *    a fact about one person is read.
- * 3. **Names come from `identities`, which is one account's to see.** Pass an
- *    empty list and every dot is anonymous — what an unpublished set of rules
- *    leaves behind. Who may ask for them at all is `usePollHistory`, and the
- *    address is `lib/superAdmin.ts`.
+ * 3. **Names come from `identities`, which is the super admins' to see.** Pass
+ *    an empty list and every dot is anonymous — what an unpublished set of
+ *    rules leaves behind. Who may ask for them at all is `usePollHistory`, and
+ *    the addresses are `lib/superAdmin.ts`.
  *
  * Only the overall goes in. The puestos and the atributos are answered by a
  * fraction of the people who answer the overall, so a swarm of them is three
@@ -45,7 +45,7 @@ export interface PollRecord {
   /** The list that went out, which is the authority for what a ballot says. */
   order: readonly PlayerId[];
   ballots: readonly BallotEntry[];
-  /** Empty for everybody but the one account. */
+  /** Empty for everybody but the super admins. */
   identities: readonly PollIdentity[];
 }
 

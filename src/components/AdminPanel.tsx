@@ -29,9 +29,9 @@ export function AdminPanel() {
         Modo dueño
       </h2>
       <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-        Sos el que mantiene esto, así que tenés una llave que nadie más tiene:
-        ver el mail de cada uno que contestó una encuesta y exactamente qué
-        puso. Sirve para una sola cosa — darte cuenta si alguien entró a
+        Sos de los que mantienen esto, así que tenés una llave que casi nadie
+        tiene: ver el mail de cada uno que contestó una encuesta y exactamente
+        qué puso. Sirve para una sola cosa — darte cuenta si alguien entró a
         jorobar — y no para chusmear los números de nadie.
       </p>
 

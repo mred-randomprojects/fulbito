@@ -138,9 +138,9 @@ export async function fetchBallotEntries(
 }
 
 /**
- * Who sent which ballot. **Readable by one account only.**
+ * Who sent which ballot. **Readable by the super admins only.**
  *
- * `firestore.rules` is the gate, not this function: for anybody who is not the
+ * `firestore.rules` is the gate, not this function: for anybody who is not an
  * address in `lib/superAdmin.ts` this rejects with a permission error, which
  * is the correct outcome and the reason the caller must be prepared to show
  * the results page without it.

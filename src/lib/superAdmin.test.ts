@@ -1,19 +1,37 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  SUPER_ADMIN_EMAIL,
+  SUPER_ADMIN_EMAILS,
   canToggleSuperAdmin,
   isSuperAdminEmail,
   superAdminSees,
 } from "./superAdmin.js";
 
+const [MAXI, BRUNO] = SUPER_ADMIN_EMAILS;
+
 describe("isSuperAdminEmail", () => {
-  it("knows the one address", () => {
-    assert.equal(isSuperAdminEmail(SUPER_ADMIN_EMAIL), true);
+  it("knows every listed address", () => {
+    for (const email of SUPER_ADMIN_EMAILS) {
+      assert.equal(isSuperAdminEmail(email), true);
+    }
+  });
+
+  it("is the two people who maintain the app", () => {
+    assert.equal(MAXI, "maxiredigonda@gmail.com");
+    assert.equal(BRUNO, "bruno.david9914@gmail.com");
+    assert.equal(SUPER_ADMIN_EMAILS.length, 2);
+  });
+
+  it("is written lower-case, or the case-folded compare silently misses", () => {
+    for (const email of SUPER_ADMIN_EMAILS) {
+      assert.equal(email, email.toLowerCase());
+      assert.equal(email, email.trim());
+    }
   });
 
   it("ignores case and stray whitespace, the way an inbox does", () => {
     assert.equal(isSuperAdminEmail(" MaxiRedigonda@Gmail.com "), true);
+    assert.equal(isSuperAdminEmail("Bruno.David9914@GMAIL.com"), true);
   });
 
   it("is nobody else", () => {
@@ -23,6 +41,8 @@ describe("isSuperAdminEmail", () => {
     assert.equal(isSuperAdminEmail("maxiredigonda@gmail.com.ar"), false);
     assert.equal(isSuperAdminEmail("maxiredigonda@hotmail.com"), false);
     assert.equal(isSuperAdminEmail("xmaxiredigonda@gmail.com"), false);
+    assert.equal(isSuperAdminEmail("bruno.david9914@hotmail.com"), false);
+    assert.equal(isSuperAdminEmail("brunodavid9914@gmail.com"), false);
   });
 
   it("is not a signed-out or address-less account", () => {
@@ -33,8 +53,9 @@ describe("isSuperAdminEmail", () => {
 });
 
 describe("canToggleSuperAdmin", () => {
-  it("offers the switch to the one account and to nobody else", () => {
-    assert.equal(canToggleSuperAdmin(SUPER_ADMIN_EMAIL), true);
+  it("offers the switch to the listed accounts and to nobody else", () => {
+    assert.equal(canToggleSuperAdmin(MAXI), true);
+    assert.equal(canToggleSuperAdmin(BRUNO), true);
     assert.equal(canToggleSuperAdmin("otro@gmail.com"), false);
     assert.equal(canToggleSuperAdmin(null), false);
   });
@@ -42,8 +63,9 @@ describe("canToggleSuperAdmin", () => {
 
 describe("superAdminSees", () => {
   it("needs the right account and the switch, not either one", () => {
-    assert.equal(superAdminSees(SUPER_ADMIN_EMAIL, true), true);
-    assert.equal(superAdminSees(SUPER_ADMIN_EMAIL, false), false);
+    assert.equal(superAdminSees(MAXI, true), true);
+    assert.equal(superAdminSees(BRUNO, true), true);
+    assert.equal(superAdminSees(MAXI, false), false);
     assert.equal(superAdminSees("otro@gmail.com", true), false);
   });
 

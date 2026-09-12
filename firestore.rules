@@ -15,7 +15,7 @@ rules_version = '2';
 //      anybody with a Google account sync their own roster — the default, and
 //      what Fulbito is deployed as. Fill it in to make the app invitational,
 //      and keep it in step with the VITE_ALLOWED_EMAILS secret.
-//   3. One address, and only that one, may read who sent which ballot. See
+//   3. Two addresses, and only those two, may read who sent which ballot. See
 //      `isSuperAdmin()` and the `identities` block near the bottom.
 
 service cloud.firestore {
@@ -33,14 +33,15 @@ service cloud.firestore {
             || request.auth.token.email in allowedEmails());
     }
 
-    // The one account that may read who sent which ballot. Keep in step with
-    // `SUPER_ADMIN_EMAIL` in `src/lib/superAdmin.ts` — that half only decides
-    // whether the app offers the switch, and anybody can edit it out of their
-    // own copy of the JavaScript. This half is the one that matters.
+    // The accounts that may read who sent which ballot. Keep in step with
+    // `SUPER_ADMIN_EMAILS` in `src/lib/superAdmin.ts` — that half only
+    // decides whether the app offers the switch, and anybody can edit it out
+    // of their own copy of the JavaScript. This half is the one that matters.
     //
-    // One address, written here, and deliberately not a list and not a field
-    // on a document: a privilege that can be granted by editing data is a
-    // privilege that gets granted by accident.
+    // The two people who maintain the app, written here, and deliberately not
+    // a field on a document: a privilege that can be granted by editing data
+    // is a privilege that gets granted by accident. Lower-case, because the
+    // compare below folds the token's case and not this list's.
     //
     // It buys exactly one thing — `polls/{id}/identities` — plus the ability
     // to read the ballots of a poll whose link it holds. It is NOT added to
@@ -50,7 +51,10 @@ service cloud.firestore {
       return request.auth != null
         && 'email' in request.auth.token
         && request.auth.token.email is string
-        && request.auth.token.email.lower() == 'maxiredigonda@gmail.com';
+        && request.auth.token.email.lower() in [
+          'maxiredigonda@gmail.com',
+          'bruno.david9914@gmail.com'
+        ];
     }
 
     // One document per record, under the owner's uid:

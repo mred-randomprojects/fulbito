@@ -70,7 +70,7 @@ async function fetchArchive(uid: string): Promise<PollRecord[]> {
       const [order, ballots, identities] = await Promise.all([
         fetchPollPlayerIds(db, poll.id),
         fetchBallotEntries(db, poll.id),
-        // The rules refuse this to anybody but the one address, and a refusal
+        // The rules refuse this to anybody but the super admins, and a refusal
         // is a result rather than an error: unpublished rules leave the same
         // chart with nobody's name on it, which is the honest version of "we
         // could not put names to them" and the same fallback the results page
@@ -106,7 +106,7 @@ function archive(uid: string): Promise<PollRecord[]> {
   return memo.polls;
 }
 
-/** What the encuestas ever said about one player — for the one account. */
+/** What the encuestas ever said about one player — for the super admins. */
 export function usePollHistory(playerId: PlayerId | undefined): PollHistoryView {
   const { available, user } = useCloudAuth();
   const admin = useSuperAdmin();

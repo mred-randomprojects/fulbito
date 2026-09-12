@@ -93,7 +93,7 @@ export function PollPage() {
   const order = useMemo(() => (poll === null ? [] : pollOrder(poll)), [poll]);
 
   /**
-   * Who to file the ballot under, for the one account that may read it.
+   * Who to file the ballot under, for the accounts that may read it.
    *
    * Sent with every save rather than once, because the debounce means "every
    * save" is already how this screen works and a second code path that fires
@@ -261,8 +261,8 @@ export function PollPage() {
             No se sube nada tuyo y el que armó la lista ve los números, no
             quién los puso.
           </span>{" "}
-          Tu mail sí queda guardado, pero no lo ve él: lo ve nada más el que
-          mantiene la app, y sólo para cazar a algún vivo que venga a poner
+          Tu mail sí queda guardado, pero no lo ve él: lo ven nada más los que
+          mantienen la app, y sólo para cazar a algún vivo que venga a poner
           cualquier cosa.
         </p>
         <Button onClick={() => void enter()} disabled={signingIn}>

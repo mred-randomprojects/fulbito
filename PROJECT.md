@@ -241,7 +241,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, and the same pile turned sideways onto one player |
 | `lib/pollHistory.ts` | Every encuesta ever sent, stacked and read from one player's side |
 | `lib/voteSwarm.ts` | Where each dot lands when a pile of votes is drawn as a little mountain |
-| `lib/superAdmin.ts` | The one address that may see who voted, and that the switch alone is not a permission |
+| `lib/superAdmin.ts` | The two addresses that may see who voted, and that the switch alone is not a permission |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
@@ -271,9 +271,9 @@ them), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
 dialog, `InstallPanel` is the offer to install and renders nothing at all when
 there is nothing to offer, `AdminPanel` is the super admin switch and renders
-for exactly one Google account). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
-the link, read the medians back and adopt them a tap at a time — with, for that
-one account and only when the switch is on, two ways to see who is behind the
+for exactly the Google accounts in `lib/superAdmin.ts`). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
+the link, read the medians back and adopt them a tap at a time — with, for the
+super admins and only when the switch is on, two ways to see who is behind the
 numbers: "Quién lo votó" under each player, and a panel at the foot of the page
 saying what each person sent.
 `PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
@@ -607,9 +607,11 @@ honestly.
 A median absorbs one bad-faith 2 — that is decision 1 in `lib/crowd.ts` — but
 it does not *say* there was one, and two of them move it. A link that goes to a
 grupo de WhatsApp is a link somebody's cuñado can open, so there is one way to
-look, and it is deliberately one account wide: `SUPER_ADMIN_EMAIL` in
-`lib/superAdmin.ts`, and the identical address in `isSuperAdmin()` in
-`firestore.rules`. Four things keep it from undoing the anonymity above.
+look, and it is deliberately the two people who maintain the app and nobody
+else: `SUPER_ADMIN_EMAILS` in `lib/superAdmin.ts`, and the identical list in
+`isSuperAdmin()` in `firestore.rules` — hard-coded in both, never a field on a
+document, so granting it is two deliberate edits rather than one accidental
+write. Four things keep it from undoing the anonymity above.
 
 - **The poll's owner still cannot see it.** Not `get`, not `list`. The
   anonymity a voter was promised is anonymity *from the person who made the
@@ -626,7 +628,7 @@ look, and it is deliberately one account wide: `SUPER_ADMIN_EMAIL` in
   read by, never proof.
 - **The voter is told, before they sign in.** `PollPage` says it in the
   paragraph above the button: the one who made the list sees numbers and not
-  names, your mail is kept, and the one who maintains the app can see it. A
+  names, your mail is kept, and the ones who maintain the app can see it. A
   promise the code has quietly stopped keeping is worse than no promise, so if
   this ever changes, the cartel changes with it.
 
