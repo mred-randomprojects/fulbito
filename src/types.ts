@@ -348,6 +348,16 @@ export interface Match {
    * thing that reads this.
    */
   reviews: ReviewBook;
+  /**
+   * What the owner made of the pronóstico once the result was in: por qué
+   * el modelo se comió el 2-6, que faltó el arquero, que se jugó cuarenta
+   * minutos nomás. Free text about the *forecast*, as distinct from `notes`,
+   * which is about the night — a note that "el promedio le erró feo" is not
+   * something you want above the scoreboard every time you open the match.
+   * Stored exactly as typed, for the same reason `notes` is, and read by
+   * exactly one thing: the Pronóstico tab. See `lib/forecastScore.ts`.
+   */
+  forecastNotes: string;
   updatedAt: string;
 }
 
@@ -821,6 +831,9 @@ function normalizeMatch(raw: unknown): Match | null {
     // Absent on any match saved before the uno x uno existed, which is the
     // same state as a match nobody has written one on.
     reviews: normalizeReviews(raw.reviews),
+    // Absent on any match saved before there was a pronóstico to argue
+    // with, which is the same state as one nobody has written about.
+    forecastNotes: str(raw.forecastNotes),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
 }

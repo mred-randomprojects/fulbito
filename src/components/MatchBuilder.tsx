@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -26,6 +26,7 @@ import { PitchPlayerCard, type PitchPlace, type PitchPlayerTarget } from "./Pitc
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { TeamInsights } from "./TeamInsights";
+import { ForecastPanel } from "./ForecastPanel";
 import { ShareDialog } from "./ShareDialog";
 import { MatchTabsBar } from "./MatchTabsBar";
 import { PlayerForm } from "./PlayerForm";
@@ -37,6 +38,7 @@ import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid
 import { computeStats } from "@/lib/stats";
 import { nextPaymentState, splitCourt } from "@/lib/court";
 import { matchTabs, type MatchTabId } from "@/lib/matchTabs";
+import { forecastMatch } from "@/lib/forecastMatch";
 import { hasNote } from "@/lib/matchNotes";
 import { hasReview, setReview } from "@/lib/reviews";
 import { decideTap } from "@/lib/pitchTap";
@@ -638,6 +640,23 @@ export function MatchBuilder({
     [match.courtCost, match.payments, squadPlayers],
   );
 
+  /**
+   * What the six models make of tonight's sides. Read off the same lineups
+   * the pitch draws, remembered by fingerprint (`lib/forecastMatch.ts`), so
+   * a keystroke in the notes costs a comparison and not a simulation.
+   *
+   * Deferred, because a lineup change is the one edit that *does* cost a
+   * simulation — twenty milliseconds here, more on a phone — and it must not
+   * sit between a tap on the cancha and the swap it asked for. The pitch
+   * renders on the urgent pass with the previous forecast; the badge and the
+   * tab catch up a frame later.
+   */
+  const deferredMatch = useDeferredValue(match);
+  const forecasts = useMemo(
+    () => forecastMatch(deferredMatch, playersById, matches),
+    [deferredMatch, playersById, matches],
+  );
+
   const tabs = matchTabs({
     squadSize: match.squad.length,
     hasLineup,
@@ -647,6 +666,8 @@ export function MatchBuilder({
     courtCost: match.courtCost,
     payers: courtSplit.payers,
     paidCount: courtSplit.paidCount,
+    forecastFavourite: forecasts === null ? null : Math.max(forecasts.consenso.pA, forecasts.consenso.pB),
+    hasResult: match.result !== null,
   });
 
   return (
@@ -903,6 +924,16 @@ export function MatchBuilder({
                   />
                 )}
               </div>
+            )}
+
+            {tab === "pronostico" && (
+              <ForecastPanel
+                match={match}
+                players={players}
+                matches={matches}
+                forecasts={forecasts}
+                onNotesChange={(forecastNotes) => patch({ forecastNotes })}
+              />
             )}
 
             {tab === "jugadores" && (

@@ -54,6 +54,7 @@ function match(id: string, updatedAt: string): Match {
     payments: {},
     notes: "",
     reviews: {},
+    forecastNotes: "",
     updatedAt,
   };
 }

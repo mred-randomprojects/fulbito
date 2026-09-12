@@ -94,6 +94,20 @@
     "src/lib/kits.test.ts",
     "src/lib/pwa.ts",
     "src/lib/pwa.test.ts",
+    "src/lib/random.ts",
+    "src/lib/random.test.ts",
+    "src/lib/forecast.ts",
+    "src/lib/forecast.test.ts",
+    "src/lib/forecastModels.ts",
+    "src/lib/forecastModels.test.ts",
+    "src/lib/forecastSim.ts",
+    "src/lib/forecastSim.test.ts",
+    "src/lib/forecastRecord.ts",
+    "src/lib/forecastRecord.test.ts",
+    "src/lib/forecastMatch.ts",
+    "src/lib/forecastMatch.test.ts",
+    "src/lib/forecastScore.ts",
+    "src/lib/forecastScore.test.ts",
     "src/syncRoundTrip.test.ts"
   ]
 }

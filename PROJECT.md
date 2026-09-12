@@ -19,7 +19,10 @@ about the night, how each of them went one by one, and who still owes you for
 the cancha. When more people turn
 up than two teams can hold, a second screen splits them into several, lets you
 name them, and draws the torneito they are about to play. And when it is the same two sides every week, you save
-them once and bring them both into a match in a tap.
+them once and bring them both into a match in a tap. Once the sides are up,
+six models guess how it goes — who wins, with how many goals, as a
+probability for every scoreline — and once the result is in, the same screen
+says which of them came closest, tonight and over every game so far.
 
 Three constraints shape every decision here:
 
@@ -172,6 +175,13 @@ enters the app without going through `normalizeAppData` — a hand-edited
   exactly as typed, same as `notes`; the key goes when the box is emptied, so
   an untouched match carries no field per player forever. It never leaves the
   app: not the shared text, not either PNG. See `lib/reviews.ts`.
+- **`Match.forecastNotes`** — what the owner made of the pronóstico once the
+  result was in: por qué el modelo se comió el 2-6, que faltó el arquero. Its
+  own field rather than a paragraph in `notes`, because a note about how the
+  *models* did is not the sentence you want above the scoreboard every time
+  you open the match. Stored exactly as typed, like `notes`, and read by the
+  Pronóstico tab alone. The forecasts themselves are **not** stored — see
+  "The pronóstico" below.
 - **`Match.courtCost` / `Match.payments`** — what the pitch cost in whole
   pesos, and one record per person: absent means they owe, `"paid"` means they
   put it in, `"comped"` means we bancamos them. Per match rather than global —
@@ -194,10 +204,18 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
-| `lib/matchTabs.ts` | Which of a match's four tabs is worth a count or a warning dot |
+| `lib/matchTabs.ts` | Which of a match's five tabs is worth a count or a warning dot |
 | `lib/pitchTap.ts` | What a tap on the cancha means: open the player's card, arm a move, or make one |
 | `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
 | `lib/reviews.ts` | What counts as a line of the uno x uno, and one player's history of them |
+| `lib/forecast.ts` | The ground every forecast stands on: how many goals a game has, what a gap is worth, what an extra player is worth, and the scoreline grid |
+| `lib/forecastModels.ts` | The six arguments about what decides a picado, each as a grid, and the consensus that averages them |
+| `lib/forecastSim.ts` | Mano a mano: the game played out three thousand times, minute by minute, as duels |
+| `lib/forecastRecord.ts` | El historial: a level per person read off earlier results alone, never off a rating |
+| `lib/forecastMatch.ts` | One stored match's forecasts, remembered by a fingerprint of everything they read |
+| `lib/forecastScore.ts` | How a forecast is judged against the result, and the tally over the last forty |
+| `lib/random.ts` | Dice you can seed, so a simulation lands the same way on every render and device |
+| `useForecastTally.ts` | The tally's rows, worked out a few at a time so the tab never freezes |
 | `lib/matchFaces.ts` | Whose photo stands for a side on the list of partidos |
 | `lib/matchOrder.ts` | The order the partidos are in, on every device |
 | `lib/tags.ts` | When two crew labels are the same tag, and who a filter keeps |
@@ -240,10 +258,10 @@ before each save, and a corrupt-blob stash that loading falls back through.
 
 Screens: `MatchesPage` (the list, with the face of each side's best player
 and what is still owed on each row),
-`MatchBuilder` (one screen in four tabs — Cancha, Jugadores, Ajustes, Pagos —
-under a result panel and a note that are always there; on the cancha, a tap on
-a player opens `PitchPlayerCard`, the uno x uno box with the move and the ficha
-under it), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
+`MatchBuilder` (one screen in five tabs — Cancha, Pronóstico, Jugadores,
+Ajustes, Pagos — under a result panel and a note that are always there; on the
+cancha, a tap on a player opens `PitchPlayerCard`, the uno x uno box with the
+move and the ficha under it; `ForecastPanel` is the Pronóstico tab), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, every line of
 uno x uno ever written about them, which crews they belong to, who they will
@@ -332,12 +350,14 @@ would be a second autosaver writing to the same roster. `usePlayerFormTarget`
 holds which job is running, and the reason it is a hook rather than a
 `useState` in five files is the invariant below.
 
-### The four tabs of a match
+### The five tabs of a match
 
 A match is four jobs — look at the pitch, pick who came, set the sizes and
 kits, chase the money — and they used to be one long column. On a phone that
 put the cancha's money at the very bottom, so `MatchTabsBar` puts each job one
-tap away instead. Two consequences worth knowing:
+tap away instead. The fifth tab, Pronóstico, is not a job but a reading: what
+the models make of the sides, and afterwards which of them was right. It has
+its own section below. Two consequences worth knowing:
 
 - **The tabs only exist once the squad reaches two.** Below that the screen is
   still the intro layout: an explainer beside the picker, because there is no
@@ -349,8 +369,10 @@ tap away instead. Two consequences worth knowing:
 
 What each tab *says* — the counts and the amber dot — is `lib/matchTabs.ts`,
 not the component. The rules have a "yes, but" each: no bench count before
-there is a lineup, no money count before there is a price, and nothing
-congratulatory about a cancha you bancaste to everybody.
+there is a lineup, no money count before there is a price, nothing
+congratulatory about a cancha you bancaste to everybody, and the favourite's
+percentage on Pronóstico only until there is a result — after which a stale
+"58%" beside a 2-6 would read as the app not having noticed.
 
 ### The tap on the cancha, and the uno x uno
 
@@ -398,6 +420,79 @@ order Partidos uses and sorted by `reviewHistory` itself rather than trusted
 from the caller. Read-only: a line is edited where it was written, by tapping
 the player on that match's cancha, because the match is the thing it is about,
 and the ficha writes to exactly one record.
+
+### The pronóstico, and why nothing about it is stored
+
+Six models look at the two lineups and each hands back a probability for
+every scoreline — a grid, team A's goals down the side and B's along the top.
+Win, draw and loss, the expected goals, the five likeliest scores and the
+heatmap on the tab are all read off that grid. The six are six *arguments*
+about what decides a picado, and the point of having six is to find out which
+argument the results bear out:
+
+| Model | The claim | How |
+| --- | --- | --- |
+| El promedio | the better average scores more | two Poissons on the per-head gap (Maher, 1982) |
+| Cracks y flojitos | the star scores, the weak link concedes | attack weighted to a side's best, defence to its worst |
+| Por líneas | line against line, and the keeper counts double | midfield → possession share; forwards against back line + keeper → conversion |
+| Mano a mano | a chain of duels, and legs that tire | 3,000 games played minute by minute, `forecastSim.ts` |
+| El historial | results are facts, ratings are opinions | a per-person Elo walked over earlier games; reads no rating at all |
+| Margen de error | the ratings are uncertain, and anyone has an off night | the ratings themselves rolled 400 times, wider the thinner the ficha |
+
+And **el consenso**, the six averaged with equal weight, which is what the
+tab opens on and what the badge on it quotes.
+
+Three things are decided once, in `lib/forecast.ts`, and every model
+inherits them, so that what the tally compares is the argument and not a
+lucky guess about the format:
+
+- **How many goals a game has.** Learned from the group's own finished games,
+  shrunk toward a prior by side size while there are few. A model is judged
+  on how it splits the goals, not on whether it guessed that this group's
+  Thursday is a nine-goal game.
+- **What a gap is worth.** `EDGE_SENSITIVITY` turns rating points a head into
+  goal rates so that the words `insights.ts` uses come out as the numbers a
+  person would put on them: slight ≈ 58%, clear ≈ 72%, lopsided past 90%.
+  The simulation splits that rate across its two duels rather than charging
+  it twice, and the record model prices its levels with the same function.
+- **What an extra player is worth.** Five against six is normal here, and an
+  even average per head hides a spare pair of legs.
+
+**Nothing here is stored except the owner's notes**, and that is the design
+rather than an omission. A forecast is read off the ratings and the matches
+on every pass — the same bargain `lib/stats.ts` makes with results — and
+`lib/forecastMatch.ts` remembers each one by a fingerprint of everything it
+read (the lineups, the fields `effectiveRating` reads on the people in them,
+the result, and a digest rolled over every finished game older than it).
+Two consequences, one good and one to know about:
+
+- **A change to a model is judged against every game ever recorded**, not
+  only the ones played after the change. That is what makes the tally a
+  backtest: for any match, the history models see only the games that sort
+  *after* it in the order Partidos uses (`byMatchOrder`, so "after" means
+  older, and two games on one night still agree on which came first). A
+  forecast that had seen its own result would be the one dishonest thing on
+  the leaderboard.
+- **A rating edited after the game moves the forecast with it**, and the
+  screen says so in as many words. In the common case — rate, play, write
+  the score down the same evening — the number after the game is the number
+  from before it. Freezing the forecast at kick-off would need a stored copy
+  of six grids per match, and would make a *better* model look worse on old
+  games than it is; see "Deliberately not built".
+
+**Judging a forecast is not "did it get the score right".** Nobody gets a 4-3
+right. `lib/forecastScore.ts` reads what the model gave the score that
+happened and where that score sat in its ranking, and what it gave the
+outcome (win, draw, loss) — both proper scoring rules, so a model cannot game
+them by hedging or by bluffing. The tally over the last forty finished games
+takes the geometric mean of the exact-score probability (the log score in a
+shape a person can read) and says, below four games, that it is an anecdote.
+
+**The tab never freezes**, which took a decision: forecasting a game costs
+about twenty milliseconds, nearly all of it the simulated matches, and the
+tally forecasts forty. `useForecastTally` scores them a few at a time on the
+timer `browserClock` wires up and lets the rows land as they are ready;
+every game after the first visit is a cache hit and lands on the first tick.
 
 ### Repartir, and why it is not a match
 
@@ -684,6 +779,24 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   a stored tally drifts the first time anybody fixes a scoreline, moves
   somebody between sides after the fact, or merges a backup this device never
   saw. Only lineups count, and only matches with a `result`.
+- **A forecast is read, never written.** No grid, probability or model score
+  is stored; `lib/forecastMatch.ts` is a memo and not a record, and the
+  answer is the same with it or without it. Storing one would freeze it to
+  the model version that produced it and make the tally a mix of vintages.
+- **The history models see only what came before.** `buildForecastInput`
+  cuts the history at the match itself, by `byMatchOrder`, and
+  `forecast.test.ts` pins both the cut and the same-night tie-break. A model
+  that could see its own result — or a later one — would score like a
+  genius and mean nothing.
+- **The six share their calibration.** Base rate, exchange rate and man
+  advantage come from `lib/forecast.ts` and nowhere else. A model that
+  guessed the goal count better would win the tally for the wrong reason,
+  and `forecastModels.test.ts` checks that every model scores the base rate
+  between equal sides.
+- **The simulation rolls seeded dice, never `Math.random`.** Same match,
+  same three thousand games, on every render and every device — otherwise
+  the 58% you read a second ago would be a 57% now, and the tally would drift
+  between phones. `lib/random.ts` is the only generator it reaches for.
 - **A saved team is a shortcut, never a source of truth for a match.** Bringing
   two teams in *copies* the squad and both lineups onto the match. Nothing
   about last Thursday's game points back at the team record, so renaming Los
@@ -893,6 +1006,9 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   as small as it is.
 - **New test files must be added to `tsconfig.test.json`.** The `include` list
   is explicit; a file missing from it silently never runs.
+- **Nothing anybody wrote about the pronóstico leaves the app either.**
+  `Match.forecastNotes` follows `notes` and `reviews`: not in the shared text,
+  not in either PNG.
 
 ## Verifying a change
 
@@ -944,4 +1060,21 @@ touched anything and the two of them must go quiet.
   from the *record* — from who won on Thursday — would quietly turn one bad
   night into a downgrade, and nobody asked the app to have opinions. An
   encuesta is other people's opinions, which is a different thing and still
-  yours to take or leave.
+  yours to take or leave. The record model in the pronóstico (`El
+  historial`) *reads* the results to make a forecast, and that is where it
+  stops: its levels are worked out and thrown away on every pass, and no
+  ficha ever shows one.
+- **A forecast frozen at kick-off.** What the tab shows is recomputed from
+  the ratings as they are now, and says so. A stored snapshot per match
+  would make "what did it say before the game" exact even after a rating
+  edit, at the cost of six grids per match in storage and sync, and of a
+  tally that mixes model versions. Worth building the day the ratings turn
+  out to get edited between the forecast and the result often enough to
+  matter; not before.
+- **A consensus weighted by track record.** The six are averaged with equal
+  weight. Letting the tally set the weights is the obvious next step once
+  there are a few dozen results — and, with a handful, a way to chase noise.
+- **Sharing the pronóstico.** It is not in the shared text or either PNG.
+  "La app dice 58% Claros" would be a fun line for the grupo; it would also
+  be a number that changes if a rating does, and the share is meant to be a
+  record of the night.

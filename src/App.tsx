@@ -49,6 +49,7 @@ export default function App() {
       payments: {},
       notes: "",
       reviews: {},
+      forecastNotes: "",
       updatedAt: new Date().toISOString(),
     };
     app.saveMatch(match);

@@ -12,6 +12,8 @@ const BASE: MatchTabsInput = {
   courtCost: 0,
   payers: 10,
   paidCount: 0,
+  forecastFavourite: null,
+  hasResult: false,
 };
 
 function tab(input: Partial<MatchTabsInput>, id: MatchTabId): MatchTab {
@@ -21,10 +23,10 @@ function tab(input: Partial<MatchTabsInput>, id: MatchTabId): MatchTab {
 }
 
 describe("matchTabs", () => {
-  it("always offers the same four, in order", () => {
+  it("always offers the same five, in order", () => {
     assert.deepEqual(
       matchTabs(BASE).map((t) => t.id),
-      ["cancha", "jugadores", "ajustes", "pagos"],
+      ["cancha", "pronostico", "jugadores", "ajustes", "pagos"],
     );
   });
 
@@ -94,5 +96,25 @@ describe("the money badge", () => {
     const pagos = tab({ courtCost: 30000, payers: 0, paidCount: 0 }, "pagos");
     assert.equal(pagos.badge, null);
     assert.equal(pagos.alert, false);
+  });
+});
+
+describe("the forecast badge", () => {
+  it("carries the favourite's number once there is a lineup", () => {
+    // Decision 5.
+    assert.equal(tab({ hasLineup: true, forecastFavourite: 0.583 }, "pronostico").badge, "58%");
+  });
+
+  it("stays quiet before there is anything to forecast", () => {
+    assert.equal(tab({ hasLineup: false, forecastFavourite: 0.583 }, "pronostico").badge, null);
+    assert.equal(tab({ hasLineup: true, forecastFavourite: null }, "pronostico").badge, null);
+  });
+
+  it("goes once the game has been played", () => {
+    assert.equal(tab({ hasLineup: true, forecastFavourite: 0.583, hasResult: true }, "pronostico").badge, null);
+  });
+
+  it("never flags, because a forecast is never a problem to fix", () => {
+    assert.equal(tab({ hasLineup: true, forecastFavourite: 0.9 }, "pronostico").alert, false);
   });
 });

@@ -113,6 +113,20 @@ describe("normalizing the note", () => {
   });
 });
 
+describe("normalizing the forecast notes", () => {
+  it("has nothing on a match saved before there was a pronóstico to argue with", () => {
+    assert.equal(withMatch({}).forecastNotes, "");
+  });
+
+  it("keeps what was typed, same as the note about the night", () => {
+    assert.equal(withMatch({ forecastNotes: " faltó el arquero " }).forecastNotes, " faltó el arquero ");
+  });
+
+  it("reads anything that is not a string as nothing written", () => {
+    assert.equal(withMatch({ forecastNotes: 3 }).forecastNotes, "");
+  });
+});
+
 describe("normalizing the uno x uno", () => {
   it("has nothing written on a match saved before it existed", () => {
     assert.deepEqual(withMatch({}).reviews, {});

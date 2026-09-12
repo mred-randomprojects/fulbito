@@ -27,15 +27,30 @@
  *    Ajustes, so that is where the dot goes, even though the banner
  *    explaining the greyed-out "armar" button stays next to the button.
  *
- * The uno x uno is deliberately *not* a fifth tab. It lived as one for a day:
+ * 5. **The forecast badge is the favourite's number, until there is a
+ *    result.** "58%" beside Pronóstico is the one number worth carrying out
+ *    of that screen — who the models like, and how much. Once the game has
+ *    been played the badge goes: the tab is now about how the models *did*,
+ *    and a stale "58%" next to a 2-6 would read as the app not having
+ *    noticed. Nothing at all before there is a lineup, because there is
+ *    nothing to forecast.
+ *
+ * The uno x uno is deliberately *not* a tab. It lived as one for a day:
  * a box per player, in a list. But writing about somebody is something you do
  * looking at them on the cancha, one at a time, not a form to fill in — so it
  * is what a tap on a player opens instead (`PitchPlayerCard`), and a shirt
  * with something written behind it wears a small marker. See `lib/reviews.ts`.
+ *
+ * The pronóstico *is* one — the fifth — because it is a different job from
+ * the four: not arranging the game or settling it, but reading what the
+ * models make of it, and afterwards reading which of them was right. It
+ * wants a whole screen (a grid of scorelines, a picker, a tally), not a
+ * corner of the cancha's sidebar, and it is a thing you go to look at rather
+ * than something in your way while picking the teams.
  */
 
-/** The four jobs, in the order they appear. */
-export type MatchTabId = "cancha" | "jugadores" | "ajustes" | "pagos";
+/** The five jobs, in the order they appear. */
+export type MatchTabId = "cancha" | "pronostico" | "jugadores" | "ajustes" | "pagos";
 
 export interface MatchTab {
   id: MatchTabId;
@@ -66,6 +81,13 @@ export interface MatchTabsInput {
   payers: number;
   /** How many of the payers have handed it over. */
   paidCount: number;
+  /**
+   * What the consensus gives the side it favours, 0..1, or null when there
+   * is no forecast — no lineup, or a side with nobody on it.
+   */
+  forecastFavourite: number | null;
+  /** Whether the result has been written down. */
+  hasResult: boolean;
 }
 
 export function matchTabs({
@@ -77,6 +99,8 @@ export function matchTabs({
   courtCost,
   payers,
   paidCount,
+  forecastFavourite,
+  hasResult,
 }: MatchTabsInput): MatchTab[] {
   // Decision 2 and 3: money is only worth counting when there is a bill and
   // somebody to split it between.
@@ -89,6 +113,16 @@ export function matchTabs({
       // Decision 1.
       badge: hasLineup && benchCount > 0 ? `${benchCount} afuera` : null,
       alert: conflictCount > 0,
+    },
+    {
+      id: "pronostico",
+      label: "Pronóstico",
+      // Decision 5.
+      badge:
+        hasLineup && !hasResult && forecastFavourite !== null
+          ? `${Math.round(forecastFavourite * 100)}%`
+          : null,
+      alert: false,
     },
     {
       id: "jugadores",

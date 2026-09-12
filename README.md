@@ -4,7 +4,9 @@ Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, let it work out the split, write down how it
 ended, and keep track of who still owes you for the cancha. Twenty turned up?
 Cut them into four fives, name them, and send the group the torneito. Same two
-sides every week? Save them once and bring both into a match in a tap.
+sides every week? Save them once and bring both into a match in a tap. Want to
+know how it goes before it goes? Six models will tell you, and afterwards the
+app tells you which of them was right.
 
 `PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
@@ -55,6 +57,19 @@ any other app, full screen and with no signal needed.
   renamed along with the change; a name you typed yourself is never touched.
 - **Insight, not just a total.** Line-by-line comparisons, top-heaviness, the
   gap between the two best players, and a plain-English read on what it means.
+- **A pronóstico, six ways.** Once the sides are up, the Pronóstico tab gives
+  a probability for every scoreline — who wins, with how many goals, the five
+  likeliest scores and a heatmap of all of them — from six models that each
+  make a different argument: the plain average, the stars and the weak links,
+  line against line, a minute-by-minute simulation of three thousand games,
+  the record alone (no ratings at all), and the ratings taken with a margin
+  of error. Plus the consensus of the six. Each one explains its claim and
+  how it gets there, and they all learn how many goals *this* group scores
+  from the games already played. Once you write the result down, the tab
+  turns around: how much each model gave the score that happened, who came
+  closest tonight, a box for your own notes on why, and a running tally over
+  the last forty games — each one forecast knowing only the games before it,
+  so it is a real test and not a model marking its own homework.
 - **Uneven sides and deliberate handicaps.** 5 v 6 is normal. So is stacking one
   team on purpose.
 - **More than two teams.** Twenty people, two hours, one pitch: cut them into
