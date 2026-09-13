@@ -45,6 +45,12 @@ export function loadPostHogSink(): Promise<TrackSink> {
       const { default: posthog } = await import("posthog-js");
       posthog.init(key, {
         api_host: POSTHOG_HOST,
+        // A dated snapshot of the SDK's recommended defaults, pinned on
+        // purpose. Do not bump it without reading what the newer date flips:
+        // 2026-06-25 turns on `disable_capture_url_hashes`, and this app's
+        // screens live entirely in the hash.
+        defaults: "2026-05-30",
+        disable_capture_url_hashes: false,
         // The hash router never reloads the page, so the pageview is ours to
         // send: `useTracking` fires one per screen, named by `screenOf`.
         capture_pageview: false,
