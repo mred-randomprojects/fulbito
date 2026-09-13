@@ -37,6 +37,8 @@ import {
 } from "@/lib/lista";
 import { track } from "@/lib/track";
 import { cn } from "@/lib/utils";
+import { COPY_REFUSED } from "@/share";
+import { useCopy } from "@/useCopy";
 import { playerShortName, type Match, type Player, type PlayerId } from "@/types";
 
 interface Props {
@@ -71,7 +73,7 @@ export function ListPanel({ match, players, onAnotar, onCreatePlayer }: Props) {
   const [working, setWorking] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<"text" | "link" | null>(null);
+  const { copied, copy: copyToClipboard } = useCopy();
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
@@ -220,14 +222,11 @@ export function ListPanel({ match, players, onAnotar, onCreatePlayer }: Props) {
             link,
           });
     setError(null);
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(what);
-      window.setTimeout(() => setCopied(null), 2000);
-      track({ name: "list_shared", via: what });
-    } catch {
-      setError("El navegador no dejó copiar. Seleccioná el texto y copialo a mano.");
+    if (!(await copyToClipboard(text, what))) {
+      setError(COPY_REFUSED);
+      return;
     }
+    track({ name: "list_shared", via: what });
   };
 
   const apply = () => {

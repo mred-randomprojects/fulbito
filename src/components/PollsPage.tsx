@@ -53,6 +53,7 @@ import { useSuperAdmin } from "@/useSuperAdmin";
 import { computeStats } from "@/lib/stats";
 import { formatMatchDate } from "@/lib/dates";
 import { track } from "@/lib/track";
+import { useCopy } from "@/useCopy";
 import {
   ATTRIBUTE_LABELS,
   ROLE_SHORT,
@@ -521,20 +522,14 @@ function Page({ children }: { children: React.ReactNode }) {
 }
 
 function LinkBox({ pollId }: { pollId: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopy();
   const [manual, setManual] = useState(false);
   const url = linkFor(pollId);
 
-  // `navigator.clipboard` is missing outside a secure context and can be
-  // refused even inside one. Selecting the text is a worse answer than copying
-  // it and a much better one than a button that silently does nothing.
+  // A refused clipboard gets the text shown to select by hand: a worse answer
+  // than copying it and a much better one than a button that does nothing.
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-    } catch {
-      setManual(true);
-    }
+    if (!(await copyToClipboard(url))) setManual(true);
   }
 
   return (
@@ -543,7 +538,7 @@ function LinkBox({ pollId }: { pollId: string }) {
         <code className="flex-1 truncate text-xs text-muted-foreground">{url}</code>
         <Button size="sm" variant="secondary" onClick={() => void copy()}>
           <Copy className="mr-1.5 h-3.5 w-3.5" />
-          {copied ? "Copiado" : "Copiar"}
+          {copied !== null ? "Copiado" : "Copiar"}
         </Button>
       </div>
       {manual && (

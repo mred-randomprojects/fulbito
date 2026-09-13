@@ -10,6 +10,7 @@ import { CloudPanel } from "./CloudPanel";
 import { InstallPanel } from "./InstallPanel";
 import { UsagePanel } from "./UsagePanel";
 import { track } from "@/lib/track";
+import { downloadBlob } from "@/share";
 import type { CloudState } from "@/lib/cloudStatus";
 
 interface Props {
@@ -30,12 +31,7 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `fulbito-${todayIso()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `fulbito-${todayIso()}.json`);
     track({ name: "backup_exported" });
   };
 

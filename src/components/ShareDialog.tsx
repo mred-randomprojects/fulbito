@@ -16,6 +16,8 @@ import { slugify } from "@/lib/canvas";
 import { formatMatchDate } from "@/lib/dates";
 import { formatMoney, splitCourt } from "@/lib/court";
 import { track } from "@/lib/track";
+import { COPY_REFUSED, downloadBlob } from "@/share";
+import { useCopy } from "@/useCopy";
 import {
   KIT_EMOJI,
   playerDisplayName,
@@ -54,7 +56,7 @@ export function ShareDialog({
   formationB,
 }: Props) {
   const [includeRatings, setIncludeRatings] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopy();
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,14 +64,11 @@ export function ShareDialog({
 
   const copy = async () => {
     setError(null);
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-      track({ name: "lineup_shared", via: "text", ratings: includeRatings });
-    } catch {
-      setError("El navegador no dejó copiar. Seleccioná el texto y copialo a mano.");
+    if (!(await copyToClipboard(text))) {
+      setError(COPY_REFUSED);
+      return;
     }
+    track({ name: "lineup_shared", via: "text", ratings: includeRatings });
   };
 
   const downloadImage = async () => {
@@ -88,12 +87,7 @@ export function ShareDialog({
         totalA: evalA.total,
         totalB: evalB.total,
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${slugify(match.name)}.png`;
-      link.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `${slugify(match.name)}.png`);
       track({ name: "lineup_shared", via: "image", ratings: includeRatings });
     } catch (e) {
       console.error("[share] image failed:", e);
@@ -162,12 +156,12 @@ export function ShareDialog({
             {text}
           </pre>
           <Button variant="secondary" className="w-full" onClick={() => void copy()}>
-            {copied ? (
+            {copied !== null ? (
               <Check className="mr-1.5 h-4 w-4" />
             ) : (
               <Copy className="mr-1.5 h-4 w-4" />
             )}
-            {copied ? "Copiado" : "Copiar para WhatsApp"}
+            {copied !== null ? "Copiado" : "Copiar para WhatsApp"}
           </Button>
         </div>
 

@@ -12,6 +12,8 @@ import { cleanName, listText, mine, splitList, type ListEntry } from "@/lib/list
 import { track } from "@/lib/track";
 import { useTracking } from "@/useTracking";
 import { cn } from "@/lib/utils";
+import { COPY_REFUSED } from "@/share";
+import { useCopy } from "@/useCopy";
 
 /**
  * Signing la lista: the page somebody lands on from the grupo.
@@ -70,7 +72,7 @@ export function ListPage() {
   const [addingExtra, setAddingExtra] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopy();
 
   /* ---------------------------------------------------------------- */
   /* Connecting                                                        */
@@ -180,13 +182,7 @@ export function ListPage() {
       entries: snapshot.entries,
       link: window.location.href,
     });
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError("El navegador no dejó copiar. Seleccioná el texto y copialo a mano.");
-    }
+    if (!(await copyToClipboard(text))) setError(COPY_REFUSED);
   };
 
   /* ---------------------------------------------------------------- */
@@ -353,8 +349,12 @@ export function ListPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="secondary" size="sm" onClick={() => void copy()}>
-          {copied ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />}
-          {copied ? "Copiado" : "Copiar la lista"}
+          {copied !== null ? (
+            <Check className="mr-1.5 h-4 w-4" />
+          ) : (
+            <Copy className="mr-1.5 h-4 w-4" />
+          )}
+          {copied !== null ? "Copiado" : "Copiar la lista"}
         </Button>
       </div>
 

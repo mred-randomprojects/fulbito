@@ -57,6 +57,8 @@ import {
 } from "@/types";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
+import { COPY_REFUSED, downloadBlob } from "@/share";
+import { useCopy } from "@/useCopy";
 
 interface Props {
   players: Player[];
@@ -108,7 +110,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
       they are what the search picked. */
   const [handMade, setHandMade] = useState<ReadonlySet<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy: copyToClipboard } = useCopy();
   const form = usePlayerFormTarget();
 
   const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
@@ -411,12 +413,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
         })),
         fixture,
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "torneito.png";
-      link.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, "torneito.png");
       track({ name: "torneito_shared", via: "image", teams: option.teams.length });
     } catch (e) {
       console.error("[torneito] image failed:", e);
@@ -427,19 +424,13 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   }, [option, teamLabels, includeRatings, fixture, rule]);
 
   const copy = useCallback(async () => {
-    // `navigator.clipboard` is simply absent outside a secure context, so
-    // reaching for `.writeText` throws before any promise exists — a bare
-    // `.catch()` would never see it.
     setError(null);
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-      track({ name: "torneito_shared", via: "text", teams: option?.teams.length ?? 0 });
-    } catch {
-      setError("El navegador no dejó copiar. Seleccioná el texto y copialo a mano.");
+    if (!(await copyToClipboard(text))) {
+      setError(COPY_REFUSED);
+      return;
     }
-  }, [text, option]);
+    track({ name: "torneito_shared", via: "text", teams: option?.teams.length ?? 0 });
+  }, [text, option, copyToClipboard]);
 
   /* ---------------------------------------------------------------- */
   /* Render                                                            */
@@ -734,12 +725,12 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                   {rendering ? "Dibujando…" : "Bajar la imagen del torneito"}
                 </Button>
                 <Button variant="secondary" className="w-full" onClick={() => void copy()}>
-                  {copied ? (
+                  {copied !== null ? (
                     <Check className="mr-1.5 h-4 w-4" />
                   ) : (
                     <Copy className="mr-1.5 h-4 w-4" />
                   )}
-                  {copied ? "Copiado" : "Copiar para WhatsApp"}
+                  {copied !== null ? "Copiado" : "Copiar para WhatsApp"}
                 </Button>
                 <p className="text-[11px] leading-snug text-muted-foreground">
                   Esto no se guarda en ningún lado. Lo que mandás al grupo es el
