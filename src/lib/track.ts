@@ -46,7 +46,9 @@ export type TrackEvent =
   /** `own`: their own name, as against somebody they brought along. */
   | { name: "list_joined"; own: boolean }
   | { name: "list_left" }
-  | { name: "list_applied"; players: number };
+  | { name: "list_applied"; players: number }
+  /** A render error the boundary caught. The vendor's own capture never sees these. */
+  | { name: "app_crashed"; message: string };
 
 export type TrackEventName = TrackEvent["name"];
 export type TrackProps = Record<string, string | number | boolean>;

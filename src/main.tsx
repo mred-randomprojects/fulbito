@@ -6,6 +6,7 @@ import App from "./App";
 import { PollPage } from "./components/PollPage";
 import { ListPage } from "./components/ListPage";
 import { CloudAuthProvider } from "./cloud/auth";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { registerServiceWorker } from "./registerServiceWorker";
 
 // Hash routing, because GitHub Pages serves static files and would 404 on a
@@ -28,9 +29,13 @@ createRoot(document.getElementById("root")!).render(
         has to be known before the first screen decides what to show, and
         because for the many visitors who never sign in it is the thing that
         keeps Firebase from being downloaded at all. */}
-    <CloudAuthProvider>
-      <RouterProvider router={router} />
-    </CloudAuthProvider>
+    {/* Outermost, so a provider throwing is caught too. What it shows depends
+        on nothing above it but the button styles. */}
+    <ErrorBoundary>
+      <CloudAuthProvider>
+        <RouterProvider router={router} />
+      </CloudAuthProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );
 
