@@ -57,6 +57,16 @@ service cloud.firestore {
         ];
     }
 
+    // Somebody who signed in as themselves, as against a device that was
+    // handed an anonymous session for la lista. An anonymous session is
+    // mintable by anybody with the public API key, so "any session" only
+    // keeps out crawlers; the encuesta's names and faces, and the one vote
+    // per person, are gated on a Google account like they always were.
+    function isPerson() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     // One document per record, under the owner's uid:
     //   users/{uid}/players/{playerId}
     //   users/{uid}/matches/{matchId}
@@ -131,7 +141,7 @@ service cloud.firestore {
       // Whoever holds the link, once signed in. A poll carries names and
       // faces, so it is not readable by an unauthenticated crawler that
       // guessed an id, and it is never enumerable by anybody but its owner.
-      allow get: if request.auth != null;
+      allow get: if isPerson();
       allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
       allow create: if request.auth != null
         && request.resource.data.ownerUid == request.auth.uid;
@@ -141,7 +151,7 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
 
       match /players/{playerId} {
-        allow read: if request.auth != null;
+        allow read: if isPerson();
         allow create, update: if request.auth != null
           && request.resource.data.ownerUid == request.auth.uid;
         allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
@@ -199,7 +209,7 @@ service cloud.firestore {
         // uid beside every ballot and undo the whole design above.
         allow get: if request.auth != null && request.auth.uid == voterId;
         allow list: if false;
-        allow create: if request.auth != null
+        allow create: if isPerson()
           && request.auth.uid == voterId
           && request.resource.data.keys().hasOnly(['ballotId'])
           && request.resource.data.ballotId is string

@@ -309,6 +309,17 @@ describe("polls", () => {
     await denied(fetchPoll(as(null), pollId));
   });
 
+  /**
+   * An anonymous session is what la lista hands any device, and anybody
+   * with the public API key can mint one. The names and faces on an
+   * encuesta, and the one vote per person, stay behind a Google account.
+   */
+  it("is closed to an anonymous session: no reading it, no claiming a vote", async () => {
+    const pollId = await createPoll(as(OWNER), "owner-1", draft);
+    await denied(fetchPoll(as(DEVICE_A), pollId));
+    await denied(claimBallotId(as(DEVICE_A), pollId, "anon-a"));
+  });
+
   it("takes one ballot per account, at the id the marker names", async () => {
     const pollId = await createPoll(as(OWNER), "owner-1", draft);
     const db = as(VOTER);
