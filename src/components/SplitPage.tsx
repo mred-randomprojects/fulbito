@@ -56,6 +56,7 @@ import {
   type PlayerId,
 } from "@/types";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/track";
 
 interface Props {
   players: Player[];
@@ -416,6 +417,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
       link.download = "torneito.png";
       link.click();
       URL.revokeObjectURL(url);
+      track({ name: "torneito_shared", via: "image", teams: option.teams.length });
     } catch (e) {
       console.error("[torneito] image failed:", e);
       setError("No se pudo armar la imagen. Probá de nuevo.");
@@ -433,10 +435,11 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
       await navigator.clipboard.writeText(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+      track({ name: "torneito_shared", via: "text", teams: option?.teams.length ?? 0 });
     } catch {
       setError("El navegador no dejó copiar. Seleccioná el texto y copialo a mano.");
     }
-  }, [text]);
+  }, [text, option]);
 
   /* ---------------------------------------------------------------- */
   /* Render                                                            */

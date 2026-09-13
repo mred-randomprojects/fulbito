@@ -15,6 +15,7 @@ import { renderLineupImage } from "@/lib/lineupImage";
 import { slugify } from "@/lib/canvas";
 import { formatMatchDate } from "@/lib/dates";
 import { formatMoney, splitCourt } from "@/lib/court";
+import { track } from "@/lib/track";
 import {
   KIT_EMOJI,
   playerDisplayName,
@@ -65,6 +66,7 @@ export function ShareDialog({
       await navigator.clipboard.writeText(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+      track({ name: "lineup_shared", via: "text", ratings: includeRatings });
     } catch {
       setError("El navegador no dejó copiar. Seleccioná el texto y copialo a mano.");
     }
@@ -92,6 +94,7 @@ export function ShareDialog({
       link.download = `${slugify(match.name)}.png`;
       link.click();
       URL.revokeObjectURL(url);
+      track({ name: "lineup_shared", via: "image", ratings: includeRatings });
     } catch (e) {
       console.error("[share] image failed:", e);
       setError("No se pudo armar la imagen. Probá de nuevo.");

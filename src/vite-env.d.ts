@@ -15,6 +15,10 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID: string | undefined;
   /** Comma-separated. Empty means anybody may sync. See `lib/allowlist.ts`. */
   readonly VITE_ALLOWED_EMAILS: string | undefined;
+  /** PostHog project key. Missing means no analytics at all. See `analytics/posthog.ts`. */
+  readonly VITE_POSTHOG_KEY: string | undefined;
+  /** PostHog ingestion host. Missing means US Cloud. */
+  readonly VITE_POSTHOG_HOST: string | undefined;
 }
 
 interface ImportMeta {

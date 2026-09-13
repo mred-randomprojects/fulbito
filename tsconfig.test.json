@@ -108,6 +108,8 @@
     "src/lib/forecastMatch.test.ts",
     "src/lib/forecastScore.ts",
     "src/lib/forecastScore.test.ts",
+    "src/lib/track.ts",
+    "src/lib/track.test.ts",
     "src/syncRoundTrip.test.ts"
   ]
 }

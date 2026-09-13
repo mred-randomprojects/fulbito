@@ -207,7 +207,10 @@ Works with no configuration at all: everything lives in `localStorage` and
 leaves the machine only when you export it. To develop the optional sync,
 `cp .env.example .env` and fill in a Firebase project — see
 [FIREBASE_SETUP.md](./FIREBASE_SETUP.md). Without it the app simply never
-offers to sync, which is a supported state and not a broken build.
+offers to sync, which is a supported state and not a broken build. The same
+goes for `VITE_POSTHOG_KEY`: set, the deployed app reports how it is used
+(and says so in "Tus datos", with a switch); unset, no analytics code is
+even in the bundle.
 
 ```bash
 npm run build   # typecheck + production build
@@ -237,6 +240,14 @@ little cloud** means a server has acknowledged it and your other phone will see
 it. Writes made with no signal are queued on disk and go up on their own the
 next time the app is opened, so closing the tab at the cancha does not lose
 them.
+
+**Usage is reported, and the app says so.** The deployed build sends PostHog
+which screens are opened, which buttons are tapped, and a session recording
+with typed fields starred out and photos blocked — to learn what works, not to
+read anybody's roster, which still lives only here and in your own sync copy.
+"Tus datos" explains it and has the off switch; the encuesta page a voter
+lands on never loads it at all. See "Analytics" in
+[PROJECT.md](./PROJECT.md).
 
 Photos are centre-cropped and re-encoded on upload: a 1.7 MB camera photo lands
 at a 256px square, usually 10–25 KB and never more than 60, which is what makes

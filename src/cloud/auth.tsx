@@ -18,6 +18,7 @@ import {
   syncGate,
   type SyncGate,
 } from "@/lib/syncConsent";
+import { track } from "@/lib/track";
 
 /**
  * Signing in, and — separately — agreeing to sync.
@@ -177,6 +178,7 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
     // until the thing it mirrors is actually true.
     writeCloudConsent(new Date().toISOString());
     setAccount(true);
+    track({ name: "sync_enabled" });
   }, [ensureSignedIn]);
 
   const disableSync = useCallback(async () => {

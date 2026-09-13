@@ -8,6 +8,8 @@ import { todayIso } from "@/lib/dates";
 import { AdminPanel } from "./AdminPanel";
 import { CloudPanel } from "./CloudPanel";
 import { InstallPanel } from "./InstallPanel";
+import { UsagePanel } from "./UsagePanel";
+import { track } from "@/lib/track";
 import type { CloudState } from "@/lib/cloudStatus";
 
 interface Props {
@@ -34,6 +36,7 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
     link.download = `fulbito-${todayIso()}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    track({ name: "backup_exported" });
   };
 
   const importData = async (file: File | undefined) => {
@@ -44,6 +47,7 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
       const parsed = normalizeAppData(JSON.parse(await file.text()));
       const before = data.players.length;
       onImport(parsed);
+      track({ name: "backup_imported" });
       setMessage(
         `Listo. Vinieron ${parsed.players.length} jugador${parsed.players.length === 1 ? "" : "es"}, ${parsed.matches.length} partido${parsed.matches.length === 1 ? "" : "s"} y ${parsed.teams.length} equipo${parsed.teams.length === 1 ? "" : "s"}. Antes tenías ${before}.`,
       );
@@ -68,6 +72,8 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
       <AdminPanel />
 
       <InstallPanel />
+
+      <UsagePanel />
 
       <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
         <h2 className="mb-1 text-base font-medium">Backup</h2>

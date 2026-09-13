@@ -10,6 +10,7 @@ import {
   type TeamConfig,
 } from "@/types";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/track";
 
 interface Props {
   match: Match;
@@ -43,7 +44,14 @@ export function ResultPanel({ match, onChange }: Props) {
             los equipos que armaste.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => onChange(emptyResult())}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            onChange(emptyResult());
+            track({ name: "result_recorded" });
+          }}
+        >
           Anotar el resultado
         </Button>
       </section>

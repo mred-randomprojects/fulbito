@@ -52,6 +52,7 @@ import {
 import { useSuperAdmin } from "@/useSuperAdmin";
 import { computeStats } from "@/lib/stats";
 import { formatMatchDate } from "@/lib/dates";
+import { track } from "@/lib/track";
 import {
   ATTRIBUTE_LABELS,
   ROLE_SHORT,
@@ -178,6 +179,7 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
       setTitle("");
       setPicked(new Set());
       setView({ kind: "made", pollId });
+      track({ name: "poll_created", players: chosen.length });
       void refresh();
     } catch {
       setError("No se pudo crear la encuesta. Probá de nuevo.");
@@ -891,6 +893,7 @@ function ResultRow({
       if (number.kind === "ready") next.attributes[key] = number.suggested;
     }
     onSavePlayer(next);
+    track({ name: "crowd_adopted" });
   }
 
   const crowd = row.overall;

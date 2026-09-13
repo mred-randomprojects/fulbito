@@ -32,7 +32,10 @@ Three constraints shape every decision here:
   is one optional extra — a second copy in Firestore so the roster you built on
   the laptop is on the phone at the cancha — and it is offered once, in Tus
   datos, behind a consent dialog. The export file is still the portability
-  story for anybody who would rather not. See "Sync" below.
+  story for anybody who would rather not. See "Sync" below. The one thing
+  that does leave without being asked is *how the app is used* — screens,
+  taps, a recording — and it is said out loud in Tus datos with the switch
+  beside it; see "Analytics" below.
 - **Missing data never punishes anybody.** One overall rating is a complete
   player. Positions and attributes are for the two or three people you actually
   have an opinion about, and the model degrades gracefully as the data thins.
@@ -247,6 +250,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
 | `lib/syncConsent.ts` | Whether sync may run, and whether this tab needs the SDK at all |
 | `lib/authErrors.ts` | Reading a Firebase error code; which ones are somebody changing their mind |
+| `lib/track.ts` | The closed list of events the app can report, whether it may report at all, and holding the early ones until the vendor arrives |
+| `analytics/posthog.ts` | The vendor, in one file; `analytics/tracking.ts` is the switch from both ends, `analytics/prefs.ts` is where it is remembered, `useTracking.ts` is the wiring |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
 | `cloud/firebase.ts` | Whether this build has a cloud at all, and loading the SDK if so |
 | `cloud/polls.ts` | Encuestas in Firestore: sending one out, answering it, reading the answers |
@@ -270,8 +275,10 @@ them — `PollVotesPanel`, the swarm of everything the room ever voted on
 them), `SettingsPage` (sync, backup,
 storage use, rubrics — `CloudPanel` is the sync section and owns the consent
 dialog, `InstallPanel` is the offer to install and renders nothing at all when
-there is nothing to offer, `AdminPanel` is the super admin switch and renders
-for exactly the Google accounts in `lib/superAdmin.ts`). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
+there is nothing to offer, `UsagePanel` is the analytics switch and what it
+means, and renders nothing in a build with no key, `AdminPanel` is the super
+admin switch and renders for exactly the Google accounts in
+`lib/superAdmin.ts`). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
 the link, read the medians back and adopt them a tap at a time — with, for the
 super admins and only when the switch is on, two ways to see who is behind the
 numbers: "Quién lo votó" under each player, and a panel at the foot of the page
@@ -687,6 +694,53 @@ comes back.
 Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
 [`firestore.rules`](./firestore.rules) is the gate that actually enforces it.
 
+### Analytics, and what it is allowed to see
+
+The deployed app reports how it is used, because the point of the next few
+features is finding out which of them anybody uses. PostHog is the vendor:
+which screen is open, which buttons are tapped (autocapture, with the text of
+the button — they say what they do in Spanish, so a session reads as a story
+with no wiring), a session recording, and a short list of events the app
+sends on purpose. Four things about it are deliberate.
+
+- **The events are a closed list, and the vendor is one file.** `TrackEvent`
+  in `lib/track.ts` is the contract: `match_created`, `teams_generated`,
+  `lineup_shared`, `result_recorded`, `poll_created` and the rest — about
+  fifteen, each fired once at the tap that means it, never per keystroke.
+  Adding one is adding a member there; a typo at a call site is a build
+  error. `analytics/posthog.ts` is the only file that imports the SDK, so
+  changing vendor changes that file and none of the questions.
+- **Nothing is fetched before it is allowed.** `trackingGate` answers
+  synchronously from two facts known on the first render: was this build
+  given `VITE_POSTHOG_KEY`, and did this browser switch it off
+  (`analytics/prefs.ts`, local, like the admin switch). Off means the SDK is
+  not downloaded — and a build with no key has no PostHog bytes in it at all,
+  because the dynamic import sits behind a check the bundler can see is
+  dead. Meanwhile the tracker holds what happened, in order, and hands it
+  over when the sink arrives; told nothing is coming, it drops the lot.
+  `track.test.ts` pins that.
+- **The encuesta never loads it.** `useTracking` is mounted in `App`, and
+  `PollPage` sits beside `App` in `main.tsx` for exactly this kind of
+  reason: a voter was promised the one who made the list sees numbers and
+  not names, and a recording of them putting a 4 on El Gordo would be a
+  second way to break that promise. Nothing on that route touches the
+  tracker.
+- **What the recording is not allowed to see.** Typed fields are starred
+  (`maskAllInputs`), and every inline photo is blocked
+  (`blockSelector: img[src^="data:"]`) — twenty faces of somebody's friends
+  are neither anybody's business nor cheap to resend on every snapshot.
+  Names on screen are visible, and `UsagePanel` says so in as many words.
+  Signing in identifies the session by uid with name and mail; signing out
+  resets it. The reset is sent only on an actual sign-out — never on the
+  first render's "nobody yet" — because the vendor's reset mints a fresh
+  anonymous person, and doing that on every load would make the same phone
+  a stranger every week.
+
+The switch in Tus datos is on by default and takes effect on the spot:
+`setTrackingEnabled` writes the preference and then does what boot does with
+it, so the two paths cannot disagree. PostHog keeps an opt-out of its own; the
+adapter overrides it on start so the preference here is the only truth.
+
 ### Installing it, and the service worker
 
 The app is installable, and it opens with no signal. Two files do that, both in
@@ -734,6 +788,12 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
 
 ## Invariants worth not breaking
 
+- **Nothing about usage is sent from the encuesta, and nothing is sent
+  before the gate says so.** `useTracking` lives in `App` and nowhere above
+  it; `lib/track.ts` decides on the first render whether the vendor is
+  downloaded at all. Mounting the hook in `main.tsx` "to catch everything"
+  would put a recording on the voter's screen and break the promise printed
+  above the sign-in button. See "Analytics".
 - **Nothing has a save button.** The player form writes itself as you type
   (`lib/autosave.ts`); a match writes itself on every tap. Because of that,
   **every write is confirmed on screen** by `SaveIndicator`, and a failed write

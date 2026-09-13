@@ -22,6 +22,7 @@ import {
   upsertPlayer,
   upsertTeam,
 } from "./appDataOps";
+import { track } from "./lib/track";
 
 /**
  * How long "Guardado" stays up after the last write. Long enough to be read
@@ -126,7 +127,14 @@ export function useAppData(): AppDataApi {
   }, [notifier]);
 
   const savePlayer = useCallback(
-    (player: Player) => persist((current) => upsertPlayer(current, player, now())),
+    (player: Player) => {
+      // Read before the write: a new player is one whose id the roster does
+      // not know yet. The autosaver calls this for every edit after that.
+      const before = latest.current.players;
+      const isNew = !before.some((entry) => entry.id === player.id);
+      persist((current) => upsertPlayer(current, player, now()));
+      if (isNew) track({ name: "player_created", players: before.length + 1 });
+    },
     [persist],
   );
 

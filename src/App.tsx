@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "./useAppData";
 import { useCloudSync } from "./useCloudSync";
+import { useTracking } from "./useTracking";
 import { NavBar } from "./components/NavBar";
 import { PlayersPage } from "./components/PlayersPage";
 import { MatchesPage } from "./components/MatchesPage";
@@ -20,10 +21,12 @@ import {
   type MatchId,
 } from "./types";
 import { defaultMatchName, todayIso } from "./lib/dates";
+import { track } from "./lib/track";
 
 export default function App() {
   const app = useAppData();
   const cloud = useCloudSync(app);
+  useTracking();
   const navigate = useNavigate();
 
   const createMatch = useCallback(() => {
@@ -53,6 +56,7 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
     app.saveMatch(match);
+    track({ name: "match_created", matches: app.matches.length + 1 });
     navigate(`/matches/${match.id}`);
   }, [app, navigate]);
 

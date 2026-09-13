@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { installOffer, isApplePhoneOrTablet, type InstallOffer } from "@/lib/pwa";
+import { track } from "@/lib/track";
 
 /**
  * Chrome's install prompt. The DOM library does not know about it because it
@@ -51,6 +52,7 @@ export function useInstallPrompt(): { offer: InstallOffer; install: () => void }
       deferred.current = null;
       setCanPrompt(false);
       setInstalled(true);
+      track({ name: "app_installed" });
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);

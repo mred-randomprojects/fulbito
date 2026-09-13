@@ -48,6 +48,7 @@ import { summarise } from "@/lib/insights";
 import type { TeamMatchPlan } from "@/lib/teamMatch";
 import { formatMatchDate } from "@/lib/dates";
 import { openDatePicker } from "@/lib/datePicker";
+import { track } from "@/lib/track";
 import { useTagFilter } from "@/useTagFilter";
 import {
   KITS,
@@ -280,7 +281,12 @@ export function MatchBuilder({
   /** One line of the uno x uno. Emptying the box takes the key with it — see `lib/reviews.ts`. */
   const writeReview = useCallback(
     (id: PlayerId, review: string) => {
-      patch({ reviews: setReview(match.reviews, id, review) });
+      const next = setReview(match.reviews, id, review);
+      // Once per line, not per keystroke: the moment a review comes to exist.
+      if (!hasReview(match.reviews, id) && hasReview(next, id)) {
+        track({ name: "review_written" });
+      }
+      patch({ reviews: next });
     },
     [match.reviews, patch],
   );
@@ -359,6 +365,7 @@ export function MatchBuilder({
       setSelection(null);
       setEdited(false);
       setBalanceError(null);
+      track({ name: "saved_teams_loaded" });
     },
     [match.payments, match.teamA, match.teamB, patch],
   );
@@ -426,6 +433,7 @@ export function MatchBuilder({
       setOptionIndex(0);
       setEdited(false);
       applyOption(result, 0);
+      track({ name: "teams_generated", squad: squadPlayers.length, basis: match.basis });
     } catch (e) {
       console.error("[balance] failed:", e);
       setBalanceError(
