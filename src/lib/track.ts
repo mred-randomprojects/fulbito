@@ -40,7 +40,13 @@ export type TrackEvent =
   | { name: "backup_exported" }
   | { name: "backup_imported" }
   | { name: "sync_enabled" }
-  | { name: "app_installed" };
+  | { name: "app_installed" }
+  | { name: "list_created"; cap: number }
+  | { name: "list_shared"; via: "text" | "link" }
+  /** `own`: their own name, as against somebody they brought along. */
+  | { name: "list_joined"; own: boolean }
+  | { name: "list_left" }
+  | { name: "list_applied"; players: number };
 
 export type TrackEventName = TrackEvent["name"];
 export type TrackProps = Record<string, string | number | boolean>;

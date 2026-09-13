@@ -125,7 +125,12 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
         const { onAuthStateChanged } = await import("firebase/auth");
         if (!live) return;
         unsubscribe = onAuthStateChanged(auth, (signedIn) => {
-          if (signedIn === null) {
+          // An anonymous session is what a device gets for putting a name
+          // on a lista (`cloud/lists.ts`). It is nobody as far as this
+          // provider is concerned: it has no address, it consents to
+          // nothing, and treating it as signed in would offer to sync a
+          // roster under an account that evaporates.
+          if (signedIn === null || signedIn.isAnonymous) {
             setUser(null);
             setAccount(null);
           } else {
@@ -157,7 +162,11 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
   /** A session, created if there is not one already. Consents to nothing. */
   const ensureSignedIn = useCallback(async (): Promise<string> => {
     const { auth } = await loadCloud();
-    if (auth.currentUser !== null) return auth.currentUser.uid;
+    if (auth.currentUser !== null && !auth.currentUser.isAnonymous) return auth.currentUser.uid;
+    // Signing in over an anonymous session replaces it. The lista entries
+    // that session wrote keep their old uid — on this device the organiser
+    // can no longer edit those as "mine", which is a small price for not
+    // linking a throwaway identity to a Google account by accident.
     const { GoogleAuthProvider, signInWithPopup } = await import("firebase/auth");
     const account = await signInWithPopup(auth, new GoogleAuthProvider());
     setUser(toCloudUser(account.user));

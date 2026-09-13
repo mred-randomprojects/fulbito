@@ -25,6 +25,7 @@ import { MatchNotes } from "./MatchNotes";
 import { PitchPlayerCard, type PitchPlace, type PitchPlayerTarget } from "./PitchPlayerCard";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
+import { ListPanel } from "./ListPanel";
 import { TeamInsights } from "./TeamInsights";
 import { ForecastPanel } from "./ForecastPanel";
 import { ShareDialog } from "./ShareDialog";
@@ -739,6 +740,12 @@ export function MatchBuilder({
             </p>
           </div>
           <div className="space-y-4">
+            <ListPanel
+              match={match}
+              players={players}
+              onAnotar={(ids) => setSquadMembership(ids, true)}
+              onCreatePlayer={form.create}
+            />
             <SavedTeamsPanel
               teams={teams}
               playersById={playersById}
@@ -946,6 +953,15 @@ export function MatchBuilder({
 
             {tab === "jugadores" && (
               <div className="mx-auto w-full max-w-3xl space-y-4">
+                {/* The names from the grupo come first: they are where tonight's
+                    squad actually starts, and ticking the roster by hand is
+                    what happens when there was no list. */}
+                <ListPanel
+                  match={match}
+                  players={players}
+                  onAnotar={(ids) => setSquadMembership(ids, true)}
+                  onCreatePlayer={form.create}
+                />
                 <SavedTeamsPanel
                   teams={teams}
                   playersById={playersById}
@@ -1044,6 +1060,7 @@ export function MatchBuilder({
 
       <PlayerForm
         open={form.target != null}
+        seedName={form.target?.kind === "new" ? form.target.name : undefined}
         onOpenChange={(next) => {
           if (!next) form.close();
         }}

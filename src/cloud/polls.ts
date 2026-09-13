@@ -22,8 +22,9 @@ import type { BallotEntry } from "@/lib/pollAudit";
  * polls/{pollId}/identities/{ballotId}  { email, name, at }
  * ```
  *
- * This is the only collection in the app outside `users/{uid}`, because it is
- * the only thing somebody who is not you has to be able to read and answer.
+ * This is one of two collections outside `users/{uid}` (`cloud/lists.ts` is
+ * the other), because somebody who is not you has to be able to read and
+ * answer it.
  * `firestore.rules` is the real gate; this file is the half that has to agree
  * with it, and two of those agreements are load-bearing:
  *

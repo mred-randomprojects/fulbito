@@ -69,8 +69,9 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     // Encuestas — asking other people what your players are worth.
     //
-    // The one thing in this app that lives outside `users/{uid}`, and every
-    // rule below is about paying for that honestly.
+    // The first thing in this app to live outside `users/{uid}` (la lista,
+    // below, is the second), and every rule here is about paying for that
+    // honestly.
     //
     // A poll is a snapshot the owner sends out: names and faces, no ratings.
     // The faces are a subcollection rather than an array on the poll itself,
@@ -205,6 +206,83 @@ service cloud.firestore {
           && request.resource.data.ballotId.size() > 0;
         // Never re-pointed: that is what makes one marker mean one vote.
         allow update, delete: if false;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // La lista — who says they are coming.
+    //
+    // The second thing outside `users/{uid}`, and the opposite temperament
+    // to the encuesta: a "voy" is a public claim made in front of the whole
+    // grupo, so nothing here is anonymous *from* anybody. What the rules buy
+    // is smaller and simpler:
+    //
+    //   - Reading needs a session of any kind, so a crawler that guessed an
+    //     id gets nothing. The app signs a device in anonymously the moment
+    //     the page opens, which is the only sign-in there is on that page.
+    //   - An entry is pinned to the uid that wrote it. You may rename or
+    //     remove your own names and nobody else's; the organiser may remove
+    //     anybody's, and is the only one who may say which player a name is.
+    //   - `at` is the server's clock. Arrival order decides who is on the
+    //     banco, and a phone with a fast clock would otherwise jump the queue.
+    //
+    // The list's id is the match's id — random, so nobody squats on one they
+    // were not sent, and one match has at most one list without a query.
+    //
+    // Not defended: a device that clears its storage is a new device, and a
+    // troll with the link can put names on the list. The link lives in a
+    // private grupo, the organiser can take names off, and the list is
+    // shared back into the same chat where everybody can see who did what.
+    // That is the same accountability the numbered message always had.
+    // ------------------------------------------------------------------
+    match /lists/{listId} {
+      function list() {
+        return get(/databases/$(database)/documents/lists/$(listId)).data;
+      }
+      function isListOwner() {
+        return request.auth != null && list().ownerUid == request.auth.uid;
+      }
+      function validName(name) {
+        return name is string && name.size() > 0 && name.size() <= 40;
+      }
+
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['ownerUid', 'title', 'date', 'cap', 'createdAt'])
+        && request.resource.data.cap is int
+        && request.resource.data.cap >= 2
+        && request.resource.data.cap <= 40;
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.keys().hasOnly(['ownerUid', 'title', 'date', 'cap', 'createdAt'])
+        && request.resource.data.cap is int
+        && request.resource.data.cap >= 2
+        && request.resource.data.cap <= 40;
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      match /entries/{entryId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['name', 'uid', 'at'])
+          && validName(request.resource.data.name)
+          && request.resource.data.at == request.time;
+        // Your own name: rename it, nothing else changes. The organiser: say
+        // who it is, nothing else changes.
+        allow update: if request.auth != null
+          && (
+            (resource.data.uid == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+              && validName(request.resource.data.name))
+            || (isListOwner()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playerId'])
+              && (!('playerId' in request.resource.data) || request.resource.data.playerId is string))
+          );
+        allow delete: if request.auth != null
+          && (resource.data.uid == request.auth.uid || isListOwner());
       }
     }
 

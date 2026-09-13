@@ -92,6 +92,8 @@ export function mirrorIsStale(gate: SyncGate, mirrored: boolean): boolean {
 
 /** Where an encuesta is answered. Hash routing, so this is what is compared. */
 export const POLL_ROUTE = "/encuesta/";
+/** Where a lista is signed. Same deal: the SDK is needed before anything else. */
+export const LIST_ROUTE = "/lista/";
 
 /**
  * Does this URL need Firebase whether or not sync was ever turned on?
@@ -102,5 +104,5 @@ export const POLL_ROUTE = "/encuesta/";
  */
 export function hashNeedsAuth(hash: string): boolean {
   const path = hash.startsWith("#") ? hash.slice(1) : hash;
-  return path.startsWith(POLL_ROUTE);
+  return path.startsWith(POLL_ROUTE) || path.startsWith(LIST_ROUTE);
 }

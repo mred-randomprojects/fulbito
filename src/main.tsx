@@ -4,6 +4,7 @@ import { RouterProvider, createHashRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App";
 import { PollPage } from "./components/PollPage";
+import { ListPage } from "./components/ListPage";
 import { CloudAuthProvider } from "./cloud/auth";
 import { registerServiceWorker } from "./registerServiceWorker";
 
@@ -16,6 +17,8 @@ import { registerServiceWorker } from "./registerServiceWorker";
 // upload one. Mounting it here is what keeps this route from touching either.
 const router = createHashRouter([
   { path: "/encuesta/:pollId", element: <PollPage /> },
+  // Same shape, same reason. See `ListPage` for how it differs in temperament.
+  { path: "/lista/:listId", element: <ListPage /> },
   { path: "*", element: <App /> },
 ]);
 

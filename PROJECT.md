@@ -22,7 +22,11 @@ name them, and draws the torneito they are about to play. And when it is the sam
 them once and bring them both into a match in a tap. Once the sides are up,
 six models guess how it goes — who wins, with how many goals, as a
 probability for every scoreline — and once the result is in, the same screen
-says which of them came closest, tonight and over every game so far.
+says which of them came closest, tonight and over every game so far. And
+before any of that, a match can put out la lista: a link where each person
+types a name and taps Voy, sees who else is in, and lands on the banco once
+the cupo is full — the numbered message from the grupo, live, and one tap
+from being tonight's squad.
 
 Three constraints shape every decision here:
 
@@ -250,6 +254,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
 | `lib/syncConsent.ts` | Whether sync may run, and whether this tab needs the SDK at all |
 | `lib/authErrors.ts` | Reading a Firebase error code; which ones are somebody changing their mind |
+| `lib/lista.ts` | La lista: who is in and who is on the banco, the message for the grupo, and which typed name is which player |
+| `cloud/lists.ts` | La lista in Firestore: making one, watching it live, putting a name on it, taking one off |
 | `lib/track.ts` | The closed list of events the app can report, whether it may report at all, and holding the early ones until the vendor arrives |
 | `analytics/posthog.ts` | The vendor, in one file; `analytics/tracking.ts` is the switch from both ends, `analytics/prefs.ts` is where it is remembered, `useTracking.ts` is the wiring |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
@@ -283,11 +289,15 @@ the link, read the medians back and adopt them a tap at a time — with, for the
 super admins and only when the switch is on, two ways to see who is behind the
 numbers: "Quién lo votó" under each player, and a panel at the foot of the page
 saying what each person sent.
+`ListPanel` sits at the top of the Jugadores tab (and of the intro layout
+before there is a squad): make the list, copy the message, read the names
+back with who each one is, pass them to the partido.
 `PollPage` (Encuesta) is the odd one out and mounted *beside* `App` in
 `main.tsx` rather than inside it: whoever is answering a poll has no roster of
 ours to load and no permission to upload one, so that route touches neither
 `useAppData` nor `useCloudSync`, and it has no NavBar because the person on it
-is not using the app. `SaveIndicator` floats over all the others. `SquadPicker` is shared by
+is not using the app. `ListPage` (Lista) is mounted the same way for the same
+reason, and is where somebody with the link puts their name down. `SaveIndicator` floats over all the others. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.
@@ -580,10 +590,11 @@ server acknowledgement arrives as an event. Everything short of that is
 
 Everything above lives under `users/{uid}`, which is a wall. Asking other
 people what your players are worth cannot: a poll is read, and answered, by
-somebody who is not you. So it is the one collection at the root —
+somebody who is not you. So it is a collection at the root —
 `polls/{pollId}`, with `ballots/{ballotId}`, `voters/{uid}` and
 `identities/{ballotId}` under it — and the design is about paying for that
-honestly.
+honestly. (La lista is the other one, and the section after this says how
+it differs.)
 
 - **A poll is a snapshot, not a window.** Names and faces, copied at the
   moment the link went out. No ratings — showing yours would anchor the answer
@@ -694,6 +705,52 @@ comes back.
 Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
 [`firestore.rules`](./firestore.rules) is the gate that actually enforces it.
 
+### La lista, and the second thing outside the wall
+
+An encuesta asks for a private opinion; la lista asks for a public "voy". The
+same shape — a root collection, `lists/{matchId}` with `entries/{entryId}`
+under it, a page mounted beside `App` — and the opposite temperament, and
+four decisions follow from the difference.
+
+- **Nobody signs in, visibly.** The page signs the device in *anonymously*
+  the moment it opens (`ensureAnyUid` in `cloud/lists.ts`), so the rules can
+  pin every entry to a uid without anybody seeing a dialog. That uid is what
+  lets you take your own name off and nobody else's, and it is not proof of
+  anything: a device that clears its storage is a new device. The link lives
+  in a private grupo and the list is shared back into the same chat, which
+  is the accountability the numbered message always had. **An anonymous
+  session is nobody to `CloudAuthProvider`** — it has no address and has
+  consented to nothing — so `user` stays `null` on it and signing in with
+  Google simply replaces it. Treating it as signed in would offer to sync a
+  roster under an account that evaporates.
+- **The list's id is the match's id.** One match, one list, no query, no
+  field on the match: `ListPanel` watches `lists/{match.id}` and it either
+  exists or it does not. A match id is random, so nobody squats on one they
+  were not sent, and the link gives away nothing else — `users/{uid}` is a
+  wall. Renaming or re-dating the partido after the link went out rewrites
+  the list's title and date, so the page in the grupo never announces last
+  week's name.
+- **Arrival order is the server's clock.** Who is tenth and who is on the
+  banco is decided by `at`, and a phone running fast would otherwise jump
+  the queue; the rules pin it to `request.time`. A write still in flight is
+  read with an estimate so the person sees their own name go on at once.
+  `splitList` in `lib/lista.ts` does the cut and breaks ties on the id, so
+  every device draws the same list.
+- **The names match themselves where it is obvious, and only there.**
+  `matchName` finds the one player who answers to a typed name — nickname,
+  first name or full name, accents and case folded; never a bare surname —
+  and anything less than exactly one is a picker for the organiser. What
+  they pick is written on the entry (`playerId`, the one field only the
+  owner may set) so the phone agrees with the laptop. A name nobody answers
+  to opens the ficha with the name already typed; the durable fix for next
+  week is a nickname on that ficha, and nothing else is remembered.
+
+It is tracked, unlike the encuesta: "of everybody the link reached, how many
+tapped" is the question the feature exists to answer, and a "voy" was never
+private. The events are `list_created`, `list_shared`, `list_joined`,
+`list_left` and `list_applied`, plus the `page_viewed` the page sends like
+any other.
+
 ### Analytics, and what it is allowed to see
 
 The deployed app reports how it is used, because the point of the next few
@@ -719,12 +776,12 @@ sends on purpose. Four things about it are deliberate.
   dead. Meanwhile the tracker holds what happened, in order, and hands it
   over when the sink arrives; told nothing is coming, it drops the lot.
   `track.test.ts` pins that.
-- **The encuesta never loads it.** `useTracking` is mounted in `App`, and
-  `PollPage` sits beside `App` in `main.tsx` for exactly this kind of
-  reason: a voter was promised the one who made the list sees numbers and
-  not names, and a recording of them putting a 4 on El Gordo would be a
-  second way to break that promise. Nothing on that route touches the
-  tracker.
+- **The encuesta never loads it.** `useTracking` is mounted in `App` and in
+  `ListPage`, and `PollPage` sits beside both in `main.tsx` for exactly
+  this kind of reason: a voter was promised the one who made the list sees
+  numbers and not names, and a recording of them putting a 4 on El Gordo
+  would be a second way to break that promise. Nothing on that route
+  touches the tracker.
 - **What the recording is not allowed to see.** Typed fields are starred
   (`maskAllInputs`), and every inline photo is blocked
   (`blockSelector: img[src^="data:"]`) — twenty faces of somebody's friends
@@ -789,11 +846,15 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
 ## Invariants worth not breaking
 
 - **Nothing about usage is sent from the encuesta, and nothing is sent
-  before the gate says so.** `useTracking` lives in `App` and nowhere above
-  it; `lib/track.ts` decides on the first render whether the vendor is
-  downloaded at all. Mounting the hook in `main.tsx` "to catch everything"
-  would put a recording on the voter's screen and break the promise printed
-  above the sign-in button. See "Analytics".
+  before the gate says so.** `useTracking` lives in `App` and in `ListPage`
+  and nowhere above them; `lib/track.ts` decides on the first render whether
+  the vendor is downloaded at all. Mounting the hook in `main.tsx` "to catch
+  everything" would put a recording on the voter's screen and break the
+  promise printed above the sign-in button. See "Analytics".
+- **An anonymous Firebase session is nobody.** `CloudAuthProvider` reports
+  it as signed out and `ensureSignedIn` signs in over it. It exists so a
+  device can put a name on la lista; letting it count as an account would
+  sync a roster under a uid that evaporates. See "La lista".
 - **Nothing has a save button.** The player form writes itself as you type
   (`lib/autosave.ts`); a match writes itself on every tap. Because of that,
   **every write is confirmed on screen** by `SaveIndicator`, and a failed write
@@ -1101,9 +1162,10 @@ touched anything and the two of them must go quiet.
 
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
   devices. Two people cannot edit one plantel: there is no invite, no shared
-  team, and `users/{uid}` is a wall, not a default. An encuesta is the one
-  thing that crosses it, and it crosses in one direction only — a read-only
-  snapshot out, anonymous numbers back.
+  team, and `users/{uid}` is a wall, not a default. Two things cross it,
+  each in one direction only: an encuesta sends a read-only snapshot out and
+  gets anonymous numbers back; la lista sends a title out and gets names
+  back. Neither lets anybody touch the plantel.
 - **Free placement on the pitch.** Positions come from a formation; dragging a
   player anywhere on the grass is the obvious next step.
 - **Head-to-head history.** A player's own record exists, but "wins 80% of the

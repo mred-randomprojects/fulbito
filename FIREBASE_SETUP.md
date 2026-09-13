@@ -51,9 +51,15 @@ rules and the authorized-domains list.
 **Build → Authentication → Get started → Sign-in method → Google → Enable.**
 Pick a support email and save.
 
-Google is the only provider. There is no password to reset and no email to
-verify, which is the whole appeal for an app whose alternative is no account
-at all.
+Google is the only provider people ever see. There is no password to reset
+and no email to verify, which is the whole appeal for an app whose
+alternative is no account at all.
+
+**Then, on the same page: Anonymous → Enable.** This is what la lista runs
+on: whoever opens a list link gets a uid on the spot, with no dialog, so the
+rules can pin each name to the device that wrote it. Without it the list
+page says the list is not enabled yet. Anonymous sessions are nobody as far
+as sync is concerned — `cloud/auth.tsx` treats them as signed out.
 
 ## 4. Authorized domains
 

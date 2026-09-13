@@ -90,6 +90,11 @@ describe("hashNeedsAuth", () => {
     assert.equal(hashNeedsAuth("#/encuesta/abc123"), true);
   });
 
+  it("recognises the lista route, which signs the device in anonymously", () => {
+    assert.equal(hashNeedsAuth("#/lista/abc123"), true);
+    assert.equal(hashNeedsAuth("#/listas"), false);
+  });
+
   it("leaves every other screen downloading nothing", () => {
     assert.equal(hashNeedsAuth("#/players"), false);
     assert.equal(hashNeedsAuth("#/"), false);

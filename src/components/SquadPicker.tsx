@@ -229,7 +229,7 @@ export function SquadPicker({
       </ul>
 
       <div className="border-t border-border p-2">
-        <Button variant="ghost" size="sm" className="w-full" onClick={onAddPlayer}>
+        <Button variant="ghost" size="sm" className="w-full" onClick={() => onAddPlayer()}>
           <UserPlus className="mr-1.5 h-4 w-4" />
           Cargar a alguien nuevo
         </Button>

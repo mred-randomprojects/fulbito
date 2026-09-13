@@ -89,13 +89,15 @@ interface Props {
   /** Every match, for the uno x uno written about this player over time. */
   matches: readonly Match[];
   onSave: (player: Player) => void;
+  /** A first name to start a new player off with, when somebody typed one already. */
+  seedName?: string;
   onDelete?: (player: Player) => void;
 }
 
-function blankPlayer(): Player {
+function blankPlayer(seedName = ""): Player {
   return {
     id: newPlayerId(),
-    firstName: "",
+    firstName: seedName,
     lastName: "",
     nickname: "",
     avatar: "",
@@ -141,8 +143,9 @@ export function PlayerForm({
   matches,
   onSave,
   onDelete,
+  seedName,
 }: Props) {
-  const [draft, setDraft] = useState<Player>(() => player ?? blankPlayer());
+  const [draft, setDraft] = useState<Player>(() => player ?? blankPlayer(seedName));
   const [showRoles, setShowRoles] = useState(
     () => Object.keys(player?.roleRatings ?? {}).length > 0,
   );
@@ -205,7 +208,7 @@ export function PlayerForm({
   if (open ? seededFor !== key : seededFor !== null) {
     setSeededFor(open ? key : null);
     if (open) {
-      setDraft(player ?? blankPlayer());
+      setDraft(player ?? blankPlayer(seedName));
       setShowRoles(Object.keys(player?.roleRatings ?? {}).length > 0);
       setShowAttributes(Object.keys(player?.attributes ?? {}).length > 0);
       setShowAvoid((player?.avoid.length ?? 0) > 0);

@@ -110,6 +110,8 @@
     "src/lib/forecastScore.test.ts",
     "src/lib/track.ts",
     "src/lib/track.test.ts",
+    "src/lib/lista.ts",
+    "src/lib/lista.test.ts",
     "src/syncRoundTrip.test.ts"
   ]
 }

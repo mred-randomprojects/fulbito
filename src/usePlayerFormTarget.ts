@@ -5,13 +5,14 @@ import type { PlayerId } from "@/types";
  * What a screen's one `PlayerForm` is pointed at: somebody being invented, or
  * somebody being looked at.
  */
-export type FormTarget = { kind: "new" } | { kind: "player"; id: PlayerId };
+export type FormTarget = { kind: "new"; name?: string } | { kind: "player"; id: PlayerId };
 
 export interface PlayerFormTarget {
   /** Who the dialog is showing, or null when it is shut. */
   target: FormTarget | null;
   view: (id: PlayerId) => void;
-  create: () => void;
+  /** With a name when somebody typed one first — on la lista, say. */
+  create: (name?: string) => void;
   close: () => void;
   /**
    * Was the write that is happening right now part of "cargar a alguien
@@ -59,7 +60,7 @@ export function usePlayerFormTarget(): PlayerFormTarget {
     (id: PlayerId) => point({ kind: "player", id }),
     [point],
   );
-  const create = useCallback(() => point({ kind: "new" }), [point]);
+  const create = useCallback((name?: string) => point({ kind: "new", name }), [point]);
   // `opened` is deliberately left pointing at whoever just closed, for the
   // write that is still on its way out.
   const close = useCallback(() => setTarget(null), []);

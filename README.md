@@ -90,6 +90,15 @@ any other app, full screen and with no signal needed.
   pairing after the first depends on a result nobody has yet. Either way it
   comes out as one PNG — the teams, the faces and the fixture — for the group
   chat. Nothing is stored: the message you send is the record.
+- **La lista, before any of that.** Every match can put out a link where
+  each person types their name and taps *Voy* — no account, no app — and
+  sees who else is in, live. Past the cupo they are on the banco, in order
+  of arrival, and move up when somebody drops. "Copiar para el grupo" pastes
+  the numbered list everybody already knows, link included, so the message
+  in WhatsApp and the page are the same list. On your side the names match
+  themselves to the plantel where it is obvious, you pick where it is not or
+  load a new player with the name already typed, and "Pasar al partido"
+  ticks them all in.
 - **Ask the group what they think.** Send the whole list to the grupo — not one
   player, so everybody judges against the same field — and each person scores
   who they know and skips who they do not. They sign in with Google so nobody
