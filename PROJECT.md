@@ -209,6 +209,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/teamMatch.ts` | What a match looks like when the two sides are the input, not the answer |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
+| `lib/squad.ts` | Anotar and desanotar, and everything a player is let go of on the way out — the pin, the payment, the slot |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
 | `lib/matchTabs.ts` | Which of a match's five tabs is worth a count or a warning dot |
@@ -242,6 +243,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/pwa.ts` | Whether to offer to install the app, and whether this is a device that will never ask |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
+| `share.ts`, `useCopy.ts` | The clipboard and the file download, once; and a copy button's two seconds of "Copiado" |
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
 | `lib/crowd.ts` | What a pile of answers says a player is worth, and when there are enough of them |
@@ -297,7 +299,9 @@ back with who each one is, pass them to the partido.
 ours to load and no permission to upload one, so that route touches neither
 `useAppData` nor `useCloudSync`, and it has no NavBar because the person on it
 is not using the app. `ListPage` (Lista) is mounted the same way for the same
-reason, and is where somebody with the link puts their name down. `SaveIndicator` floats over all the others. `SquadPicker` is shared by
+reason, and is where somebody with the link puts their name down. `SaveIndicator` floats over all the others. `ErrorBoundary` sits under
+everything in `main.tsx`: a screen that throws gets "Se rompió algo", the
+backup straight off `localStorage`, and a reload, instead of a white page. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.

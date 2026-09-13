@@ -6,6 +6,7 @@ import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
 import { PlayerTags, TagFilter } from "./TagFilter";
 import { useLongPress } from "@/useLongPress";
+import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { detailLevel, naturalRole } from "@/lib/rating";
 import { computeStats, emptyStats, winPercent, type PlayerStats } from "@/lib/stats";
 import { matchesTags } from "@/lib/tags";
@@ -33,10 +34,13 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("name");
   const tagFilter = useTagFilter(players);
-  const [editing, setEditing] = useState<Player | undefined>(undefined);
-  const [formOpen, setFormOpen] = useState(false);
+  // The same one dialog every other screen has, pointed the same way. This
+  // screen has nothing to do on "cargar a alguien nuevo" beyond saving, so
+  // `wasCreating` goes unread here.
+  const form = usePlayerFormTarget();
 
   const statsById = useMemo(() => computeStats(matches), [matches]);
+  const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -69,16 +73,6 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
     return sorted;
   }, [players, query, sort, statsById, tagFilter.selected]);
 
-  const openNew = () => {
-    setEditing(undefined);
-    setFormOpen(true);
-  };
-
-  const openEdit = (player: Player) => {
-    setEditing(player);
-    setFormOpen(true);
-  };
-
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4 px-4 py-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -92,7 +86,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
                 : `${visible.length} de ${players.length} en el plantel.`}
           </p>
         </div>
-        <Button onClick={openNew}>
+        <Button onClick={() => form.create()}>
           <Plus className="mr-1.5 h-4 w-4" />
           Jugador nuevo
         </Button>
@@ -146,7 +140,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
       )}
 
       {players.length === 0 ? (
-        <EmptyRoster onAdd={openNew} />
+        <EmptyRoster onAdd={() => form.create()} />
       ) : visible.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
           {tagFilter.selected.size > 0 && query.trim() === ""
@@ -160,7 +154,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
               <PlayerRow
                 player={player}
                 stats={statsById.get(player.id) ?? emptyStats()}
-                onClick={() => openEdit(player)}
+                onClick={() => form.view(player.id)}
               />
             </li>
           ))}
@@ -168,9 +162,12 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
       )}
 
       <PlayerForm
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        player={editing}
+        open={form.target != null}
+        seedName={form.target?.kind === "new" ? form.target.name : undefined}
+        onOpenChange={(next) => {
+          if (!next) form.close();
+        }}
+        player={form.target?.kind === "player" ? playersById.get(form.target.id) : undefined}
         roster={players}
         statsById={statsById}
         matches={matches}
