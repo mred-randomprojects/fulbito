@@ -6,3 +6,5 @@ dist
 .env.*
 !.env.example
 .tmp
+*-debug.log
+.firebase

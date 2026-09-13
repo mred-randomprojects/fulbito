@@ -855,6 +855,10 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   the vendor is downloaded at all. Mounting the hook in `main.tsx` "to catch
   everything" would put a recording on the voter's screen and break the
   promise printed above the sign-in button. See "Analytics".
+- **`firestore.rules` is tested, and a rules change comes with a test.**
+  `src/cloud/rules.test.ts` is the only place a wrong edit is caught before
+  it is live. A new collection or a loosened rule without a case there is a
+  promise nobody is checking.
 - **An anonymous Firebase session is nobody.** `CloudAuthProvider` reports
   it as signed out and `ensureSignedIn` signs in over it. It exists so a
   device can put a name on la lista; letting it count as an account would
@@ -1143,6 +1147,17 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
 whole loop and it takes seconds. Do not verify by driving a browser — pay for
 the missing coverage with unit tests over `src/lib/` instead. `AGENTS.md` spells
 out why, and what to do when the change is a visual one.
+
+`npm run test:rules` is the one exception to "seconds": it starts the
+Firestore emulator and runs `src/cloud/rules.test.ts` — the app's own
+`cloud/lists.ts` and `cloud/polls.ts` on one side, a stranger's raw writes on
+the other, against the real `firestore.rules`. Every test there is a promise
+a page makes: the owner of an encuesta cannot read the mails, a device cannot
+rename somebody else's name on la lista. It needs Java and Node 20, so CI runs
+it on every push before the build, and a rules edit that breaks a promise
+never deploys. With a service account secret, CI also publishes the rules
+after the site (`FIREBASE_SETUP.md`, step 6); without one they are pasted by
+hand, as before.
 
 `syncRoundTrip.test.ts` is the exception to the "one module, one test file"
 shape, and deliberately so. Every piece of the sync engine has its own tests

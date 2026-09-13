@@ -86,6 +86,22 @@ right order — it is never open to the world, not even for a minute.
 **Firestore Database → Rules** → paste [`firestore.rules`](./firestore.rules)
 → **Publish**.
 
+Or let the deploy do it. Every push runs the rules against the Firestore
+emulator first (`npm run test:rules`, `src/cloud/rules.test.ts`), and if the
+repo has a service account it publishes them right after the site:
+
+1. **Project settings → Service accounts → Generate new private key.** It
+   downloads a JSON file.
+2. Put the whole file's contents in a GitHub Actions secret named
+   `FIREBASE_SERVICE_ACCOUNT` (`gh secret set FIREBASE_SERVICE_ACCOUNT < the.json`).
+   `VITE_FIREBASE_PROJECT_ID` must be set too, which it already is if sync
+   works.
+3. Delete the downloaded file. It is a credential to the whole project.
+
+Without the secret the workflow skips that step and the rules stay pasted by
+hand — the tests still run either way, and a rules edit that breaks a
+promise fails the build before it can reach anybody.
+
 The rule that matters:
 
 ```js

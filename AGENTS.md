@@ -28,6 +28,12 @@ npm test        # node:test, no runner, no browser
 npm run lint
 ```
 
+There is a fourth, for one kind of change only: `npm run test:rules` runs
+`firestore.rules` against the Firestore emulator (`src/cloud/rules.test.ts`).
+It needs Java and Node 20+, so it is CI's job by default — it runs on every
+push before the build — and yours when you touch the rules or `src/cloud/`
+and have `brew install --cask temurin` to hand.
+
 **Do not verify through a browser.** No Playwright, no Puppeteer, no driving
 Chrome to click through the UI, no "let me start the dev server and take a
 screenshot" as a matter of course. Those take minutes, they flake, and on a

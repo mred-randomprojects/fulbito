@@ -33,6 +33,24 @@ jobs:
       - name: Test
         run: npm test
 
+      # The Firestore rules, against the emulator. They are the only thing
+      # enforcing who may read what; this is the only place a wrong edit is
+      # caught before it is live. See `src/cloud/rules.test.ts`.
+      - name: Setup Java (Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache the emulator jar
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-v1
+
+      - name: Test the Firestore rules
+        run: npm run test:rules
+
       - name: Build
         run: npm run build
         env:
@@ -64,7 +82,35 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    env:
+      # A secret cannot be read in an `if`, but an env derived from one can.
+      CAN_DEPLOY_RULES: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && secrets.VITE_FIREBASE_PROJECT_ID != '' }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # The rules go live with the app, if this repo has been given a way to
+      # publish them. Without the secret they are still pasted by hand, as
+      # FIREBASE_SETUP.md says — and the tests above have run either way.
+      - name: Checkout
+        if: ${{ env.CAN_DEPLOY_RULES == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: ${{ env.CAN_DEPLOY_RULES == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Publish the Firestore rules
+        if: ${{ env.CAN_DEPLOY_RULES == 'true' }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
+            npx --yes firebase-tools@15 deploy --only firestore:rules \
+              --project "$PROJECT_ID" --non-interactive --force
+          rm -f "$RUNNER_TEMP/sa.json"
