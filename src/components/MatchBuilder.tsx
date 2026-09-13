@@ -44,6 +44,7 @@ import { hasNote } from "@/lib/matchNotes";
 import { hasReview, setReview } from "@/lib/reviews";
 import { decideTap } from "@/lib/pitchTap";
 import { pickKit } from "@/lib/kits";
+import { setMembership } from "@/lib/squad";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import type { TeamMatchPlan } from "@/lib/teamMatch";
@@ -199,52 +200,13 @@ export function MatchBuilder({
   const tagFilter = useTagFilter(players);
 
   /**
-   * Anota, or desanota, a batch of players at once.
-   *
-   * One implementation rather than one for the tap and another for "Todos",
-   * because the fiddly part is not the squad list: it is everything that has
-   * to be let go of on the way out. Somebody taken off the list loses their
-   * pin and their slot on the pitch, and a version of this that forgot either
-   * would leave a lineup quietly holding a player who is not playing.
+   * Anota, or desanota, a batch of players at once. The tap, "Todos", la
+   * lista and "cargar a alguien nuevo" all come through here; what has to be
+   * let go of on the way out is `lib/squad.ts`'s problem, and tested there.
    */
   const setSquadMembership = useCallback(
     (ids: readonly PlayerId[], playing: boolean) => {
-      const touched = new Set(ids);
-      const squad = playing
-        ? [...match.squad, ...ids.filter((id) => !match.squad.includes(id))]
-        : match.squad.filter((id) => !touched.has(id));
-
-      const pins = { ...match.pins };
-      const payments = { ...match.payments };
-      // Same reason the pin goes: somebody desanotado is not owing anything
-      // tonight, and a record left behind would quietly come back marked paid
-      // if they were anotado again.
-      if (!playing) {
-        for (const id of ids) {
-          delete pins[id];
-          delete payments[id];
-        }
-      }
-
-      const drop = (lineup: (PlayerId | null)[]) =>
-        playing
-          ? lineup
-          : lineup.map((entry) => (entry != null && touched.has(entry) ? null : entry));
-
-      // Sizes always mirror the squad, splitting an odd number as evenly as
-      // possible. The user can pull them apart afterwards.
-      const sizeA = Math.floor(squad.length / 2);
-      const sizeB = squad.length - sizeA;
-
-      patch({
-        squad,
-        pins,
-        payments,
-        sizeA,
-        sizeB,
-        lineupA: drop(match.lineupA),
-        lineupB: drop(match.lineupB),
-      });
+      patch(setMembership(match, ids, playing));
       setSelection(null);
     },
     [match, patch],
@@ -1085,9 +1047,7 @@ export function MatchBuilder({
           // not once at the end: anotarlo has to be idempotent, or a player
           // typed slowly would land in the squad half a dozen times.
           if (match.squad.includes(player.id)) return;
-          const squad = [...match.squad, player.id];
-          const sizeA = Math.floor(squad.length / 2);
-          patch({ squad, sizeA, sizeB: squad.length - sizeA });
+          setSquadMembership([player.id], true);
         }}
         onDelete={(player) => {
           // Two ways to get here: a jugador nuevo invented by mistake, which

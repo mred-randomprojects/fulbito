@@ -112,6 +112,8 @@
     "src/lib/track.test.ts",
     "src/lib/lista.ts",
     "src/lib/lista.test.ts",
+    "src/lib/squad.ts",
+    "src/lib/squad.test.ts",
     "src/syncRoundTrip.test.ts"
   ]
 }
