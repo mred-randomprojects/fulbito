@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
 import {
-  FirestoreError,
   addDoc,
   collection,
   connectFirestoreEmulator,
@@ -89,11 +88,25 @@ async function wipe(): Promise<void> {
   assert.equal(res.status, 200, "emulator did not clear");
 }
 
+/**
+ * By shape rather than `instanceof FirestoreError`: the app's cloud modules
+ * import the SDK dynamically and the test statically, and under tsx those
+ * can be two copies of the same class.
+ */
+function isPermissionDenied(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code: unknown }).code === "permission-denied"
+  );
+}
+
 async function denied(work: Promise<unknown>): Promise<void> {
   try {
     await work;
   } catch (e: unknown) {
-    if (e instanceof FirestoreError && e.code === "permission-denied") return;
+    if (isPermissionDenied(e)) return;
     throw e;
   }
   assert.fail("expected the rules to refuse this");
