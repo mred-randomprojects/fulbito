@@ -38,6 +38,12 @@ export interface AppDataApi {
   teams: Team[];
   /** Whether the last write landed, for the confirmation the whole app shares. */
   saveStatus: SaveStatus;
+  /**
+   * ⌘S. There is nothing to write — every change already wrote itself — so
+   * this re-shows the receipt; unless the last write failed, in which case it
+   * is the retry the person is asking for.
+   */
+  save: () => void;
   savePlayer: (player: Player) => void;
   deletePlayer: (id: PlayerId) => void;
   saveMatch: (match: Match) => void;
@@ -100,15 +106,7 @@ export function useAppData(): AppDataApi {
    */
   const latest = useRef(data);
 
-  const persist = useCallback((mutate: (current: AppData) => AppData) => {
-    const next = mutate(latest.current);
-    // A mutation that hands back the very same object changed nothing, and
-    // saying "Guardado" over it would be a lie. This is the ordinary case once
-    // sync is on: every write echoes back down from Firestore as a snapshot,
-    // and every one of those echoes merges to exactly what is already here.
-    if (next === latest.current) return;
-    latest.current = next;
-    setData(next);
+  const write = useCallback((next: AppData) => {
     try {
       saveAppData(next);
       notifier.saved();
@@ -125,6 +123,31 @@ export function useAppData(): AppDataApi {
       );
     }
   }, [notifier]);
+
+  const persist = useCallback((mutate: (current: AppData) => AppData) => {
+    const next = mutate(latest.current);
+    // A mutation that hands back the very same object changed nothing, and
+    // saying "Guardado" over it would be a lie. This is the ordinary case once
+    // sync is on: every write echoes back down from Firestore as a snapshot,
+    // and every one of those echoes merges to exactly what is already here.
+    if (next === latest.current) return;
+    latest.current = next;
+    setData(next);
+    write(next);
+  }, [write]);
+
+  /**
+   * Deliberately not a plain re-write of the current data. `saveAppData`
+   * rolls the previous copy into the backup slot before it writes, so writing
+   * the same bytes again would replace the one-step-back backup with a copy of
+   * the present — the exact moment somebody reaching for ⌘S out of nerves
+   * would least want that. Memory and disk only disagree after a failed
+   * write, and that is the one case where writing is the right answer.
+   */
+  const save = useCallback(() => {
+    if (notifier.status().kind === "error") write(latest.current);
+    else notifier.saved();
+  }, [notifier, write]);
 
   const savePlayer = useCallback(
     (player: Player) => {
@@ -243,6 +266,7 @@ export function useAppData(): AppDataApi {
     matches: data.matches,
     teams: data.teams,
     saveStatus,
+    save,
     savePlayer,
     deletePlayer,
     saveMatch,

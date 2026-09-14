@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "./useAppData";
 import { useCloudSync } from "./useCloudSync";
@@ -22,12 +22,18 @@ import {
 } from "./types";
 import { defaultMatchName, todayIso } from "./lib/dates";
 import { track } from "./lib/track";
+import { interceptSave } from "cmd-s";
 
 export default function App() {
   const app = useAppData();
   const cloud = useCloudSync(app);
   useTracking();
   const navigate = useNavigate();
+
+  // ⌘S / Ctrl+S: keep the browser's "Save page" dialog away and answer with
+  // the app's own receipt instead. `SaveIndicator` is that receipt, so no
+  // toast of its own — `save` returns nothing.
+  useEffect(() => interceptSave({ onSave: app.save }), [app.save]);
 
   const createMatch = useCallback(() => {
     const today = todayIso();

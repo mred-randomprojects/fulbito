@@ -868,6 +868,13 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   **every write is confirmed on screen** by `SaveIndicator`, and a failed write
   says so and stays saying it. Removing that confirmation would leave an app
   that is indistinguishable from one silently losing your work.
+- **⌘S is answered, not ignored — and it does not write.** The shared `cmd-s`
+  package (`github:mred-randomprojects/cmd-s`, wired once in `App.tsx`) keeps
+  the browser's "Save page" dialog away and calls `useAppData().save`, which
+  re-shows the receipt rather than rewriting the data: `saveAppData` rolls the
+  previous copy into the backup slot on every write, so a no-op rewrite would
+  replace the one-step-back backup with the present. The one time it does
+  write is after a failed write, where it is the retry being asked for.
 - **"Guardado" and "Guardado acá" are different promises, and the pill says
   which one it has earned.** Plain "Guardado" with the cloud tick means a
   Firestore server has acknowledged the write and another device will see it.
