@@ -35,18 +35,22 @@ import {
   fetchIdentities,
   fetchPoll,
   listMyPolls,
+  setIgnoredBallots,
   type PollSummary,
 } from "@/cloud/polls";
 import { isCancelledSignIn } from "@/lib/authErrors";
 import { MIN_VOTERS, aggregateBallots, type CrowdPlayer } from "@/lib/crowd";
-import { pollOrder, type VoteSummary } from "@/lib/poll";
+import { pollOrder, type Poll, type PollIdentity, type VoteSummary } from "@/lib/poll";
 import {
   answeredCount,
   auditPoll,
+  countedBallots,
   describeVoteDetail,
   identifiedCount,
+  ignoredCount,
   votesOnPlayer,
   type AuditRow,
+  type BallotEntry,
   type PlayerVotes,
 } from "@/lib/pollAudit";
 import { useSuperAdmin } from "@/useSuperAdmin";
@@ -554,6 +558,16 @@ function LinkBox({ pollId }: { pollId: string }) {
 /* Reading the answers back                                            */
 /* ------------------------------------------------------------------ */
 
+/** Everything one poll's results are worked out from, fetched once. */
+interface Loaded {
+  poll: Poll;
+  ballots: BallotEntry[];
+  /** `null` when this account was never going to be shown them. */
+  identities: PollIdentity[] | null;
+  /** The rules refused them, and the audit is shown with nobody attached. */
+  identitiesFailed: boolean;
+}
+
 function Results({
   pollId,
   title,
@@ -571,13 +585,20 @@ function Results({
   onDelete: () => void;
   working: boolean;
 }) {
-  const [rows, setRows] = useState<CrowdPlayer[] | null>(null);
-  const [voters, setVoters] = useState(0);
-  const [names, setNames] = useState<Map<PlayerId, string>>(new Map());
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  /**
+   * Which ballots are set aside, as this screen last knew it.
+   *
+   * Seeded from the poll document and then owned here: a toggle writes the
+   * whole list and, once the write lands, the numbers above are recounted
+   * from what is already in hand rather than fetched again. The ballots did
+   * not change — only which of them count did.
+   */
+  const [ignored, setIgnored] = useState<string[]>([]);
+  const [settingAside, setSettingAside] = useState(false);
+  const [setAsideFailed, setSetAsideFailed] = useState(false);
   const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [audit, setAudit] = useState<AuditRow[] | null>(null);
-  const [auditFailed, setAuditFailed] = useState(false);
   const admin = useSuperAdmin();
   const showNames = admin.on;
 
@@ -598,14 +619,10 @@ function Results({
         setFailed(true);
         return;
       }
-      const order = pollOrder(poll);
-      setNames(new Map(poll.players.map((player) => [player.id, player.name])));
-      setVoters(ballots.length);
-      setRows(aggregateBallots(ballots.map((entry) => entry.ballot), order));
+      setIgnored(poll.ignored);
 
       if (!showNames) {
-        setAudit(null);
-        setAuditFailed(false);
+        setLoaded({ poll, ballots, identities: null, identitiesFailed: false });
         return;
       }
       // Fetched second and separately, because the medians must not depend on
@@ -614,11 +631,10 @@ function Results({
       // attached shows the same rows the results above were counted from,
       // which is the honest version of "we could not put names to them".
       try {
-        setAudit(auditPoll(ballots, await fetchIdentities(db, pollId), order));
-        setAuditFailed(false);
+        const identities = await fetchIdentities(db, pollId);
+        setLoaded({ poll, ballots, identities, identitiesFailed: false });
       } catch {
-        setAudit(auditPoll(ballots, [], order));
-        setAuditFailed(true);
+        setLoaded({ poll, ballots, identities: [], identitiesFailed: true });
       }
     } catch {
       setFailed(true);
@@ -628,6 +644,53 @@ function Results({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const order = useMemo(() => (loaded === null ? [] : pollOrder(loaded.poll)), [loaded]);
+  const names = useMemo(
+    () =>
+      new Map(
+        (loaded === null ? [] : loaded.poll.players).map((player) => [player.id, player.name]),
+      ),
+    [loaded],
+  );
+  const voters = loaded === null ? 0 : loaded.ballots.length;
+  const rows = useMemo(
+    () =>
+      loaded === null
+        ? null
+        : aggregateBallots(
+            countedBallots(loaded.ballots, ignored).map((entry) => entry.ballot),
+            order,
+          ),
+    [loaded, ignored, order],
+  );
+  const audit = useMemo(
+    () =>
+      loaded === null || loaded.identities === null
+        ? null
+        : auditPoll(loaded.ballots, loaded.identities, order, ignored),
+    [loaded, ignored, order],
+  );
+
+  const toggleIgnored = useCallback(
+    async (ballotId: string) => {
+      const next = ignored.includes(ballotId)
+        ? ignored.filter((id) => id !== ballotId)
+        : [...ignored, ballotId];
+      setSettingAside(true);
+      setSetAsideFailed(false);
+      try {
+        const { db } = await loadCloud();
+        await setIgnoredBallots(db, pollId, next);
+        setIgnored(next);
+      } catch {
+        setSetAsideFailed(true);
+      } finally {
+        setSettingAside(false);
+      }
+    },
+    [ignored, pollId],
+  );
 
   return (
     <>
@@ -644,7 +707,11 @@ function Results({
       <p className="mb-4 text-sm text-muted-foreground">
         {voters === 0
           ? "Todavía no contestó nadie."
-          : `Contestaron ${voters}. Hacen falta ${MIN_VOTERS} por número para que se muestre.`}
+          : `Contestaron ${voters}${
+              ignored.length === 0
+                ? ""
+                : ` (${ignored.length} que no ${ignored.length === 1 ? "cuenta" : "cuentan"})`
+            }. Hacen falta ${MIN_VOTERS} por número para que se muestre.`}
       </p>
 
       <div className="mb-4">
@@ -676,8 +743,15 @@ function Results({
         </ul>
       )}
 
-      {showNames && audit !== null && (
-        <AuditPanel rows={audit} names={names} failed={auditFailed} />
+      {showNames && audit !== null && loaded !== null && (
+        <AuditPanel
+          rows={audit}
+          names={names}
+          failed={loaded.identitiesFailed}
+          onToggleIgnored={toggleIgnored}
+          busy={settingAside}
+          toggleFailed={setAsideFailed}
+        />
       )}
 
       <Button
@@ -738,13 +812,20 @@ function AuditPanel({
   rows,
   names,
   failed,
+  onToggleIgnored,
+  busy,
+  toggleFailed,
 }: {
   rows: AuditRow[];
   names: Map<PlayerId, string>;
   failed: boolean;
+  onToggleIgnored: (ballotId: string) => void;
+  busy: boolean;
+  toggleFailed: boolean;
 }) {
   const answered = answeredCount(rows);
   const identified = identifiedCount(rows);
+  const aside = ignoredCount(rows);
 
   return (
     <section className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
@@ -755,7 +836,9 @@ function AuditPanel({
       <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
         {rows.length === 0
           ? "Todavía no llegó ninguna respuesta."
-          : `Llegaron ${rows.length} respuesta${rows.length === 1 ? "" : "s"}, ${answered} con números. De ${identified} sabemos el mail.`}{" "}
+          : `Llegaron ${rows.length} respuesta${rows.length === 1 ? "" : "s"}, ${answered} con números${
+              aside === 0 ? "" : `, ${aside} que dejaste afuera`
+            }. De ${identified} sabemos el mail.`}{" "}
         Esto lo ves vos y nadie más — al que armó la lista, si no sos vos, le
         siguen llegando los números pelados.
       </p>
@@ -768,10 +851,23 @@ function AuditPanel({
         </p>
       )}
 
+      {toggleFailed && (
+        <p className="mb-3 flex items-center gap-1.5 text-sm text-destructive">
+          <TriangleAlert className="h-4 w-4 shrink-0" />
+          No se pudo guardar. Probá de nuevo.
+        </p>
+      )}
+
       {rows.length > 0 && (
         <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
           {rows.map((row) => (
-            <AuditEntry key={row.ballotId} row={row} names={names} />
+            <AuditEntry
+              key={row.ballotId}
+              row={row}
+              names={names}
+              onToggleIgnored={() => onToggleIgnored(row.ballotId)}
+              busy={busy}
+            />
           ))}
         </ul>
       )}
@@ -838,20 +934,30 @@ function VoteLine({
   );
 }
 
-function AuditEntry({ row, names }: { row: AuditRow; names: Map<PlayerId, string> }) {
+function AuditEntry({
+  row,
+  names,
+  onToggleIgnored,
+  busy,
+}: {
+  row: AuditRow;
+  names: Map<PlayerId, string>;
+  onToggleIgnored: () => void;
+  busy: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const email = row.identity?.email ?? "";
   const name = row.identity?.name ?? "";
 
   return (
-    <li>
+    <li className={row.ignored ? "bg-secondary/30" : ""}>
       <button
         type="button"
         onClick={() => setOpen((was) => !was)}
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-secondary/60"
       >
         <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1">
+        <span className={`min-w-0 flex-1 ${row.ignored ? "line-through opacity-60" : ""}`}>
           <span className="block truncate text-sm">
             {email === "" ? (
               <span className="text-muted-foreground">Sin identificar</span>
@@ -863,9 +969,15 @@ function AuditEntry({ row, names }: { row: AuditRow; names: Map<PlayerId, string
             <span className="block truncate text-xs text-muted-foreground">{name}</span>
           )}
         </span>
-        <span className="tabular shrink-0 text-xs text-muted-foreground">
-          {row.progress.rated} de {row.progress.total}
-        </span>
+        {row.ignored ? (
+          <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+            No cuenta
+          </span>
+        ) : (
+          <span className="tabular shrink-0 text-xs text-muted-foreground">
+            {row.progress.rated} de {row.progress.total}
+          </span>
+        )}
         <ChevronDown
           className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
         />
@@ -888,8 +1000,31 @@ function AuditEntry({ row, names }: { row: AuditRow; names: Map<PlayerId, string
       {open && email === "" && (
         <p className="border-t border-border bg-secondary/20 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
           Sin mail: o llegó antes de que se guardaran, o la escribió el dueño de
-          la encuesta a mano. Cuenta para las medianas igual.
+          la encuesta a mano.{row.ignored ? "" : " Cuenta para las medianas igual."}
         </p>
+      )}
+
+      {/* Under the votes rather than beside the address, so the decision is
+          made after reading what the ballot says — that is the whole reason
+          to open it — and not from the row's face alone. */}
+      {open && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-secondary/20 px-3 py-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={onToggleIgnored}
+            disabled={busy}
+          >
+            {busy && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+            {row.ignored ? "Volver a contarla" : "No contar esta respuesta"}
+          </Button>
+          <span className="text-[11px] leading-relaxed text-muted-foreground">
+            {row.ignored
+              ? "Queda acá para que la veas, pero no mueve ningún número."
+              : "Para el que puso 1 a todos y 90 a sí mismo. Se puede deshacer."}
+          </span>
+        </div>
       )}
     </li>
   );

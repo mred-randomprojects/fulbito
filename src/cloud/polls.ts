@@ -3,6 +3,7 @@ import { generateId, type PlayerId } from "@/types";
 import {
   normalizeBallot,
   normalizeIdentity,
+  normalizeIgnored,
   normalizePoll,
   type Ballot,
   type Poll,
@@ -15,7 +16,7 @@ import type { BallotEntry } from "@/lib/pollAudit";
  * The encuesta, in Firestore.
  *
  * ```
- * polls/{pollId}                        { ownerUid, title, createdAt }
+ * polls/{pollId}                        { ownerUid, title, createdAt, ignored? }
  * polls/{pollId}/players/{playerId}     { ownerUid, name, avatar }
  * polls/{pollId}/ballots/{ballotId}     { votes }
  * polls/{pollId}/voters/{uid}           { ballotId }
@@ -58,6 +59,8 @@ export interface PollSummary {
   id: string;
   title: string;
   createdAt: string;
+  /** See `Poll.ignored`: on the document, so a list read gets it for free. */
+  ignored: string[];
 }
 
 export interface PollDraft {
@@ -111,7 +114,12 @@ export async function listMyPolls(db: Firestore, uid: string): Promise<PollSumma
     .map((entry) => {
       const data: unknown = entry.data();
       const fields = isRecord(data) ? data : {};
-      return { id: entry.id, title: str(fields.title), createdAt: str(fields.createdAt) };
+      return {
+        id: entry.id,
+        title: str(fields.title),
+        createdAt: str(fields.createdAt),
+        ignored: normalizeIgnored(fields.ignored),
+      };
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -136,6 +144,25 @@ export async function fetchBallotEntries(
   const { collection, getDocs } = await import("firebase/firestore");
   const snap = await getDocs(collection(db, POLLS, pollId, BALLOTS));
   return snap.docs.map((entry) => ({ id: entry.id, ballot: normalizeBallot(entry.data()) }));
+}
+
+/**
+ * Which ballots no longer count, as the owner's one word on the matter.
+ *
+ * The whole list every time rather than an add or a remove: the owner is the
+ * only writer, the list is a handful of ids, and "this is the set" cannot
+ * leave two tabs disagreeing about what the set is. Nothing else on the poll
+ * is touched — `updateDoc` with one field — and the rules take it as they
+ * take any owner's update, so no republishing stands between this and
+ * working.
+ */
+export async function setIgnoredBallots(
+  db: Firestore,
+  pollId: string,
+  ignored: readonly string[],
+): Promise<void> {
+  const { doc, updateDoc } = await import("firebase/firestore");
+  await updateDoc(doc(db, POLLS, pollId), { ignored: [...ignored] });
 }
 
 /**
@@ -214,6 +241,7 @@ export async function fetchPoll(db: Firestore, pollId: string): Promise<Poll | n
     id: pollId,
     title: fields.title,
     createdAt: fields.createdAt,
+    ignored: fields.ignored,
     // Firestore hands these back in document-id order, which is neither the
     // roster's order nor the one they were sent in. Left that way on purpose:
     // it is stable, and an arbitrary order is the one that does not quietly

@@ -67,6 +67,31 @@ export interface Poll {
   /** The list, in the order it is put to people. */
   players: PollPlayer[];
   createdAt: string;
+  /**
+   * Ballot ids the owner set aside: still stored, no longer counted.
+   *
+   * The answer to somebody who marked everybody a 1 and themselves a 90. A
+   * median absorbs one of those and says nothing; the owner, once they have
+   * seen it, wants it out of the numbers — and wants it *out* rather than
+   * *deleted*, because a deleted ballot is one the same account can write
+   * again tomorrow (its marker still names the id), and because the thing
+   * that made you ignore it is worth being able to look at afterwards.
+   *
+   * On the poll document rather than beside each ballot, so the owner sets
+   * it with one write that the rules already allow, and so every reader of
+   * the pile — the results, the ficha's swarm — takes the same ballots out.
+   */
+  ignored: string[];
+}
+
+/** Ballot ids the owner set aside, deduplicated and with the junk dropped. */
+export function normalizeIgnored(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  for (const id of raw) {
+    if (typeof id === "string" && id !== "") seen.add(id);
+  }
+  return [...seen];
 }
 
 /** The ids on the list, which is what every ballot reader is handed. */
@@ -389,7 +414,7 @@ function normalizePollPlayer(raw: unknown): PollPlayer | null {
 }
 
 export function normalizePoll(raw: unknown): Poll {
-  const empty: Poll = { id: "", title: "", players: [], createdAt: "" };
+  const empty: Poll = { id: "", title: "", players: [], createdAt: "", ignored: [] };
   if (!isRecord(raw)) return empty;
   const players = Array.isArray(raw.players)
     ? raw.players
@@ -408,6 +433,7 @@ export function normalizePoll(raw: unknown): Poll {
       return true;
     }),
     createdAt: str(raw.createdAt),
+    ignored: normalizeIgnored(raw.ignored),
   };
 }
 

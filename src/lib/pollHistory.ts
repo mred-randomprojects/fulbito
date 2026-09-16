@@ -47,6 +47,8 @@ export interface PollRecord {
   ballots: readonly BallotEntry[];
   /** Empty for everybody but the super admins. */
   identities: readonly PollIdentity[];
+  /** The ballots the owner set aside — `Poll.ignored`, same rule here. */
+  ignored: readonly string[];
 }
 
 /** One person's number on one player, and where it came from. */
@@ -96,7 +98,7 @@ export function pollHistory(
     asked += 1;
 
     const found = votesOnPlayer(
-      auditPoll(poll.ballots, poll.identities, poll.order),
+      auditPoll(poll.ballots, poll.identities, poll.order, poll.ignored),
       playerId,
     );
     pending += found.pending;

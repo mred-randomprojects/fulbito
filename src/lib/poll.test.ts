@@ -292,6 +292,14 @@ describe("normalizePoll", () => {
     const poll = normalizePoll({ players: [{ id: "nano", name: 7 }] });
     assert.deepEqual(poll.players[0], { id: NANO, name: "", avatar: "" });
     assert.equal(poll.title, "");
+    // Every poll from before the field existed: nothing set aside.
+    assert.deepEqual(poll.ignored, []);
+  });
+
+  it("keeps the ballots set aside, once each and only the real ids", () => {
+    const poll = normalizePoll({ ignored: ["b1", "", 7, null, "b1", "b2"] });
+    assert.deepEqual(poll.ignored, ["b1", "b2"]);
+    assert.deepEqual(normalizePoll({ ignored: "b1" }).ignored, []);
   });
 });
 

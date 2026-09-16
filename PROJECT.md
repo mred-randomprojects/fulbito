@@ -247,7 +247,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
 | `lib/crowd.ts` | What a pile of answers says a player is worth, and when there are enough of them |
-| `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, and the same pile turned sideways onto one player |
+| `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, the same pile turned sideways onto one player, and which ballots the owner set aside |
 | `lib/pollHistory.ts` | Every encuesta ever sent, stacked and read from one player's side |
 | `lib/voteSwarm.ts` | Where each dot lands when a pile of votes is drawn as a little mountain |
 | `lib/superAdmin.ts` | The two addresses that may see who voted, and that the switch alone is not a permission |
@@ -662,6 +662,26 @@ is where the question actually starts: you notice a median looks wrong and
 so the ends of the range the crowd row already prints are its first and last
 lines, and it counts the ballots that never reached that player rather than
 listing them.
+
+And once the troll is found, there is one thing to do about it: **set the
+ballot aside.** `polls/{pollId}.ignored` is a list of ballot ids the owner
+does not want counted — written whole with `setIgnoredBallots`, one
+`updateDoc` that the rules take as any owner's update, so nothing had to be
+republished for it and nobody but the owner can write it. (Whoever holds the
+link can read the poll document, so a voter who goes looking can learn that
+their own ballot id is on the list — an id nobody else can tie to them — and
+nothing about anybody else's.) It is *set aside*
+rather than deleted on purpose: a deleted ballot is one the same account can
+write again tomorrow (its marker still names the id), and the thing that made
+you ignore it is worth being able to look at afterwards. `countedBallots` is
+what the medians are taken from and `auditPoll` flags the same ids instead of
+dropping them, so the row stays in the list at the foot — struck through, at
+the bottom, with the button to change your mind — while `votesOnPlayer`, the
+"Contestaron N" line and the ficha's swarm (`PollRecord.ignored`) all leave
+it out. The button lives under the ballot's votes rather than beside its
+address, so the decision is made after reading what it says. Which also puts
+it behind the same gate as the votes themselves: an owner who is not a super
+admin never sees a ballot on its own, so has nothing to set aside.
 
 #### The same answers again, on the ficha
 

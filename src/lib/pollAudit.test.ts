@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 import {
   answeredCount,
   auditPoll,
+  countedBallots,
   describeVote,
   describeVoteDetail,
   identifiedCount,
+  ignoredCount,
   votesOnPlayer,
   type BallotEntry,
 } from "./pollAudit.js";
@@ -31,7 +33,7 @@ function entry(id: string, ballot: Ballot): BallotEntry {
 
 describe("auditPoll", () => {
   it("puts an address next to what that person actually put", () => {
-    const rows = auditPoll([entry("b1", rated(7))], [who("b1", "uno@gmail.com")], ORDER);
+    const rows = auditPoll([entry("b1", rated(7))], [who("b1", "uno@gmail.com")], ORDER, []);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].identity?.email, "uno@gmail.com");
     assert.equal(rows[0].progress.rated, 1);
@@ -41,20 +43,20 @@ describe("auditPoll", () => {
   it("keeps a ballot nobody is attached to", () => {
     // It predates identities, or the owner wrote it themselves. Either way the
     // count on screen has to match the count the medians came from.
-    const rows = auditPoll([entry("b9", rated(3))], [], ORDER);
+    const rows = auditPoll([entry("b9", rated(3))], [], ORDER, []);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].identity, null);
   });
 
   it("gives no row to an identity whose ballot is gone", () => {
-    assert.deepEqual(auditPoll([], [who("b1", "uno@gmail.com")], ORDER), []);
+    assert.deepEqual(auditPoll([], [who("b1", "uno@gmail.com")], ORDER, []), []);
   });
 
   it("reads every ballot against the poll's list, not the ballot's keys", () => {
     const stray: Ballot = {
       votes: { ["p-fantasma" as PlayerId]: { ...emptyVote(), played: true, overall: 10 } },
     };
-    const rows = auditPoll([entry("b1", stray)], [who("b1", "uno@gmail.com")], ORDER);
+    const rows = auditPoll([entry("b1", stray)], [who("b1", "uno@gmail.com")], ORDER, []);
     assert.deepEqual(
       rows[0].votes.map((v) => v.playerId),
       ORDER,
@@ -71,6 +73,7 @@ describe("auditPoll", () => {
       ],
       [who("b1", "zeta@gmail.com"), who("b2", "alfa@gmail.com"), who("b3", "beta@gmail.com")],
       ORDER,
+      [],
     );
     assert.deepEqual(
       rows.map((r) => r.identity?.email),
@@ -83,6 +86,7 @@ describe("auditPoll", () => {
       [entry("b1", rated(5)), entry("b2", rated(5))],
       [who("b2", "zzz@gmail.com")],
       ORDER,
+      [],
     );
     assert.equal(rows[0].identity?.email, "zzz@gmail.com");
     assert.equal(rows[1].identity, null);
@@ -90,7 +94,7 @@ describe("auditPoll", () => {
 
   it("is stable when two rows tie on everything else", () => {
     const twice = () =>
-      auditPoll([entry("b2", rated(5)), entry("b1", rated(5))], [], ORDER).map(
+      auditPoll([entry("b2", rated(5)), entry("b1", rated(5))], [], ORDER, []).map(
         (r) => r.ballotId,
       );
     assert.deepEqual(twice(), ["b1", "b2"]);
@@ -106,14 +110,69 @@ describe("answeredCount and identifiedCount", () => {
       [entry("b1", rated(7)), entry("b2", rated(4)), entry("b3", { votes: {} })],
       [who("b1", "uno@gmail.com")],
       ORDER,
+      [],
     );
     assert.equal(answeredCount(rows), 2);
     assert.equal(identifiedCount(rows), 1);
   });
 
   it("does not count an identity that arrived with no address on it", () => {
-    const rows = auditPoll([entry("b1", rated(7))], [who("b1", "")], ORDER);
+    const rows = auditPoll([entry("b1", rated(7))], [who("b1", "")], ORDER, []);
     assert.equal(identifiedCount(rows), 0);
+  });
+});
+
+describe("a ballot the owner set aside", () => {
+  const rows = auditPoll(
+    [entry("b1", rated(1)), entry("b2", rated(7)), entry("b3", rated(8))],
+    [who("b1", "troll@gmail.com"), who("b2", "uno@gmail.com")],
+    ORDER,
+    ["b1", "b-gone"],
+  );
+
+  it("keeps its row, flagged and at the bottom", () => {
+    // Still there to be looked at and to be un-ignored; below everybody who
+    // counts, so the list reads as the answer first and the footnote after.
+    assert.deepEqual(
+      rows.map((row) => [row.ballotId, row.ignored]),
+      [
+        ["b2", false],
+        ["b3", false],
+        ["b1", true],
+      ],
+    );
+  });
+
+  it("is counted as set aside and not as having answered", () => {
+    assert.equal(ignoredCount(rows), 1);
+    assert.equal(answeredCount(rows), 2);
+    // The address is still known; setting the ballot aside forgets nothing.
+    assert.equal(identifiedCount(rows), 2);
+  });
+
+  it("is not in the list of who voted a player, and is not pending either", () => {
+    const votes = votesOnPlayer(rows, ANA);
+    assert.deepEqual(
+      votes.rows.map((vote) => vote.vote.overall),
+      [7, 8],
+    );
+    assert.equal(votes.pending, 0);
+  });
+
+  it("is what the medians never see", () => {
+    assert.deepEqual(
+      countedBallots(
+        [entry("b1", rated(1)), entry("b2", rated(7)), entry("b3", rated(8))],
+        ["b1", "b-gone"],
+      ).map((one) => one.id),
+      ["b2", "b3"],
+    );
+  });
+
+  it("shrugs off an id that names no ballot", () => {
+    // The owner ignored one and then it was deleted, or the array was edited
+    // by hand: nothing to flag, nothing to crash on.
+    assert.equal(rows.length, 3);
   });
 });
 
@@ -176,6 +235,7 @@ describe("votesOnPlayer", () => {
       [entry("b1", onAna(8)), entry("b2", onAna(2))],
       [who("b1", "generoso@gmail.com"), who("b2", "vivo@gmail.com")],
       ORDER,
+      [],
     );
     const { rows: votes } = votesOnPlayer(rows, ANA);
     assert.deepEqual(
@@ -192,6 +252,7 @@ describe("votesOnPlayer", () => {
       [entry("b1", onAna(7)), entry("b2", onAna(3)), entry("b3", onAna(9))],
       [],
       ORDER,
+      [],
     );
     assert.deepEqual(
       votesOnPlayer(rows, ANA).rows.map((v) => v.vote.overall),
@@ -206,6 +267,7 @@ describe("votesOnPlayer", () => {
       [entry("b1", knows), entry("b2", passed), entry("b3", onAna(6))],
       [],
       ORDER,
+      [],
     );
     assert.deepEqual(
       votesOnPlayer(rows, ANA).rows.map((v) => v.status),
@@ -217,7 +279,7 @@ describe("votesOnPlayer", () => {
     const roleOnly: Ballot = {
       votes: { [ANA]: { ...emptyVote(), played: true, roleRatings: { DEF: 9 } } },
     };
-    const rows = auditPoll([entry("b1", roleOnly), entry("b2", onAna(9))], [], ORDER);
+    const rows = auditPoll([entry("b1", roleOnly), entry("b2", onAna(9))], [], ORDER, []);
     assert.deepEqual(
       votesOnPlayer(rows, ANA).rows.map((v) => v.ballotId),
       ["b2", "b1"],
@@ -227,14 +289,14 @@ describe("votesOnPlayer", () => {
   it("counts whoever never got this far instead of listing them", () => {
     // Beto is second on the list, so a ballot that only reached Ana says
     // nothing about him — and ten of those would bury the two that do.
-    const rows = auditPoll([entry("b1", onAna(7)), entry("b2", onAna(5))], [], ORDER);
+    const rows = auditPoll([entry("b1", onAna(7)), entry("b2", onAna(5))], [], ORDER, []);
     const votes = votesOnPlayer(rows, BETO);
     assert.deepEqual(votes.rows, []);
     assert.equal(votes.pending, 2);
   });
 
   it("counts a ballot that predates this player being on the list", () => {
-    const rows = auditPoll([entry("b1", { votes: {} })], [], ORDER);
+    const rows = auditPoll([entry("b1", { votes: {} })], [], ORDER, []);
     assert.equal(votesOnPlayer(rows, ANA).pending, 1);
   });
 
@@ -243,6 +305,7 @@ describe("votesOnPlayer", () => {
       [entry("b1", onAna(5)), entry("b2", onAna(5))],
       [who("b2", "alguien@gmail.com")],
       ORDER,
+      [],
     );
     assert.deepEqual(
       votesOnPlayer(rows, ANA).rows.map((v) => v.identity?.email ?? null),

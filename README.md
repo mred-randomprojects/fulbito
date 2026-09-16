@@ -105,8 +105,9 @@ any other app, full screen and with no signal needed.
   votes twice, and the answers are stored with no name attached: whoever sent
   the encuesta sees the numbers, not who put them. Only the two accounts that
   maintain the app can put a mail to a ballot, and only to tell an opinion
-  from a troll — the person answering is told so before they start. From two
-  opinions up it shows the median beside
+  from a troll — the person answering is told so before they start — and when
+  it is one, a tap takes that ballot out of the count without deleting it,
+  and another puts it back. From two opinions up it shows the median beside
   the number *you* gave, plus how much they disagreed, and adopting it is a tap
   you have to make. On those same accounts, and only with the
   switch on, each player's ficha adds the whole pile: every vote he ever got as

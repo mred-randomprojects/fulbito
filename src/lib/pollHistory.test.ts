@@ -29,11 +29,30 @@ function poll(id: string, over: Partial<PollRecord> = {}): PollRecord {
     order: [ANA, BETO],
     ballots: [],
     identities: [],
+    ignored: [],
     ...over,
   };
 }
 
 describe("pollHistory", () => {
+  it("leaves out a ballot the owner set aside, in that poll only", () => {
+    const history = pollHistory(
+      [
+        poll("marzo", {
+          ballots: [entry("b1", rated(60)), entry("b2", rated(5))],
+          ignored: ["b2"],
+        }),
+        poll("agosto", { ballots: [entry("b2", rated(70))] }),
+      ],
+      ANA,
+    );
+    assert.deepEqual(
+      history.votes.map((dot) => dot.value),
+      [60, 70],
+    );
+    assert.equal(history.pending, 0);
+  });
+
   it("stacks the votes from every encuesta he was on", () => {
     const history = pollHistory(
       [

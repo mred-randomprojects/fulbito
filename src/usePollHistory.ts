@@ -84,6 +84,7 @@ async function fetchArchive(uid: string): Promise<PollRecord[]> {
         order,
         ballots,
         identities,
+        ignored: poll.ignored,
       };
     }),
   );

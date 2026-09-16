@@ -52,6 +52,19 @@ export interface BallotEntry {
   ballot: Ballot;
 }
 
+/**
+ * The ballots the medians are counted from: everything the owner did not set
+ * aside. `auditPoll` flags the same ids rather than dropping them, and the
+ * two must agree — this is the one rule, and the results page calls both.
+ */
+export function countedBallots(
+  ballots: readonly BallotEntry[],
+  ignored: readonly string[],
+): BallotEntry[] {
+  const setAside = new Set(ignored);
+  return ballots.filter((entry) => !setAside.has(entry.id));
+}
+
 export interface AuditRow {
   /** The ballot id, which is also the row's key. */
   ballotId: string;
@@ -60,6 +73,13 @@ export interface AuditRow {
   progress: BallotProgress;
   /** Every player on the poll's list, in its order, with what they got. */
   votes: VoteSummary[];
+  /**
+   * Set aside by the owner — see `Poll.ignored`. Still a row, because the
+   * list at the foot of the results is where you go to see what it said and
+   * to change your mind; but `votesOnPlayer` leaves it out, the same as the
+   * medians do.
+   */
+  ignored: boolean;
 }
 
 /**
@@ -77,19 +97,26 @@ export function auditPoll(
   ballots: readonly BallotEntry[],
   identities: readonly PollIdentity[],
   order: readonly PlayerId[],
+  ignored: readonly string[],
 ): AuditRow[] {
   const byBallot = new Map(identities.map((one) => [one.ballotId, one]));
+  const setAside = new Set(ignored);
   return ballots
     .map((entry) => ({
       ballotId: entry.id,
       identity: byBallot.get(entry.id) ?? null,
       progress: ballotProgress(entry.ballot, order),
       votes: ballotSummary(entry.ballot, order),
+      ignored: setAside.has(entry.id),
     }))
     .sort(compare);
 }
 
 function compare(a: AuditRow, b: AuditRow): number {
+  // The ones that no longer count go last: they are there to be looked at,
+  // not read as part of the answer.
+  const aside = Number(a.ignored) - Number(b.ignored);
+  if (aside !== 0) return aside;
   const said = Number(b.progress.rated > 0) - Number(a.progress.rated > 0);
   if (said !== 0) return said;
   // A row with no address sorts after every row that has one, rather than
@@ -103,9 +130,14 @@ function compare(a: AuditRow, b: AuditRow): number {
   return a.ballotId.localeCompare(b.ballotId);
 }
 
-/** How many of these rows put at least one number in. */
+/** How many of these rows put at least one number in that still counts. */
 export function answeredCount(rows: readonly AuditRow[]): number {
-  return rows.filter((entry) => entry.progress.rated > 0).length;
+  return rows.filter((entry) => !entry.ignored && entry.progress.rated > 0).length;
+}
+
+/** How many of them the owner set aside. */
+export function ignoredCount(rows: readonly AuditRow[]): number {
+  return rows.filter((entry) => entry.ignored).length;
 }
 
 /** How many of them we can put a name to. */
@@ -204,6 +236,9 @@ export function votesOnPlayer(
   let pending = 0;
 
   for (const row of rows) {
+    // Neither a vote nor a pending one: the medians never saw it, and this
+    // list is the list of what the medians saw.
+    if (row.ignored) continue;
     const summary = row.votes.find((vote) => vote.playerId === playerId);
     // A ballot from before this player was on the list has no entry at all,
     // which is the same nothing as never having got to him.

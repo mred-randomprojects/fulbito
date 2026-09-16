@@ -32,6 +32,7 @@ import {
   fetchBallotEntries,
   fetchIdentities,
   fetchPoll,
+  setIgnoredBallots,
   submitBallot,
 } from "./polls";
 
@@ -358,6 +359,21 @@ describe("polls", () => {
       names.map((n) => [n.ballotId, n.email]),
       [[ballotId, "voter@example.com"]],
     );
+  });
+
+  /**
+   * Setting a ballot aside is an update to the poll document, and the rules
+   * take it as any owner's update: no new field to republish for, and — the
+   * half that matters — nobody but the owner can write it, so a voter cannot
+   * quietly un-count everybody else.
+   */
+  it("lets the owner, and only the owner, say which ballots do not count", async () => {
+    const pollId = await createPoll(as(OWNER), "owner-1", draft);
+    const ballotId = await claimBallotId(as(VOTER), pollId, "voter-1");
+    await setIgnoredBallots(as(OWNER), pollId, [ballotId]);
+    assert.deepEqual((await fetchPoll(as(OWNER), pollId))?.ignored, [ballotId]);
+    await denied(setIgnoredBallots(as(VOTER), pollId, []));
+    await denied(setIgnoredBallots(as(ADMIN), pollId, []));
   });
 
   it("refuses an identity whose address is not the token's", async () => {
