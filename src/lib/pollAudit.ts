@@ -114,15 +114,21 @@ export function identifiedCount(rows: readonly AuditRow[]): number {
 }
 
 /**
- * One person's vote on one player, in a line.
+ * The puestos and atributos in one person's vote, in a line — everything but
+ * the overall, which the row shows on its own.
+ *
+ * Kept apart from the overall because of how long this gets: somebody who
+ * filled in every puesto and every atributo produces a dozen pairs, and a row
+ * that tried to hold that beside an email address would push the address off
+ * the screen. The overall is a number that fits at the end of a line; this is
+ * a paragraph that wraps under it.
  *
  * Only the numbers, and only the ones they actually gave — the status beside
  * it carries "no lo conozco" and "omitir", so repeating them here would say
  * the same thing twice in a table that is already dense.
  */
-export function describeVote(vote: PlayerVote): string {
+export function describeVoteDetail(vote: PlayerVote): string {
   const parts: string[] = [];
-  if (vote.overall !== undefined) parts.push(String(vote.overall));
   for (const role of ROLES) {
     const value = vote.roleRatings[role];
     if (value !== undefined) parts.push(`${ROLE_SHORT[role]} ${value}`);
@@ -132,6 +138,13 @@ export function describeVote(vote: PlayerVote): string {
     if (value !== undefined) parts.push(`${ATTRIBUTE_LABELS[key]} ${value}`);
   }
   return parts.join(" · ");
+}
+
+/** One person's vote on one player, in a line: the overall, then the rest. */
+export function describeVote(vote: PlayerVote): string {
+  const detail = describeVoteDetail(vote);
+  const overall = vote.overall === undefined ? "" : String(vote.overall);
+  return [overall, detail].filter((part) => part !== "").join(" · ");
 }
 
 /* ------------------------------------------------------------------ */

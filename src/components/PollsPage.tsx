@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ClipboardList,
@@ -43,7 +43,7 @@ import { pollOrder, type VoteSummary } from "@/lib/poll";
 import {
   answeredCount,
   auditPoll,
-  describeVote,
+  describeVoteDetail,
   identifiedCount,
   votesOnPlayer,
   type AuditRow,
@@ -788,6 +788,56 @@ const AUDIT_STATUS: Record<VoteSummary["status"], string> = {
   pending: "No llegó hasta acá",
 };
 
+/**
+ * One vote in an audit list: who or whom on the left, the verdict on the right.
+ *
+ * The verdict is the overall alone — or the status, when there is no number —
+ * and the puestos and atributos go on a line of their own underneath, where
+ * they can wrap. They used to sit beside the label as one string, which was
+ * fine for "70" and broke the moment somebody filled in every atributo: a
+ * dozen pairs that refused to shrink pushed the email off the row and the
+ * row off the card.
+ */
+function VoteLine({
+  label,
+  status,
+  vote,
+  className = "",
+}: {
+  label: ReactNode;
+  status: VoteSummary["status"];
+  vote: VoteSummary["vote"];
+  className?: string;
+}) {
+  const rated = status === "rated";
+  const detail = rated ? describeVoteDetail(vote) : "";
+  const verdict = rated
+    ? vote.overall === undefined
+      ? ""
+      : String(vote.overall)
+    : AUDIT_STATUS[status];
+
+  return (
+    <li className={`text-xs ${className}`}>
+      <div className="flex items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {verdict !== "" && (
+          <span
+            className={`tabular text-right ${rated ? "text-foreground" : "text-muted-foreground"}`}
+          >
+            {verdict}
+          </span>
+        )}
+      </div>
+      {detail !== "" && (
+        <p className="tabular mt-0.5 break-words text-[11px] leading-snug text-muted-foreground">
+          {detail}
+        </p>
+      )}
+    </li>
+  );
+}
+
 function AuditEntry({ row, names }: { row: AuditRow; names: Map<PlayerId, string> }) {
   const [open, setOpen] = useState(false);
   const email = row.identity?.email ?? "";
@@ -824,16 +874,13 @@ function AuditEntry({ row, names }: { row: AuditRow; names: Map<PlayerId, string
       {open && (
         <ul className="divide-y divide-border/60 border-t border-border bg-secondary/20">
           {row.votes.map(({ playerId, status, vote }) => (
-            <li key={playerId} className="flex items-baseline gap-2 px-3 py-1.5">
-              <span className="min-w-0 flex-1 truncate text-xs">
-                {names.get(playerId) ?? "Sin nombre"}
-              </span>
-              <span
-                className={`tabular text-xs ${status === "rated" ? "text-foreground" : "text-muted-foreground"}`}
-              >
-                {status === "rated" ? describeVote(vote) : AUDIT_STATUS[status]}
-              </span>
-            </li>
+            <VoteLine
+              key={playerId}
+              className="px-3 py-1.5"
+              label={names.get(playerId) ?? "Sin nombre"}
+              status={status}
+              vote={vote}
+            />
           ))}
         </ul>
       )}
@@ -1016,24 +1063,22 @@ function WhoVoted({ votes }: { votes: PlayerVotes }) {
 
       {open && (
         <>
-          <ul className="mt-1.5 space-y-0.5">
+          <ul className="mt-1.5 space-y-1">
             {votes.rows.map((one) => (
-              <li key={one.ballotId} className="flex items-baseline gap-2 text-xs">
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                  {(one.identity?.email ?? "") === "" ? (
-                    <span className="italic">Sin identificar</span>
-                  ) : (
-                    one.identity?.email
-                  )}
-                </span>
-                <span
-                  className={`tabular shrink-0 ${one.status === "rated" ? "text-foreground" : "text-muted-foreground"}`}
-                >
-                  {one.status === "rated"
-                    ? describeVote(one.vote)
-                    : AUDIT_STATUS[one.status]}
-                </span>
-              </li>
+              <VoteLine
+                key={one.ballotId}
+                label={
+                  <span className="text-muted-foreground">
+                    {(one.identity?.email ?? "") === "" ? (
+                      <span className="italic">Sin identificar</span>
+                    ) : (
+                      one.identity?.email
+                    )}
+                  </span>
+                }
+                status={one.status}
+                vote={one.vote}
+              />
             ))}
           </ul>
           {votes.pending > 0 && (

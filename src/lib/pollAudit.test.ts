@@ -4,6 +4,7 @@ import {
   answeredCount,
   auditPoll,
   describeVote,
+  describeVoteDetail,
   identifiedCount,
   votesOnPlayer,
   type BallotEntry,
@@ -134,6 +135,33 @@ describe("describeVote", () => {
     // "No lo conozco" and omitir are carried by the status beside it, so this
     // line staying empty is what keeps the table from saying it twice.
     assert.equal(describeVote(emptyVote()), "");
+  });
+
+  it("starts at the puestos when they never gave an overall", () => {
+    // No stray separator at the front — the overall is absent, not empty.
+    assert.equal(
+      describeVote({ ...emptyVote(), played: true, roleRatings: { GK: 90 } }),
+      "ARQ 90",
+    );
+  });
+});
+
+describe("describeVoteDetail", () => {
+  it("leaves the overall out, because the row shows it on its own", () => {
+    assert.equal(
+      describeVoteDetail({
+        ...emptyVote(),
+        played: true,
+        overall: 70,
+        roleRatings: { DEF: 80 },
+        attributes: { pace: 60 },
+      }),
+      "DEF 80 · Pique 60",
+    );
+  });
+
+  it("is empty for a vote that is only an overall", () => {
+    assert.equal(describeVoteDetail({ ...emptyVote(), played: true, overall: 70 }), "");
   });
 });
 
