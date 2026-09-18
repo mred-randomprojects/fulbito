@@ -13,10 +13,17 @@ import {
   evaluateSquad,
   SplitError,
   strengthEdge,
+  TOGETHER_PENALTY,
   type CostWeights,
   type TeamEvaluation,
 } from "./balance.js";
 import { defaultFormation, type Formation } from "./formations.js";
+import {
+  EMPTY_TOGETHER_INDEX,
+  keepTogether,
+  separatedAcross,
+  type TogetherIndex,
+} from "./together.js";
 
 /**
  * Splitting a squad into *more than two* teams.
@@ -64,6 +71,8 @@ export interface GroupSplitRequest {
   basis: BalanceBasis;
   /** Omit — or pass the empty index — to ignore who does not mix with whom. */
   avoid?: AvoidIndex;
+  /** Omit — or pass the empty index — to ignore who goes with whom. */
+  together?: TogetherIndex;
   /** How many distinct options to return. */
   optionCount?: number;
   weights?: CostWeights;
@@ -90,6 +99,8 @@ export interface GroupSplitOption {
   worstGap: number;
   /** Pairs that wanted separating and did not get it. Zero on a clean split. */
   conflicts: number;
+  /** Pairs that wanted the same team and did not get it. Zero on a clean split. */
+  separated: number;
 }
 
 export interface GroupSplitResult {
@@ -172,6 +183,7 @@ export interface GroupingRequest {
   formations?: readonly Formation[];
   basis: BalanceBasis;
   avoid?: AvoidIndex;
+  together?: TogetherIndex;
   weights?: CostWeights;
 }
 
@@ -190,18 +202,22 @@ export interface GroupingRequest {
  * pair that drifts apart quietly.
  */
 export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
-  const { teams, basis, avoid = EMPTY_AVOID_INDEX, weights } = request;
+  const {
+    teams,
+    basis,
+    avoid = EMPTY_AVOID_INDEX,
+    together = EMPTY_TOGETHER_INDEX,
+    weights,
+  } = request;
   const formations =
     request.formations ?? teams.map((team) => defaultFormation(team.length));
 
   const evaluations = teams.map((team, index) =>
     evaluateSquad(team, formations[index] ?? defaultFormation(team.length)),
   );
-  const conflicts = teams.reduce(
-    (sum, team) =>
-      sum + conflictsWithin(avoid, team.map((player) => player.id)).length,
-    0,
-  );
+  const ids = teams.map((team) => team.map((player) => player.id));
+  const conflicts = ids.reduce((sum, team) => sum + conflictsWithin(avoid, team).length, 0);
+  const separated = separatedAcross(together, ids).length;
 
   return {
     teams: teams.map((team, index) => ({
@@ -211,9 +227,13 @@ export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
     // The same folding `findGroupSplits` does, for the same reason: `cost` is
     // the one number these are compared on, so a penalty left outside it would
     // be honoured by one code path and ignored by the other.
-    cost: groupsCost(evaluations, basis, weights) + AVOID_PENALTY * conflicts,
+    cost:
+      groupsCost(evaluations, basis, weights) +
+      AVOID_PENALTY * conflicts +
+      TOGETHER_PENALTY * separated,
     worstGap: worstGap(evaluations, basis),
     conflicts,
+    separated,
   };
 }
 
@@ -280,6 +300,7 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     pins = {},
     basis,
     avoid = EMPTY_AVOID_INDEX,
+    together = EMPTY_TOGETHER_INDEX,
     optionCount = 5,
     weights,
   } = request;
@@ -361,6 +382,37 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     return found;
   };
 
+  /* ---- The together relation, the same way -------------------------- */
+
+  // A pair is either inside one team or split across two, so the split ones
+  // are the total minus the ones every team kept — the same count as above,
+  // read the other way round, and it holds for any number of teams.
+  const friends: Set<number>[] = players.map(() => new Set<number>());
+  let togetherPairs = 0;
+  if (together.size > 0) {
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        if (!keepTogether(together, players[i].id, players[j].id)) continue;
+        friends[i].add(j);
+        friends[j].add(i);
+        togetherPairs += 1;
+      }
+    }
+  }
+
+  const countKept = (indices: readonly number[]): number => {
+    if (togetherPairs === 0) return 0;
+    let found = 0;
+    for (let i = 0; i < indices.length; i++) {
+      const mates = friends[indices[i]];
+      if (mates.size === 0) continue;
+      for (let j = i + 1; j < indices.length; j++) {
+        if (mates.has(indices[j])) found += 1;
+      }
+    }
+    return found;
+  };
+
   /* ---- Scoring ------------------------------------------------------ */
 
   const evalCache = new Map<string, TeamEvaluation>();
@@ -379,6 +431,8 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
   const scoreSplit = (teams: readonly (readonly number[])[]): GroupSplitOption => {
     const evaluations = teams.map((indices, team) => evaluate(indices, formations[team]));
     const conflicts = teams.reduce((sum, indices) => sum + countConflicts(indices), 0);
+    const separated =
+      togetherPairs - teams.reduce((sum, indices) => sum + countKept(indices), 0);
     return {
       teams: teams.map((indices, team) => ({
         players: indices.map((i) => players[i]),
@@ -388,9 +442,13 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
       // same reason `findSplits` does it: the local-search fallback decides
       // which swaps are improvements from `cost` alone, so a penalty kept
       // outside it would be honoured by one code path and ignored by the other.
-      cost: groupsCost(evaluations, basis, weights) + AVOID_PENALTY * conflicts,
+      cost:
+        groupsCost(evaluations, basis, weights) +
+        AVOID_PENALTY * conflicts +
+        TOGETHER_PENALTY * separated,
       worstGap: worstGap(evaluations, basis),
       conflicts,
+      separated,
     };
   };
 

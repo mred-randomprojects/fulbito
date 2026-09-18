@@ -37,6 +37,7 @@ function player(id: string, rating: number): Player {
     roleRatings: {},
     attributes: {},
     avoid: [],
+    together: [],
     tags: [],
     notes: "",
     updatedAt: new Date(CLOCK_START).toISOString(),

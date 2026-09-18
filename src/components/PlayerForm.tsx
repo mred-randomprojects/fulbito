@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ClipboardPaste,
   HeartCrack,
+  HeartHandshake,
   Loader2,
   NotebookPen,
   Search,
@@ -32,6 +33,7 @@ import { pickImageType, pickPastedImage } from "@/lib/clipboard";
 import { fileToAvatar, ImageError } from "@/lib/image";
 import { effectiveRating } from "@/lib/rating";
 import { listedBy } from "@/lib/avoid";
+import { buildTogetherIndex, companionsOf, wantedBy } from "@/lib/together";
 import { reviewHistory, type ReviewEntry } from "@/lib/reviews";
 import { formatMatchDate } from "@/lib/dates";
 import {
@@ -106,6 +108,7 @@ function blankPlayer(seedName = ""): Player {
     roleRatings: {},
     attributes: {},
     avoid: [],
+    together: [],
     tags: [],
     notes: "",
     updatedAt: new Date().toISOString(),
@@ -153,6 +156,9 @@ export function PlayerForm({
     () => Object.keys(player?.attributes ?? {}).length > 0,
   );
   const [showAvoid, setShowAvoid] = useState(() => (player?.avoid.length ?? 0) > 0);
+  const [showTogether, setShowTogether] = useState(
+    () => (player?.together.length ?? 0) > 0,
+  );
   const [uploading, setUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -212,6 +218,7 @@ export function PlayerForm({
       setShowRoles(Object.keys(player?.roleRatings ?? {}).length > 0);
       setShowAttributes(Object.keys(player?.attributes ?? {}).length > 0);
       setShowAvoid((player?.avoid.length ?? 0) > 0);
+      setShowTogether((player?.together.length ?? 0) > 0);
       setImageError(null);
       // Someone else is on screen now: drop anything still queued for the last
       // one, and remember whether this one is already in the roster.
@@ -336,13 +343,31 @@ export function PlayerForm({
     onOpenChange(false);
   };
 
+  // The two lists are opposites, so ticking somebody on one takes them off
+  // the other: "no lo pongas con" and "mejor ponerlo con" the same person is
+  // not a preference, it is a typo.
   const toggleAvoid = (id: PlayerId) => {
-    setDraft((prev) => ({
-      ...prev,
-      avoid: prev.avoid.includes(id)
-        ? prev.avoid.filter((entry) => entry !== id)
-        : [...prev.avoid, id],
-    }));
+    setDraft((prev) =>
+      prev.avoid.includes(id)
+        ? { ...prev, avoid: prev.avoid.filter((entry) => entry !== id) }
+        : {
+            ...prev,
+            avoid: [...prev.avoid, id],
+            together: prev.together.filter((entry) => entry !== id),
+          },
+    );
+  };
+
+  const toggleTogether = (id: PlayerId) => {
+    setDraft((prev) =>
+      prev.together.includes(id)
+        ? { ...prev, together: prev.together.filter((entry) => entry !== id) }
+        : {
+            ...prev,
+            together: [...prev.together, id],
+            avoid: prev.avoid.filter((entry) => entry !== id),
+          },
+    );
   };
 
   const addTagToDraft = (raw: string) =>
@@ -371,6 +396,26 @@ export function PlayerForm({
   const inRoster = new Set(others.map((p) => p.id));
   const avoidCount =
     draft.avoid.filter((id) => inRoster.has(id)).length + listedByOthers.length;
+  const wantedByOthers = wantedBy(others, draft);
+  const togetherCount =
+    draft.together.filter((id) => inRoster.has(id)).length + wantedByOthers.length;
+  // Who this player ends up beside because of everybody's lists, not just the
+  // two on this screen: the pareja here and the hermanos there chain into a
+  // group of four, and this is where that gets said. Built over the draft so
+  // it moves on the same tap as the tick, and over the roster that exists —
+  // a link to somebody deleted is kept on the record, but it cannot chain
+  // two living people together when no split would.
+  const alive = new Set([...inRoster, draft.id]);
+  const direct = new Set([...draft.together, ...wantedByOthers]);
+  const chained = companionsOf(
+    buildTogetherIndex(
+      [...others, draft].map((p) => ({
+        id: p.id,
+        together: p.together.filter((id) => alive.has(id)),
+      })),
+    ),
+    draft.id,
+  ).filter((id) => !direct.has(id));
   const stats = statsById.get(draft.id) ?? emptyStats();
   const reviews = useMemo(() => reviewHistory(draft.id, matches), [draft.id, matches]);
 
@@ -618,11 +663,32 @@ export function PlayerForm({
                 : `${avoidCount} cruce${avoidCount === 1 ? "" : "s"}`
             }
           >
-            <AvoidPicker
+            <PairPicker
+              tone="apart"
               others={others}
               selected={draft.avoid}
               listedByOthers={listedByOthers}
               onToggle={toggleAvoid}
+            />
+          </Disclosure>
+
+          <Disclosure
+            open={showTogether}
+            onToggle={() => setShowTogether((v) => !v)}
+            title="Mejor ponerlo con"
+            summary={
+              togetherCount === 0
+                ? "Opcional — para los que vienen en combo"
+                : `${togetherCount + chained.length} compañero${togetherCount + chained.length === 1 ? "" : "s"}`
+            }
+          >
+            <PairPicker
+              tone="together"
+              others={others}
+              selected={draft.together}
+              listedByOthers={wantedByOthers}
+              chained={chained}
+              onToggle={toggleTogether}
             />
           </Disclosure>
 
@@ -915,32 +981,46 @@ function TagPicker({
 }
 
 /**
- * The people this player would rather not be on a side with.
+ * One of the two lists on a profile: who not to put this player with, or who
+ * to put them with. The same control with the meaning flipped.
  *
  * Ticking somebody here is enough on its own: the split reads the relation in
  * both directions, so nobody has to be told they were named, and the other
  * profile is not edited behind their back. What the other profile *does* show
- * is the bottom line here — who has named them — because being kept off
- * somebody's team without ever being able to see why would be the one genuinely
- * confusing way to build this.
+ * is the bottom line here — who has named them — because being kept off (or
+ * on) somebody's team without ever being able to see why would be the one
+ * genuinely confusing way to build this.
+ *
+ * The together list also names the people reached *through* the ones ticked,
+ * because that relation chains whether anybody meant it to or not, and the
+ * profile is the one place to find out before match night.
  */
-function AvoidPicker({
+function PairPicker({
+  tone,
   others,
   selected,
   listedByOthers,
+  chained = [],
   onToggle,
 }: {
+  tone: "apart" | "together";
   others: Player[];
   selected: PlayerId[];
   listedByOthers: PlayerId[];
+  /** Together only: everyone else on the same side by way of somebody ticked. */
+  chained?: PlayerId[];
   onToggle: (id: PlayerId) => void;
 }) {
   const [query, setQuery] = useState("");
+  const apart = tone === "apart";
+  const Icon = apart ? HeartCrack : HeartHandshake;
 
   if (others.length === 0) {
     return (
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Todavía no hay nadie más en el plantel con quien pelearse.
+        {apart
+          ? "Todavía no hay nadie más en el plantel con quien pelearse."
+          : "Todavía no hay nadie más en el plantel con quien juntarlo."}
       </p>
     );
   }
@@ -972,10 +1052,9 @@ function AvoidPicker({
   return (
     <div className="space-y-3">
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Para los que no se pueden ver: se pelearon, son cuñados, o simplemente
-        juntos no funcionan. Marcalos acá y el reparto los va a mandar a equipos
-        distintos. Alcanza con que lo diga uno de los dos — no hace falta ir a
-        cargarlo del otro lado.
+        {apart
+          ? "Para los que no se pueden ver: se pelearon, son cuñados, o simplemente juntos no funcionan. Marcalos acá y el reparto los va a mandar a equipos distintos. Alcanza con que lo diga uno de los dos — no hace falta ir a cargarlo del otro lado."
+          : "Para los que vienen en combo: el padre con el pibe, los que solo caen de a dos, los primos que separados son otro equipo. Marcalos acá y el reparto los va a poner del mismo lado siempre que pueda. Alcanza con que lo diga uno de los dos."}
       </p>
 
       {others.length > 6 && (
@@ -1001,18 +1080,24 @@ function AvoidPicker({
                 aria-pressed={picked}
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors",
-                  picked ? "bg-destructive/10" : "hover:bg-accent/40",
+                  picked
+                    ? apart
+                      ? "bg-destructive/10"
+                      : "bg-emerald-500/10"
+                    : "hover:bg-accent/40",
                 )}
               >
                 <span
                   className={cn(
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
                     picked
-                      ? "border-destructive bg-destructive text-destructive-foreground"
+                      ? apart
+                        ? "border-destructive bg-destructive text-destructive-foreground"
+                        : "border-emerald-500 bg-emerald-500 text-emerald-950"
                       : "border-border",
                   )}
                 >
-                  {picked && <HeartCrack className="h-3 w-3" />}
+                  {picked && <Icon className="h-3 w-3" />}
                 </span>
                 <PlayerAvatar player={other} size={24} />
                 <span className="min-w-0 flex-1 truncate text-sm">
@@ -1032,9 +1117,16 @@ function AvoidPicker({
       {listedByOthers.length > 0 && (
         <p className="rounded-lg border border-border bg-secondary/40 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
           Además, {namesOf(listedByOthers)}{" "}
-          {listedByOthers.length === 1 ? "lo tiene" : "lo tienen"} anotado a él.
-          Cuenta igual, y se saca desde{" "}
+          {listedByOthers.length === 1 ? "lo tiene" : "lo tienen"} anotado
+          {apart ? " a él" : " con él"}. Cuenta igual, y se saca desde{" "}
           {listedByOthers.length === 1 ? "ese perfil" : "esos perfiles"}.
+        </p>
+      )}
+
+      {chained.length > 0 && (
+        <p className="rounded-lg border border-border bg-secondary/40 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          Y de yapa {namesOf(chained)}: van con alguno de los de arriba, y como
+          cada uno juega en un solo equipo, terminan todos del mismo lado.
         </p>
       )}
     </div>

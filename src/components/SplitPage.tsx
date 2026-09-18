@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Copy,
   HeartCrack,
+  HeartHandshake,
   ImageDown,
   Loader2,
   Minus,
@@ -34,6 +35,7 @@ import {
   type GroupTeam,
 } from "@/lib/groups";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
+import { buildTogetherIndex, EMPTY_TOGETHER_INDEX, separatedAcross } from "@/lib/together";
 import { defaultFormation, type Formation } from "@/lib/formations";
 import {
   buildFixture,
@@ -90,6 +92,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   const [pins, setPins] = useState<Partial<Record<PlayerId, number>>>({});
   const [basis, setBasis] = useState<BalanceBasis>("total");
   const [respectAvoids, setRespectAvoids] = useState(true);
+  const [respectTogether, setRespectTogether] = useState(true);
   const [includeRatings, setIncludeRatings] = useState(false);
 
   // The torneito. It hangs off the split rather than living on its own screen:
@@ -116,6 +119,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
   const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const statsById = useMemo(() => computeStats(matches), [matches]);
   const avoidIndex = useMemo(() => buildAvoidIndex(players), [players]);
+  const togetherIndex = useMemo(() => buildTogetherIndex(players), [players]);
   // Named for what it narrows, because `tags` down here is already the colours
   // the teams wear.
   const squadFilter = useTagFilter(players);
@@ -275,6 +279,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
         pins,
         basis,
         avoid: respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
+        together: respectTogether ? togetherIndex : EMPTY_TOGETHER_INDEX,
         optionCount: 6,
       });
       setResult(found);
@@ -289,7 +294,17 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
         e instanceof SplitError ? e.message : "Algo salió mal al repartir los equipos.",
       );
     }
-  }, [squadPlayers, setup.sizes, formations, pins, basis, respectAvoids, avoidIndex]);
+  }, [
+    squadPlayers,
+    setup.sizes,
+    formations,
+    pins,
+    basis,
+    respectAvoids,
+    avoidIndex,
+    respectTogether,
+    togetherIndex,
+  ]);
 
   const stepOption = useCallback(
     (delta: number) => {
@@ -341,6 +356,7 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
         formations,
         basis,
         avoid: respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
+        together: respectTogether ? togetherIndex : EMPTY_TOGETHER_INDEX,
       });
 
       setResult((current) =>
@@ -356,7 +372,17 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
       setHandMade((current) => new Set(current).add(optionIndex));
       setPicked(null);
     },
-    [option, picked, optionIndex, formations, basis, respectAvoids, avoidIndex],
+    [
+      option,
+      picked,
+      optionIndex,
+      formations,
+      basis,
+      respectAvoids,
+      avoidIndex,
+      respectTogether,
+      togetherIndex,
+    ],
   );
 
   const edited = handMade.has(optionIndex);
@@ -370,6 +396,14 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
       ),
     );
   }, [option, respectAvoids, avoidIndex]);
+
+  const separated = useMemo(() => {
+    if (option == null || !respectTogether) return [];
+    return separatedAcross(
+      togetherIndex,
+      option.teams.map((team) => team.players.map((p) => p.id)),
+    );
+  }, [option, respectTogether, togetherIndex]);
 
   const nameOf = useCallback(
     (id: PlayerId): string => {
@@ -545,6 +579,24 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                   </span>
                 </span>
               </label>
+
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={respectTogether}
+                  onChange={(e) => {
+                    setRespectTogether(e.target.checked);
+                    invalidate();
+                  }}
+                  className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+                />
+                <span className="text-xs">
+                  <span className="font-medium">Respetar las buenas ondas</span>
+                  <span className="block text-muted-foreground">
+                    Los que vienen en combo van al mismo equipo.
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
 
@@ -598,6 +650,17 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                 {conflicts.map(({ a, b }) => `${nameOf(a)} y ${nameOf(b)}`).join(", ")}{" "}
                 quedaron juntos, y no se bancan. Con esta cantidad de equipos no
                 daba para separarlos a todos.
+              </span>
+            </p>
+          )}
+
+          {separated.length > 0 && (
+            <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+              <HeartHandshake className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {separated.map(({ a, b }) => `${nameOf(a)} y ${nameOf(b)}`).join(", ")}{" "}
+                quedaron separados, y querían jugar juntos. Con equipos de este
+                tamaño no entraban todos del mismo lado.
               </span>
             </p>
           )}

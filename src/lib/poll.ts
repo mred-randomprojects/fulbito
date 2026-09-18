@@ -49,8 +49,8 @@ import {
  *
  * Deliberately three fields. It carries no rating — showing yours would
  * anchor the answer and ruin the very number you are asking for — and no
- * notes, no tags and no avoid list, because a poll link is readable by
- * whoever holds it and none of that was theirs to see.
+ * notes, no tags, no avoid or together lists, because a poll link is readable
+ * by whoever holds it and none of that was theirs to see.
  */
 export interface PollPlayer {
   id: PlayerId;

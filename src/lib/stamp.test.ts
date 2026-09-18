@@ -18,6 +18,7 @@ function player(id: string, updatedAt: string, rating = 6): Player {
     roleRatings: {},
     attributes: {},
     avoid: [],
+    together: [],
     tags: [],
     notes: "",
     updatedAt,

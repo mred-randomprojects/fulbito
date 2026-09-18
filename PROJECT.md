@@ -125,7 +125,9 @@ enters the app without going through `normalizeAppData` — a hand-edited
   rating ranges (1,000 currently) per conflicting pair, shared by the two-team
   and multi-team searches. It must outweigh a full-range imbalance under the
   default weights. A penalty left at 100 could favour balancing over a
-  satisfiable preference.
+  satisfiable preference. `TOGETHER_PENALTY` is half of it per broken-up
+  pair: still far above any balance cost, and below a feud on purpose, so
+  when the two relations contradict each other the friendship gives.
 - **`Player.ratingScale` / `Match.ratingScale`** — which scale that record's
   numbers were written on, and the whole of the migration. **Absent means
   1–10.** It has to be a marker rather than a heuristic because a number cannot
@@ -144,12 +146,21 @@ enters the app without going through `normalizeAppData` — a hand-edited
   nobody can answer.
 - **`Player.avoid`** — ids this player would rather not share a side with,
   stored only on whoever said it and read as symmetric. See `lib/avoid.ts`.
+- **`Player.together`** — ids this player had better share a side with. The
+  mirror of `avoid`, stored and read the same way, with one difference that
+  is the whole design: it chains. One team per person means A with B and B
+  with C puts A with C, so the connected components of these lists *are* the
+  groups — a crew of four is one person ticking three, or any chain through
+  them, and there is no group record to create, name or keep in step with the
+  pairs. See `lib/together.ts`, and `lib/pairs.ts` for the mechanics the two
+  relations share.
 - **`Player.tags`** — which crews this player belongs to: the laburo, the
   barrio, the ones who only turn up in summer. Free text, at most eight, and
   read by exactly one thing — the filter above the roster and above the squad
   list. See `lib/tags.ts`.
 - **`Match`** — name, date, the two `TeamConfig`s, the squad, pins, sizes, the
-  two lineups (slot → player), balance basis, `respectAvoids`, handicap,
+  two lineups (slot → player), balance basis, `respectAvoids`,
+  `respectTogether`, handicap,
   `result`, `courtCost`, `payments`, `notes`, `updatedAt`.
 - **`MatchResult`** — `{ goalsA, goalsB }`, or `null`. `null` and 0-0 are
   different states on purpose: one is a game nobody wrote down, the other is a
@@ -208,7 +219,9 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/teamMatch.ts` | What a match looks like when the two sides are the input, not the answer |
+| `lib/pairs.ts` | A symmetric relation between players stored on one side: the closure, the pairs inside and across teams, the chain from one person, and who named whom |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
+| `lib/together.ts` | Who had better share a side with whom, which pairs a split broke up, and everyone a player is chained to |
 | `lib/squad.ts` | Anotar and desanotar, and everything a player is let go of on the way out — the pin, the payment, the slot |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
@@ -1011,11 +1024,26 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   rather than failing. `groups.test.ts` checks the answer against a brute force
   for exactly that reason.
 - **Avoiding somebody is a price, not a rule.** The split pays
-  `AVOID_PENALTY` (100, far above any reachable balance cost) per pair it fails
-  to separate, so it behaves as a hard rule whenever one is satisfiable and
-  still returns the least-bad answer when three people all avoid each other.
-  A pin beats it: locks are the hard constraint, and the screen says so when a
-  pair ends up together anyway.
+  `AVOID_PENALTY` (1,000, far above any reachable balance cost) per pair it
+  fails to separate, so it behaves as a hard rule whenever one is satisfiable
+  and still returns the least-bad answer when three people all avoid each
+  other. A pin beats it: locks are the hard constraint, and the screen says so
+  when a pair ends up together anyway.
+- **Keeping people together is the same price, halved, and it chains.** The
+  split pays `TOGETHER_PENALTY` per linked pair it deals different sides, and
+  a chain of links is only ever whole or cut, so the connected components of
+  `Player.together` stay together whenever a team can hold them. When one
+  cannot — six who want one side of a 5 v 5 — the search cuts where it breaks
+  the fewest pairs, which for one person who named five others means a leaf
+  goes, not the hub. Half a feud so that B wanting A and C while A avoids C
+  breaks the friendship rather than the truce; per pair, so two friendships do
+  outweigh one feud, which is the edge of the edge and is named on screen
+  either way. Its own switch on the match, `respectTogether`, because a night
+  that wants balance over friendships still wants the two who fight apart. The
+  profile's ticks take a person off the opposite list, so nobody is on both.
+  Both screens read the broken pairs off the teams as they stand
+  (`separatedAcross`), not off the search result, so a hand swap that splits a
+  pair is warned about too.
 - **Bancar somebody shrinks the divisor, not the bill.** The cancha costs what
   it costs; letting one off means the other nine cover it. So the share is the
   cost over the *payers*, rounded **up** to the peso — 30.000 between 9 is

@@ -71,7 +71,10 @@ export interface MatchTabsInput {
   hasLineup: boolean;
   /** Squad members not on the pitch. Only meaningful once `hasLineup`. */
   benchCount: number;
-  /** Pairs who cannot share a side and ended up sharing one anyway. */
+  /**
+   * Pairs the lineup let down: kept together when they cannot share a side,
+   * or split up when they wanted one.
+   */
   conflictCount: number;
   /** `sizeA + sizeB - squadSize`; anything but 0 blocks the split. */
   sizeMismatch: number;

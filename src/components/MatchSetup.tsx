@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HeartCrack, Minus, Plus, Scale, TriangleAlert } from "lucide-react";
+import { HeartCrack, HeartHandshake, Minus, Plus, Scale, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formationsForSize, generateFormation, type Formation } from "@/lib/formations";
@@ -32,6 +32,11 @@ interface Props {
    * this group uses is just another thing to read past before kick-off.
    */
   anyAvoidsRecorded: boolean;
+  respectTogether: boolean;
+  /** Pairs among tonight's squad that want the same side. */
+  togetherPairsInSquad: number;
+  /** Same story as `anyAvoidsRecorded`, for the other list. */
+  anyTogetherRecorded: boolean;
   onTeamChange: (team: "A" | "B", config: TeamConfig) => void;
   /**
    * Not folded into `onTeamChange`: picking a colour is the one control here
@@ -43,6 +48,7 @@ interface Props {
   onSizeChange: (team: "A" | "B", size: number) => void;
   onBasisChange: (basis: BalanceBasis) => void;
   onRespectAvoidsChange: (respect: boolean) => void;
+  onRespectTogetherChange: (respect: boolean) => void;
   onHandicapChange: (handicap: number) => void;
 }
 
@@ -61,11 +67,15 @@ export function MatchSetup({
   respectAvoids,
   avoidPairsInSquad,
   anyAvoidsRecorded,
+  respectTogether,
+  togetherPairsInSquad,
+  anyTogetherRecorded,
   onTeamChange,
   onKitChange,
   onSizeChange,
   onBasisChange,
   onRespectAvoidsChange,
+  onRespectTogetherChange,
   onHandicapChange,
 }: Props) {
   const needed = sizeA + sizeB;
@@ -187,6 +197,32 @@ export function MatchSetup({
                   : respectAvoids
                     ? `Hay ${avoidPairsInSquad} par${avoidPairsInSquad === 1 ? "" : "es"} que no se quieren cruzar. Se van a repartir en equipos distintos siempre que se pueda.`
                     : `Hay ${avoidPairsInSquad} par${avoidPairsInSquad === 1 ? "" : "es"} que no se quieren cruzar, y los vas a repartir igual. Después no digas que no te avisamos.`}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
+
+      {anyTogetherRecorded && (
+        <div>
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={respectTogether}
+              onChange={(e) => onRespectTogetherChange(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+            />
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                <HeartHandshake className="h-3.5 w-3.5 shrink-0" />
+                Respetar las buenas ondas
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                {togetherPairsInSquad === 0
+                  ? "Hoy no hay ningún combo entre los que están anotados, así que no cambia nada."
+                  : respectTogether
+                    ? `Hay ${togetherPairsInSquad} par${togetherPairsInSquad === 1 ? "" : "es"} que quieren jugar juntos. Van al mismo equipo siempre que se pueda, aunque salga desparejo: si hoy importa más que sea parejo, sacale el tilde.`
+                    : `Hay ${togetherPairsInSquad} par${togetherPairsInSquad === 1 ? "" : "es"} que quieren jugar juntos, y hoy se reparten como cualquiera.`}
               </span>
             </span>
           </label>

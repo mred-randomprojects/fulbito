@@ -106,6 +106,14 @@ export interface Player {
    */
   avoid: PlayerId[];
   /**
+   * People this player had better share a side with — the mirror of `avoid`,
+   * stored and read the same way. Unlike `avoid` it is transitive in effect:
+   * one team per person means A with B and B with C puts A with C, so the
+   * chains these lists form are the groups. See `lib/together.ts`, which is
+   * the only thing that reads this.
+   */
+  together: PlayerId[];
+  /**
    * Which crews this player belongs to: the laburo, the barrio, the ones who
    * only turn up in summer. Free text, no fixed vocabulary, and read by
    * exactly one thing — the filter on the roster and on the squad list. See
@@ -299,6 +307,12 @@ export interface Match {
    * and a global switch would make that a settings trip instead of a tap.
    */
   respectAvoids: boolean;
+  /**
+   * Whether the split honours `Player.together`. Its own switch rather than a
+   * shared one with `respectAvoids`: a night that wants balancing over
+   * friendships still wants the two who fight kept apart.
+   */
+  respectTogether: boolean;
   /**
    * Which scale `handicap` is on. Same story as `Player.ratingScale`, and it
    * is here for the same reason: a stored 1.5 is a shove on the old scale and
@@ -650,15 +664,16 @@ function normalizeAttributes(
 }
 
 /**
- * A list of people to keep this player away from.
+ * A list of other people — who to keep this player away from, or with.
  *
  * Deduped, and stripped of the player themselves: an id pointing at its own
  * record would make `lib/avoid.ts` report someone as an unavoidable conflict
- * with themselves, which no split could ever resolve. Ids of players since
- * deleted are kept — they cost nothing, they never appear in a squad, and
- * dropping them here would make an import order-dependent.
+ * with themselves, which no split could ever resolve, and `lib/together.ts`
+ * would count a pair nothing can separate. Ids of players since deleted are
+ * kept — they cost nothing, they never appear in a squad, and dropping them
+ * here would make an import order-dependent.
  */
-function normalizeAvoid(value: unknown, selfId: string): PlayerId[] {
+function normalizePeople(value: unknown, selfId: string): PlayerId[] {
   const ids = new Set<string>();
   for (const id of strArray(value)) {
     if (id === "" || id === selfId) continue;
@@ -688,7 +703,10 @@ function normalizePlayer(raw: unknown): Player | null {
     rating: toCurrentScale(num(raw.rating, scale === RATING_SCALE ? RATING_DEFAULT : 5), scale),
     roleRatings: normalizeRoleRatings(raw.roleRatings, scale),
     attributes: normalizeAttributes(raw.attributes, scale),
-    avoid: normalizeAvoid(raw.avoid, id),
+    avoid: normalizePeople(raw.avoid, id),
+    // Absent on every player written before the preference existed, which is
+    // the same state as one nobody has been paired with yet.
+    together: normalizePeople(raw.together, id),
     tags: normalizeTagList(strArray(raw.tags)),
     notes: str(raw.notes),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
@@ -813,6 +831,7 @@ function normalizeMatch(raw: unknown): Match | null {
     // default to honouring the preference: someone who bothered to write down
     // that two people do not mix meant it for every match, not just new ones.
     respectAvoids: raw.respectAvoids !== false,
+    respectTogether: raw.respectTogether !== false,
     ratingScale: RATING_SCALE,
     handicap: clampHandicap(
       toHandicapScale(
@@ -843,7 +862,7 @@ function normalizeMatch(raw: unknown): Match | null {
  *
  * Ids are deduped — the same person twice on one side is not a thing a pitch
  * can hold — but ids of players since deleted are kept, for the same reason
- * `normalizeAvoid` keeps them: they cost nothing, every screen resolves them
+ * `normalizePeople` keeps them: they cost nothing, every screen resolves them
  * against the roster and skips what it cannot find, and dropping them here
  * would make importing a backup depend on the order the two halves arrive in.
  */

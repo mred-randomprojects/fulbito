@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { Player, PlayerId } from "../types.js";
 import { balanceCost, evaluateSquad, SplitError } from "./balance.js";
 import { buildAvoidIndex } from "./avoid.js";
+import { buildTogetherIndex } from "./together.js";
 import { defaultFormation } from "./formations.js";
 import {
   findGroupSplits,
@@ -32,6 +33,7 @@ function player(rating: number, extras: Partial<Player> = {}): Player {
     roleRatings: {},
     attributes: {},
     avoid: [],
+    together: [],
     tags: [],
     notes: "",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -421,6 +423,120 @@ describe("findGroupSplits — pins and avoids", () => {
 
       assert.equal(result.options[0].conflicts, 0);
     }
+  });
+});
+
+describe("findGroupSplits — together", () => {
+  /** Which team, by index, `id` landed on. */
+  function teamOf(option: GroupSplitOption, id: PlayerId): number {
+    return option.teams.findIndex((team) => team.players.some((p) => p.id === id));
+  }
+
+  it("keeps a chained group on one team out of three", () => {
+    // A with B, B with C: a group of three nobody wrote down as one.
+    const squad = ladder(12);
+    const [a, b, c] = squad;
+    a.together = [b.id];
+    b.together = [c.id];
+
+    const result = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      together: buildTogetherIndex(squad),
+    });
+
+    for (const option of result.options) {
+      assert.equal(option.separated, 0);
+      assert.equal(teamOf(option, a.id), teamOf(option, b.id));
+      assert.equal(teamOf(option, b.id), teamOf(option, c.id));
+    }
+  });
+
+  it("cuts a group bigger than a team at the fewest pairs", () => {
+    // Five want one team of four. The hub named the other four, so losing a
+    // leaf costs one pair and losing the hub costs four.
+    const squad = ladder(12);
+    const hub = squad[0];
+    hub.together = squad.slice(1, 5).map((p) => p.id);
+
+    const best = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      together: buildTogetherIndex(squad),
+    }).options[0];
+
+    assert.equal(best.separated, 1);
+    assert.equal(
+      squad.slice(1, 5).filter((leaf) => teamOf(best, leaf.id) === teamOf(best, hub.id)).length,
+      3,
+    );
+  });
+
+  it("breaks a friendship before a truce when they contradict", () => {
+    const squad = ladder(12);
+    const [a, b, c] = squad;
+    b.together = [a.id, c.id];
+    a.avoid = [c.id];
+
+    const best = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      avoid: buildAvoidIndex(squad),
+      together: buildTogetherIndex(squad),
+    }).options[0];
+
+    assert.equal(best.conflicts, 0);
+    assert.equal(best.separated, 1);
+  });
+
+  it("holds through the local-search path", () => {
+    const squad = ladder(20);
+    squad[0].together = [squad[1].id];
+
+    const result = findGroupSplits({
+      players: squad,
+      sizes: [5, 5, 5, 5],
+      basis: "total",
+      together: buildTogetherIndex(squad),
+      random: seeded(3),
+    });
+
+    assert.equal(result.exhaustive, false);
+    assert.equal(result.options[0].separated, 0);
+    assert.equal(teamOf(result.options[0], squad[0].id), teamOf(result.options[0], squad[1].id));
+  });
+
+  it("is rescored the same way by scoreGrouping", () => {
+    const squad = ladder(12);
+    const [a, b] = squad;
+    a.together = [b.id];
+    const together = buildTogetherIndex(squad);
+
+    const found = findGroupSplits({ players: squad, sizes: [4, 4, 4], basis: "total", together });
+    const option = found.options[0];
+    const rescored = scoreGrouping({
+      teams: option.teams.map((team) => team.players),
+      basis: "total",
+      together,
+    });
+    assert.equal(rescored.cost, option.cost);
+    assert.equal(rescored.separated, option.separated);
+
+    // And a hand swap that breaks the pair up shows up in the number.
+    const broken = scoreGrouping({
+      teams: swapPlayers(
+        option.teams.map((team) => team.players),
+        b.id,
+        option.teams[(teamOf(option, a.id) + 1) % 3].players[0].id,
+      ),
+      basis: "total",
+      together,
+    });
+    assert.equal(broken.separated, 1);
+    assert.ok(broken.cost > option.cost + 50, "a broken pair has to hurt");
   });
 });
 

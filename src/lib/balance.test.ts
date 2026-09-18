@@ -12,6 +12,7 @@ import {
   strengthEdge,
 } from "./balance.js";
 import { buildAvoidIndex } from "./avoid.js";
+import { buildTogetherIndex } from "./together.js";
 import { defaultFormation, resolveFormation } from "./formations.js";
 import { RATING_SCALE } from "../types.js";
 
@@ -32,6 +33,7 @@ function player(
     roleRatings: {},
     attributes: {},
     avoid: [],
+    together: [],
     tags: [],
     notes: "",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -722,6 +724,162 @@ describe("findSplits with avoid preferences", () => {
       avoid: buildAvoidIndex(players),
     });
     assert.equal(result.options[0].conflicts, 1);
+  });
+});
+
+describe("findSplits with together preferences", () => {
+  const formation5 = resolveFormation("5-1-2-1", 5);
+
+  function evenSquad(): Player[] {
+    return Array.from({ length: 10 }, () => player(60));
+  }
+
+  function split(players: Player[], pins: Partial<Record<PlayerId, "A" | "B">> = {}) {
+    return findSplits({
+      players,
+      sizeA: 5,
+      sizeB: 5,
+      formationA: formation5,
+      formationB: formation5,
+      pins,
+      basis: "total",
+      handicap: 0,
+      avoid: buildAvoidIndex(players),
+      together: buildTogetherIndex(players),
+    });
+  }
+
+  function sideOf(option: { teamA: Player[] }, target: Player): "A" | "B" {
+    return option.teamA.some((p) => p.id === target.id) ? "A" : "B";
+  }
+
+  it("puts a pair on the same side, whichever of them said it", () => {
+    const players = evenSquad();
+    const [one, two] = players;
+    two.together = [one.id];
+
+    for (const option of split(players).options) {
+      assert.equal(sideOf(option, one), sideOf(option, two));
+      assert.equal(option.separated, 0);
+    }
+  });
+
+  it("keeps a chain whole: pairs are already groups", () => {
+    // A with B, B with C, C with D. Nobody wrote down a group of four, but
+    // one team per person makes it one, and the split has to treat it so.
+    const players = evenSquad();
+    const [a, b, c, d] = players;
+    a.together = [b.id];
+    b.together = [c.id];
+    c.together = [d.id];
+
+    const best = split(players).options[0];
+    const side = sideOf(best, a);
+    for (const member of [b, c, d]) assert.equal(sideOf(best, member), side);
+    assert.equal(best.separated, 0);
+  });
+
+  it("outweighs balance when the two pull against each other", () => {
+    // Both 100s want each other. The fair split is one on each side; the
+    // one that keeps its word is lopsided, and it is the one that wins.
+    const teamOf2 = defaultFormation(2);
+    const players = [100, 100, 0, 0].map((rating) =>
+      player(rating, { roleRatings: { GK: rating, DEF: rating, MID: rating, FWD: rating } }),
+    );
+    const [starA, starB] = players;
+    starA.together = [starB.id];
+
+    const best = findSplits({
+      players,
+      sizeA: 2,
+      sizeB: 2,
+      formationA: teamOf2,
+      formationB: teamOf2,
+      pins: {},
+      basis: "total",
+      handicap: 0,
+      together: buildTogetherIndex(players),
+    }).options[0];
+
+    assert.equal(best.separated, 0);
+    assert.equal(sideOf(best, starA), sideOf(best, starB));
+  });
+
+  it("cuts a group that does not fit where it costs the fewest pairs", () => {
+    // Six people want one side of a 5 v 5. Somebody has to go, and with one
+    // person having named the other five it should be one of the five —
+    // cutting the hub would break five pairs, cutting a leaf breaks one.
+    const players = evenSquad();
+    const hub = players[0];
+    const leaves = players.slice(1, 6);
+    hub.together = leaves.map((p) => p.id);
+
+    const best = split(players).options[0];
+    assert.equal(best.separated, 1, "exactly one pair broken, not five");
+    const withHub = leaves.filter((leaf) => sideOf(best, leaf) === sideOf(best, hub));
+    assert.equal(withHub.length, 4);
+  });
+
+  it("breaks a friendship before it breaks a truce", () => {
+    // B wants A and C; A cannot stand C. Something has to give, and the
+    // cheaper thing is one of B's pairs.
+    const players = evenSquad();
+    const [a, b, c] = players;
+    b.together = [a.id, c.id];
+    a.avoid = [c.id];
+
+    const best = split(players).options[0];
+    assert.equal(best.conflicts, 0, "the feud is honoured");
+    assert.equal(best.separated, 1, "at the price of one friendship");
+  });
+
+  it("does nothing at all when the index is left out", () => {
+    // Which is what unticking the match's switch passes in.
+    const players = evenSquad();
+    const [one, two] = players;
+    one.together = [two.id];
+
+    const result = findSplits({
+      players,
+      sizeA: 5,
+      sizeB: 5,
+      formationA: formation5,
+      formationB: formation5,
+      pins: {},
+      basis: "total",
+      handicap: 0,
+    });
+    assert.ok(result.options.every((option) => option.separated === 0));
+  });
+
+  it("cannot unite a pair pinned to different sides, and says so", () => {
+    const players = evenSquad();
+    const [one, two] = players;
+    one.together = [two.id];
+
+    const best = split(players, { [one.id]: "A", [two.id]: "B" }).options[0];
+    assert.equal(best.separated, 1);
+  });
+
+  it("respects a preference through the sampled search too", () => {
+    const players = Array.from({ length: 24 }, () => player(60));
+    players[0].together = [players[1].id];
+
+    const result = findSplits({
+      players,
+      sizeA: 12,
+      sizeB: 12,
+      formationA: resolveFormation("", 12),
+      formationB: resolveFormation("", 12),
+      pins: {},
+      basis: "total",
+      handicap: 0,
+      together: buildTogetherIndex(players),
+      random: seededRandom(7),
+    });
+
+    assert.equal(result.exhaustive, false, "this squad is past the exhaustive budget");
+    assert.equal(result.options[0].separated, 0);
   });
 });
 

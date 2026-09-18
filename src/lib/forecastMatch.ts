@@ -16,7 +16,8 @@
  *   place in the order (date and name), since the order decides what counts
  *   as history.
  * - **The people on the pitch**: the fields `effectiveRating` reads. Notes,
- *   tags, photos and avoid lists are not in it, because no model reads them.
+ *   tags, photos, avoid and together lists are not in it, because no model
+ *   reads them.
  * - **Everything before it**: a digest rolled over every finished match
  *   older than this one, oldest first, of exactly what the history models
  *   read — lineups and results. A result typed into last month's game

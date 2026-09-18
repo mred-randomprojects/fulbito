@@ -168,6 +168,13 @@ any other app, full screen and with no signal needed.
   split sends them to opposite teams. One checkbox on the match turns it off
   for tonight, and if the preferences are impossible to satisfy the app says
   which pair it could not separate instead of refusing to pick.
+- **The ones who come as a package.** The mirror of the above: tick "mejor
+  ponerlo con" on either profile and the split keeps them on one side. Pairs
+  chain into groups on their own — there is one team per person, so A with B
+  and B with C is three people on a side — and the profile lists everyone a
+  player ends up beside, including the ones nobody ticked directly. Its own
+  checkbox on the match, so a night that wants balance over friendships still
+  keeps the two who fight apart.
 - **Nothing to save, and it says so.** Every change is written the moment you
   make it, and confirms it on screen. If a write ever fails, that stays on
   screen until it succeeds.
@@ -201,7 +208,10 @@ that falls back to local search and says so.
 Two people who would rather not share a side cost the split 1,000 points a
 pair — far more than any imbalance under the default weights — so it reads as a hard
 rule wherever one is satisfiable, and as "the least bad of a bad set" when three
-people all avoid each other. A lock still beats it: pins are the hard constraint.
+people all avoid each other. Two who want the same side cost 500 a pair when
+split up: still far above any imbalance, and deliberately half a feud, so when
+the two preferences contradict each other it is the friendship that gives. A
+lock still beats both: pins are the hard constraint.
 
 See `src/lib/rating.ts`, `src/lib/balance.ts` and `src/lib/groups.ts` — all
 three are covered by tests.

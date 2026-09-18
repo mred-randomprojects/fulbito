@@ -48,6 +48,24 @@ describe("normalizing avoid lists", () => {
   });
 });
 
+describe("normalizing together lists", () => {
+  it("defaults to nobody on a player saved before the preference existed", () => {
+    assert.deepEqual(withPlayer({}).together, []);
+  });
+
+  it("keeps the ids it was given, once each, and never the player themselves", () => {
+    // Same rules as `avoid`: a pair with yourself is one nothing can separate,
+    // so the search would be paid for keeping it whole on every split.
+    assert.deepEqual(withPlayer({ together: ["p2", "p1", "p2", 7, ""] }).together, ["p2"]);
+  });
+
+  it("does not touch the avoid list", () => {
+    const player = withPlayer({ avoid: ["p2"], together: ["p3"] });
+    assert.deepEqual(player.avoid, ["p2"]);
+    assert.deepEqual(player.together, ["p3"]);
+  });
+});
+
 describe("normalizing tags", () => {
   it("defaults to none", () => {
     // A backup written before tags existed still loads, with nobody tagged.
@@ -94,6 +112,20 @@ describe("normalizing respectAvoids", () => {
 
   it("reads anything else as yes", () => {
     assert.equal(withMatch({ respectAvoids: "nope" }).respectAvoids, true);
+  });
+});
+
+describe("normalizing respectTogether", () => {
+  it("honours the preference on a match saved before the setting existed", () => {
+    assert.equal(withMatch({}).respectTogether, true);
+  });
+
+  it("keeps an explicit no, on its own switch", () => {
+    // Its own field: a night that wants balancing over friendships still
+    // wants the two who fight kept apart.
+    const match = withMatch({ respectTogether: false });
+    assert.equal(match.respectTogether, false);
+    assert.equal(match.respectAvoids, true);
   });
 });
 

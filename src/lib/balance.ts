@@ -2,6 +2,7 @@ import type { Player, PlayerId, Role, TeamKey, BalanceBasis } from "../types.js"
 import { RATING_MAX, RATING_MIN, ROLES } from "../types.js";
 import { effectiveRating } from "./rating.js";
 import { EMPTY_AVOID_INDEX, keepApart, type AvoidIndex } from "./avoid.js";
+import { EMPTY_TOGETHER_INDEX, keepTogether, type TogetherIndex } from "./together.js";
 import type { Formation } from "./formations.js";
 
 /* ------------------------------------------------------------------ */
@@ -370,6 +371,11 @@ export interface SplitRequest {
    * ignore the preference entirely, which is what the match's own switch does.
    */
   avoid?: AvoidIndex;
+  /**
+   * Who had better end up on the same side. Omit — or pass the empty index —
+   * to ignore the preference, which is what the match's own switch does.
+   */
+  together?: TogetherIndex;
   /** How many distinct options to return. */
   optionCount?: number;
   /** Injected in tests for deterministic search. */
@@ -386,6 +392,8 @@ export interface SplitOption {
   edge: number;
   /** Pairs that wanted separating and did not get it. Zero on a clean split. */
   conflicts: number;
+  /** Pairs that wanted the same side and did not get it. Zero on a clean split. */
+  separated: number;
 }
 
 export interface SplitResult {
@@ -410,6 +418,18 @@ export class SplitError extends Error {}
  * fewest preferences, instead of throwing up its hands.
  */
 export const AVOID_PENALTY = 10 * (RATING_MAX - RATING_MIN);
+
+/**
+ * What one broken-up pair costs a split.
+ *
+ * Half a feud, on purpose. Still far above anything balance can reach, so a
+ * satisfiable "ponelo con" is honoured every time — but when the two
+ * preferences contradict each other, B wanting A and C while A cannot stand
+ * C, the cheaper thing to break is the friendship. It is a per-pair price,
+ * so two broken friendships do cost a feud; that is the edge of the edge, and
+ * the screen names every pair either way.
+ */
+export const TOGETHER_PENALTY = AVOID_PENALTY / 2;
 
 /** Rough operation budget for exhaustive enumeration, tuned to stay under ~250ms. */
 const OPS_BUDGET = 40_000_000;
@@ -446,6 +466,7 @@ export function findSplits(request: SplitRequest): SplitResult {
     basis,
     handicap,
     avoid = EMPTY_AVOID_INDEX,
+    together = EMPTY_TOGETHER_INDEX,
     optionCount = 5,
   } = request;
 
@@ -516,6 +537,37 @@ export function findSplits(request: SplitRequest): SplitResult {
     return found;
   };
 
+  /**
+   * The together relation, the same way. A pair is either inside one team or
+   * split across the two, so the split ones are the total minus the ones each
+   * team kept — which makes the count the same shape as the one above.
+   */
+  const friends: Set<number>[] = players.map(() => new Set<number>());
+  let togetherPairs = 0;
+  if (together.size > 0) {
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        if (!keepTogether(together, players[i].id, players[j].id)) continue;
+        friends[i].add(j);
+        friends[j].add(i);
+        togetherPairs += 1;
+      }
+    }
+  }
+
+  const countKept = (indices: readonly number[]): number => {
+    if (togetherPairs === 0) return 0;
+    let found = 0;
+    for (let i = 0; i < indices.length; i++) {
+      const mates = friends[indices[i]];
+      if (mates.size === 0) continue;
+      for (let j = i + 1; j < indices.length; j++) {
+        if (mates.has(indices[j])) found += 1;
+      }
+    }
+    return found;
+  };
+
   const evaluate = (indices: readonly number[], formation: Formation): TeamEvaluation => {
     const key = `${formation.id}:${[...indices].sort((x, y) => x - y).join(",")}`;
     const cached = evalCache.get(key);
@@ -532,6 +584,7 @@ export function findSplits(request: SplitRequest): SplitResult {
     const evalA = evaluate(indicesA, formationA);
     const evalB = evaluate(indicesB, formationB);
     const conflicts = countConflicts(indicesA) + countConflicts(indicesB);
+    const separated = togetherPairs - countKept(indicesA) - countKept(indicesB);
     return {
       teamA: indicesA.map((i) => players[i]),
       teamB: indicesB.map((i) => players[i]),
@@ -542,9 +595,13 @@ export function findSplits(request: SplitRequest): SplitResult {
       // decides which swaps are improvements from `cost` alone, so a penalty
       // kept outside it would be honoured by the exhaustive path and quietly
       // ignored by the other one.
-      cost: balanceCost(evalA, evalB, basis, handicap) + AVOID_PENALTY * conflicts,
+      cost:
+        balanceCost(evalA, evalB, basis, handicap) +
+        AVOID_PENALTY * conflicts +
+        TOGETHER_PENALTY * separated,
       edge: strengthEdge(evalA, evalB, basis),
       conflicts,
+      separated,
     };
   };
 

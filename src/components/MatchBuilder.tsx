@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronRight,
   HeartCrack,
+  HeartHandshake,
   Info,
   Lock,
   NotebookPen,
@@ -36,6 +37,12 @@ import { useLongPress } from "@/useLongPress";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { evaluateLineup, findSplits, SplitError, type TeamEvaluation } from "@/lib/balance";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
+import {
+  buildTogetherIndex,
+  EMPTY_TOGETHER_INDEX,
+  pairedWithin,
+  separatedAcross,
+} from "@/lib/together";
 import { computeStats } from "@/lib/stats";
 import { nextPaymentState, splitCourt } from "@/lib/court";
 import { matchTabs, type MatchTabId } from "@/lib/matchTabs";
@@ -87,6 +94,11 @@ type Selection =
   | { where: "unassigned"; id: PlayerId };
 
 
+/** The players actually standing in a lineup, empty slots skipped. */
+function lineupIds(lineup: (Player | null)[]): PlayerId[] {
+  return lineup.filter((p): p is Player => p != null).map((p) => p.id);
+}
+
 export function MatchBuilder({
   match,
   players,
@@ -137,6 +149,11 @@ export function MatchBuilder({
   const avoidIndex = useMemo(() => buildAvoidIndex(players), [players]);
   const anyAvoidsRecorded = useMemo(
     () => players.some((p) => p.avoid.length > 0),
+    [players],
+  );
+  const togetherIndex = useMemo(() => buildTogetherIndex(players), [players]);
+  const anyTogetherRecorded = useMemo(
+    () => players.some((p) => p.together.length > 0),
     [players],
   );
 
@@ -390,6 +407,7 @@ export function MatchBuilder({
         basis: match.basis,
         handicap: match.handicap,
         avoid: match.respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
+        together: match.respectTogether ? togetherIndex : EMPTY_TOGETHER_INDEX,
         optionCount: 6,
       });
       setOptions(result);
@@ -412,6 +430,8 @@ export function MatchBuilder({
     match.handicap,
     match.respectAvoids,
     avoidIndex,
+    match.respectTogether,
+    togetherIndex,
     formationA,
     formationB,
     applyOption,
@@ -545,6 +565,10 @@ export function MatchBuilder({
     () => conflictsWithin(avoidIndex, squadPlayers.map((p) => p.id)).length,
     [avoidIndex, squadPlayers],
   );
+  const togetherPairsInSquad = useMemo(
+    () => pairedWithin(togetherIndex, squadPlayers.map((p) => p.id)).length,
+    [togetherIndex, squadPlayers],
+  );
 
   /**
    * Pairs that ended up together anyway, read off the pitch rather than off the
@@ -557,13 +581,17 @@ export function MatchBuilder({
    */
   const lineupConflicts = useMemo(() => {
     if (!match.respectAvoids) return [];
-    const ids = (lineup: (Player | null)[]): PlayerId[] =>
-      lineup.filter((p): p is Player => p != null).map((p) => p.id);
     return [
-      ...conflictsWithin(avoidIndex, ids(lineupA)),
-      ...conflictsWithin(avoidIndex, ids(lineupB)),
+      ...conflictsWithin(avoidIndex, lineupIds(lineupA)),
+      ...conflictsWithin(avoidIndex, lineupIds(lineupB)),
     ];
   }, [match.respectAvoids, avoidIndex, lineupA, lineupB]);
+
+  /** The mirror: pairs that wanted the same side and are on different ones. */
+  const lineupSeparated = useMemo(() => {
+    if (!match.respectTogether) return [];
+    return separatedAcross(togetherIndex, [lineupIds(lineupA), lineupIds(lineupB)]);
+  }, [match.respectTogether, togetherIndex, lineupA, lineupB]);
 
   /** The kit of the side a player is pinned to, for the squad list to colour. */
   const lockedTo = useCallback(
@@ -632,7 +660,7 @@ export function MatchBuilder({
     squadSize: match.squad.length,
     hasLineup,
     benchCount: unassigned.length,
-    conflictCount: lineupConflicts.length,
+    conflictCount: lineupConflicts.length + lineupSeparated.length,
     sizeMismatch: mismatch,
     courtCost: match.courtCost,
     payers: courtSplit.payers,
@@ -825,6 +853,20 @@ export function MatchBuilder({
                     </p>
                   )}
 
+                  {lineupSeparated.length > 0 && (
+                    <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                      <HeartHandshake className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        {lineupSeparated
+                          .map(({ a, b }) => `${nameOf(a)} y ${nameOf(b)}`)
+                          .join(", ")}{" "}
+                        quedaron separados, y querían jugar juntos. Movelos a mano, o
+                        sacale el tilde a <em>respetar las buenas ondas</em> si hoy da
+                        igual.
+                      </span>
+                    </p>
+                  )}
+
                   {/* Above the pitch rather than under it, because the shirt
                       just tapped may be at the top and the bottom of a phone's
                       pitch is a scroll away. The pulsing ring on the shirt
@@ -969,8 +1011,12 @@ export function MatchBuilder({
                   respectAvoids={match.respectAvoids}
                   avoidPairsInSquad={avoidPairsInSquad}
                   anyAvoidsRecorded={anyAvoidsRecorded}
+                  respectTogether={match.respectTogether}
+                  togetherPairsInSquad={togetherPairsInSquad}
+                  anyTogetherRecorded={anyTogetherRecorded}
                   onBasisChange={(basis) => patch({ basis })}
                   onRespectAvoidsChange={(respectAvoids) => patch({ respectAvoids })}
+                  onRespectTogetherChange={(respectTogether) => patch({ respectTogether })}
                   onHandicapChange={(handicap) => patch({ handicap })}
                 />
               </div>

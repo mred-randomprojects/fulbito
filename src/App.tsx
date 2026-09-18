@@ -52,6 +52,7 @@ export default function App() {
       lineupB: [],
       basis: "total",
       respectAvoids: true,
+      respectTogether: true,
       handicap: 0,
       result: null,
       courtCost: 0,
