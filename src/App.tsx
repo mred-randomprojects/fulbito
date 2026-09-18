@@ -60,6 +60,7 @@ export default function App() {
       notes: "",
       reviews: {},
       forecastNotes: "",
+      videos: [],
       updatedAt: new Date().toISOString(),
     };
     app.saveMatch(match);

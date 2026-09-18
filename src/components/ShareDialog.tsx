@@ -16,6 +16,7 @@ import { slugify } from "@/lib/canvas";
 import { formatMatchDate } from "@/lib/dates";
 import { formatMoney, splitCourt } from "@/lib/court";
 import { track } from "@/lib/track";
+import { videoLines } from "@/lib/video";
 import { COPY_REFUSED, downloadBlob } from "@/share";
 import { useCopy } from "@/useCopy";
 import {
@@ -216,6 +217,16 @@ function buildText(
   }
 
   lines.push(...courtLines(match, squad));
+
+  // The recordings go out — the one thing written on the match that was
+  // made for the grupo rather than for you. Last, so the chat's own preview
+  // of the first link lands under the message instead of in the middle of
+  // the teams.
+  const videos = videoLines(match.videos);
+  if (videos.length > 0) {
+    if (lines[lines.length - 1] !== "") lines.push("");
+    lines.push(...videos);
+  }
 
   return lines.join("\n").trimEnd();
 }

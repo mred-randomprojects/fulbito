@@ -141,6 +141,17 @@ any other app, full screen and with no signal needed.
   bad Thursday and not a downgrade — and his ficha stacks them all up, newest
   first, under the match each came from. None of it leaves: not the text for
   the group chat, not either PNG, not anybody's rating.
+- **The recording, with the match.** Paste the link — YouTube, Vimeo, Drive,
+  a bare video file, or whatever the cancha's cameras gave you — and it sits
+  above the tabs with the score and the note, one tile per link with a
+  name on it: primer tiempo, cámara del arco, the goal at `?t=2052`. Tap the
+  tile and it plays right there; a link the app cannot play opens where it
+  lives. Paste the whole message from the chat and it finds the link in it.
+  The app keeps the address, never the file — YouTube unlisted is the free
+  hosting that already exists. It is the one thing written on a match that
+  goes out with the shared text, because the link is what the grupo was
+  going to ask for anyway; the list of partidos shows a little clapperboard
+  on the games that have one.
 - **Who paid the cancha, and who is still owing.** Put in what the pitch cost
   and it works out what each one puts. Bancar somebody is one extra tap: they
   come out of the reparto and the rest cover it, so a fútbol 5 with one on the

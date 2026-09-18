@@ -23,6 +23,7 @@ import { MatchSetup } from "./MatchSetup";
 import { CourtPanel } from "./CourtPanel";
 import { ResultPanel } from "./ResultPanel";
 import { MatchNotes } from "./MatchNotes";
+import { VideoPanel } from "./VideoPanel";
 import { PitchPlayerCard, type PitchPlace, type PitchPlayerTarget } from "./PitchPlayerCard";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
@@ -708,6 +709,14 @@ export function MatchBuilder({
           was. */}
       {(squadReady || hasNote(match.notes)) && (
         <MatchNotes notes={match.notes} onChange={(notes) => patch({ notes })} />
+      )}
+
+      {/* Same rule again. A video already on the match always shows: it is
+          the one thing on a match somebody emptied afterwards that still
+          says what happened, and a link is not a thing to lose by unticking
+          names. */}
+      {(squadReady || match.videos.length > 0) && (
+        <VideoPanel videos={match.videos} onChange={(videos) => patch({ videos })} />
       )}
 
       {!squadReady ? (

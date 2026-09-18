@@ -15,8 +15,8 @@ is exactly the cost this file exists to remove.
 A team picker for pickup football. You rate your mates once, tick who turned
 up, and it works out the fairest split of the sides in the thirty seconds
 before kick-off. Then you record how it actually ended, whatever needs saying
-about the night, how each of them went one by one, and who still owes you for
-the cancha. When more people turn
+about the night, how each of them went one by one, who still owes you for
+the cancha, and where the recording of it lives. When more people turn
 up than two teams can hold, a second screen splits them into several, lets you
 name them, and draws the torneito they are about to play. And when it is the same two sides every week, you save
 them once and bring them both into a match in a tap. Once the sides are up,
@@ -200,6 +200,18 @@ enters the app without going through `normalizeAppData` — a hand-edited
   you open the match. Stored exactly as typed, like `notes`, and read by the
   Pronóstico tab alone. The forecasts themselves are **not** stored — see
   "The pronóstico" below.
+- **`Match.videos`** — where the recordings of the game live: a list of
+  `{ url, label }`, each an `http(s)` address and what to call it ("primer
+  tiempo", "cámara del arco", "el gol del Gordo" with a timestamp in the
+  link). Never a file: the app stores addresses, and YouTube — unlisted, or
+  wherever the cancha's system already put it — stores the gigabyte. A list
+  from the start because the venue hands over one file per half, and a
+  string that became a list later would be a migration of every stored
+  match. The address is trimmed; the label is stored as typed, like `notes`.
+  Which addresses get a player inside the match and which are kept as a
+  link is `lib/video.ts`'s call, on the way out. Unlike everything else
+  written on a match, this one **does** go in the shared text — see the
+  invariant below.
 - **`Match.courtCost` / `Match.payments`** — what the pitch cost in whole
   pesos, and one record per person: absent means they owe, `"paid"` means they
   put it in, `"comped"` means we bancamos them. Per match rather than global —
@@ -229,6 +241,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/pitchTap.ts` | What a tap on the cancha means: open the player's card, arm a move, or make one |
 | `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
 | `lib/reviews.ts` | What counts as a line of the uno x uno, and one player's history of them |
+| `lib/video.ts` | What an address pasted onto a match is — YouTube, Vimeo, Drive, a file, a link, or nothing — what a player needs to show it, the same link twice, and the lines the chat gets |
 | `lib/forecast.ts` | The ground every forecast stands on: how many goals a game has, what a gap is worth, what an extra player is worth, and the scoreline grid |
 | `lib/forecastModels.ts` | The six arguments about what decides a picado, each as a grid, and the consensus that averages them |
 | `lib/forecastSim.ts` | Mano a mano: the game played out three thousand times, minute by minute, as duels |
@@ -285,7 +298,8 @@ before each save, and a corrupt-blob stash that loading falls back through.
 Screens: `MatchesPage` (the list, with the face of each side's best player
 and what is still owed on each row),
 `MatchBuilder` (one screen in five tabs — Cancha, Pronóstico, Jugadores,
-Ajustes, Pagos — under a result panel and a note that are always there; on the
+Ajustes, Pagos — under a result panel, a note and the recordings
+(`VideoPanel`) that are always there; on the
 cancha, a tap on a player opens `PitchPlayerCard`, the uno x uno box with the
 move and the ficha under it; `ForecastPanel` is the Pronóstico tab), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
 they play), `TeamsPage` (Equipos: the sides that live between games),
@@ -1115,6 +1129,22 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   adds either to a share is a change that has to take that sentence down first.
   Neither ever touches a rating: an opinion of one night is not a downgrade,
   the same line "Rating people from their results" draws below.
+  **`Match.videos` is the one deliberate exception.** The recording is the
+  one thing on a match that was made *for* the grupo — the link is the
+  message everybody was going to ask for anyway — so `ShareDialog` puts one
+  `🎥` line per video at the foot of the text, label first when there is
+  one. Not in either PNG: an address in a picture is an address nobody can
+  tap. The exception is the *address*; the label goes out with it, so the
+  label is the one field on this panel that is written for the grupo too,
+  and the placeholder says as much by example.
+- **The recordings load nothing until tapped.** A tile is a still (YouTube's,
+  which is a URL with the id in it) or a play button; the player — a frame
+  for YouTube, Vimeo and Drive, the browser's own `<video>` for a bare file —
+  is mounted on the tap and unmounted on the next, one at a time. A match
+  screen that pulled a player down on every open would be paying, on a
+  phone, for a thing most opens do not want. Nothing here fetches to
+  decorate: no oEmbed, no titles, no thumbnails for the hosts that need an
+  API call for one.
 - **A filter is a view, never a fact.** Nothing about tags is stored beyond
   the labels on the players. The ticked chips die with the screen, and a tick
   pointing at a tag whose last carrier just lost it stops filtering rather than
@@ -1251,6 +1281,18 @@ touched anything and the two of them must go quiet.
   to be read by the people who played it — which would be the first thing in
   this app that sends what one player wrote to another, rather than a
   read-only snapshot out and anonymous numbers back.
+- **Hosting the video.** The app keeps addresses; it does not keep, upload
+  or transcode recordings. A ninety-minute file off the cancha's cameras is
+  a gigabyte, and the day it lives in Firebase Storage is the day the app
+  has a bill and a wall. YouTube, unlisted, is the free tier that already
+  exists; the venue's own viewer is a link like any other.
+- **Momentos.** A "gol del Gordo, 34:12" that jumps the player to the second
+  is the obvious next thing, and the shape is already there — a video is a
+  link, and a link can carry a timestamp — so today it is a second entry on
+  the list with `?t=2052` in it and a label. A first-class list of moments
+  per video (a time, a player, a line) would want its own type, its own
+  editor on the player, and a read-back on the ficha; not before somebody
+  has written ten of them by hand.
 - **Anything that moves money.** No alias, no QR, no payment link: the app
   says who owes what, and the transfer happens where it always happened.
 - **Rating people from their results.** The 0-100 numbers are still entirely

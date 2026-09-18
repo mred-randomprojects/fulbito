@@ -159,6 +159,40 @@ describe("normalizing the forecast notes", () => {
   });
 });
 
+describe("normalizing the videos", () => {
+  it("has none on a match saved before recordings had a home", () => {
+    assert.deepEqual(withMatch({}).videos, []);
+  });
+
+  it("keeps the address trimmed and the label as typed", () => {
+    assert.deepEqual(
+      withMatch({ videos: [{ url: " https://youtu.be/dQw4w9WgXcQ ", label: " primer tiempo " }] }).videos,
+      [{ url: "https://youtu.be/dQw4w9WgXcQ", label: " primer tiempo " }],
+    );
+  });
+
+  it("drops an entry with no address, and reads a missing label as none", () => {
+    // An address is the whole of what a video is here; a blank tile would be
+    // a thing to tap that goes nowhere.
+    assert.deepEqual(
+      withMatch({ videos: [{ label: "x" }, { url: "  " }, { url: "https://a.b/c.mp4" }, 7, null] }).videos,
+      [{ url: "https://a.b/c.mp4", label: "" }],
+    );
+  });
+
+  it("reads anything that is not a list as no videos", () => {
+    assert.deepEqual(withMatch({ videos: "https://youtu.be/x" }).videos, []);
+  });
+
+  it("keeps the first of two entries with the same address", () => {
+    assert.deepEqual(
+      withMatch({ videos: [{ url: "https://a.b/c", label: "uno" }, { url: "https://a.b/c", label: "dos" }] })
+        .videos,
+      [{ url: "https://a.b/c", label: "uno" }],
+    );
+  });
+});
+
 describe("normalizing the uno x uno", () => {
   it("has nothing written on a match saved before it existed", () => {
     assert.deepEqual(withMatch({}).reviews, {});

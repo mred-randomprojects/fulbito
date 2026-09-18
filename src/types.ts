@@ -9,6 +9,7 @@
 
 import { clampCourtCost, type PaymentBook } from "./lib/court.js";
 import type { ReviewBook } from "./lib/reviews.js";
+import type { MatchVideo } from "./lib/video.js";
 import { normalizeTagList } from "./lib/tags.js";
 import { byMatchOrder } from "./lib/matchOrder.js";
 
@@ -372,6 +373,14 @@ export interface Match {
    * exactly one thing: the Pronóstico tab. See `lib/forecastScore.ts`.
    */
   forecastNotes: string;
+  /**
+   * Where the recordings of this game live: a link each, with a label. A
+   * list from the start, because the cancha's cameras hand over one file per
+   * half. Never a file — the app stores addresses, and YouTube stores the
+   * gigabyte. `lib/video.ts` is the only thing that reads this, and it is
+   * the one thing about the night that *does* go out in the shared text.
+   */
+  videos: MatchVideo[];
   updatedAt: string;
 }
 
@@ -777,6 +786,33 @@ function normalizeReviews(value: unknown): ReviewBook {
   return out;
 }
 
+/**
+ * Stored recordings.
+ *
+ * An entry with no address is dropped rather than kept as a blank tile: an
+ * address is the whole of what a video *is* here, and `addVideo` never
+ * writes one without. The label is kept as typed, like `notes`; the address
+ * is trimmed, because it was never prose. Whether the address is one at all
+ * is `lib/video.ts`'s call on the way out, the same way `hasNote` is for the
+ * note — a blob from a hand edit keeps its line, and the screen shows it as
+ * a link that goes nowhere rather than silently losing it.
+ */
+function normalizeVideos(value: unknown): MatchVideo[] {
+  if (!Array.isArray(value)) return [];
+  const out: MatchVideo[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const url = str(entry.url).trim();
+    // The same address twice is once — `addVideo` never writes it, and the
+    // screen keys its tiles on the address.
+    if (url === "" || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ url, label: str(entry.label) });
+  }
+  return out;
+}
+
 export const DEFAULT_TEAM_A: TeamConfig = {
   name: "Claros",
   kit: "light",
@@ -853,6 +889,9 @@ function normalizeMatch(raw: unknown): Match | null {
     // Absent on any match saved before there was a pronóstico to argue
     // with, which is the same state as one nobody has written about.
     forecastNotes: str(raw.forecastNotes),
+    // Absent on any match saved before recordings had a home, which is the
+    // same state as a match nobody filmed.
+    videos: normalizeVideos(raw.videos),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
 }

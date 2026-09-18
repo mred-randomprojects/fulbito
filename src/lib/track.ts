@@ -1,3 +1,5 @@
+import type { VideoKind } from "./video.js";
+
 /**
  * What the app says about how it is used, and the one place that decides
  * whether it says anything at all.
@@ -33,6 +35,8 @@ export type TrackEvent =
   | { name: "lineup_shared"; via: "text" | "image"; ratings: boolean }
   | { name: "result_recorded" }
   | { name: "review_written" }
+  /** `kind`: where the recording lives, never the address. */
+  | { name: "video_added"; kind: VideoKind }
   | { name: "saved_teams_loaded" }
   | { name: "torneito_shared"; via: "text" | "image"; teams: number }
   | { name: "poll_created"; players: number }

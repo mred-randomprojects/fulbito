@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CalendarDays, ChevronRight, Crown, NotebookPen, Plus, Trophy } from "lucide-react";
+import { CalendarDays, ChevronRight, Clapperboard, Crown, NotebookPen, Plus, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, splitCourt } from "@/lib/court";
 import { pickFace } from "@/lib/matchFaces";
@@ -107,6 +107,7 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
                       {match.squad.length} anotado
                       {match.squad.length === 1 ? "" : "s"}
                       <CourtNote match={match} rosterIds={rosterIds} />
+                      <VideoMark count={match.videos.length} />
                     </p>
                     <NoteLine notes={match.notes} />
                   </div>
@@ -238,6 +239,25 @@ function NoteLine({ notes }: { notes: string }) {
       <NotebookPen className="h-3 w-3 shrink-0" />
       <span className="min-w-0 truncate">{preview}</span>
     </p>
+  );
+}
+
+/**
+ * That there is a recording, on the row. Which game had the golazo is the
+ * thing you scroll the list looking for, and the tile is one tap further in.
+ * Silent on a match nobody filmed, which is most of them.
+ */
+function VideoMark({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span>
+      {" "}
+      · <Clapperboard aria-hidden className="inline h-3 w-3 align-[-2px]" />
+      {count > 1 && <span className="tabular"> {count}</span>}
+      <span className="sr-only">
+        {count === 1 ? "con video" : `con ${count} videos`}
+      </span>
+    </span>
   );
 }
 
