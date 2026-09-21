@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   hashNeedsAuth,
+  hashNeedsGoogle,
   maySync,
   mirrorIsStale,
   shouldLoadCloud,
@@ -105,5 +106,23 @@ describe("hashNeedsAuth", () => {
     // A bare prefix test would download the SDK on this one forever.
     assert.equal(hashNeedsAuth("#/encuestas-viejas"), false);
     assert.equal(hashNeedsAuth("#/encuesta"), false);
+  });
+});
+
+describe("hashNeedsGoogle", () => {
+  it("wants Google's script ready on the encuesta, where the button is", () => {
+    assert.equal(hashNeedsGoogle("#/encuesta/abc123"), true);
+  });
+
+  it("does not fetch it for la lista, which never shows the button", () => {
+    // Anonymous sign-in there; the script would be a download for nothing.
+    assert.equal(hashNeedsGoogle("#/lista/abc123"), false);
+  });
+
+  it("is at least as strict as hashNeedsAuth", () => {
+    for (const hash of ["#/encuestas-viejas", "#/encuesta", "#/players", "#/", ""]) {
+      assert.equal(hashNeedsGoogle(hash), false);
+      assert.equal(hashNeedsAuth(hash) || !hashNeedsGoogle(hash), true);
+    }
   });
 });

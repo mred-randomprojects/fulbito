@@ -24,7 +24,7 @@ import {
   watchList,
   type ListSnapshot,
 } from "@/cloud/lists";
-import { isCancelledSignIn } from "@/lib/authErrors";
+import { isCancelledSignIn, isPopupBlocked } from "@/lib/authErrors";
 import { formatMatchDate } from "@/lib/dates";
 import {
   clampCap,
@@ -164,7 +164,9 @@ export function ListPanel({ match, players, onAnotar, onCreatePlayer }: Props) {
     try {
       await signIn();
     } catch (e: unknown) {
-      if (!isCancelledSignIn(e)) setError("No se pudo entrar con Google.");
+      if (!isCancelledSignIn(e)) {
+        setError(isPopupBlocked(e) ? "El navegador no dejó abrir la ventana de Google. Tocá de nuevo, que a la segunda sale." : "No se pudo entrar con Google.");
+      }
     } finally {
       setSigningIn(false);
     }

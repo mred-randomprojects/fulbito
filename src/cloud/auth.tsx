@@ -7,12 +7,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { User } from "firebase/auth";
+import type { Auth, User, UserCredential } from "firebase/auth";
 import { cloudConfigured, loadCloud } from "./firebase";
+import { googleClientId, loadGoogleIdentity, requestGoogleAccessToken } from "./googleIdentity";
 import { clearCloudPrefs, readCloudPrefs, writeCloudConsent } from "./prefs";
 import { deleteCloudCopy, readSyncConsent, writeSyncConsent } from "./syncPrefs";
 import {
   hashNeedsAuth,
+  hashNeedsGoogle,
   mirrorIsStale,
   shouldLoadCloud,
   syncGate,
@@ -38,6 +40,11 @@ import { track } from "@/lib/track";
  * settles into "signed out" without loading a byte of Firebase. That decision
  * has to be made synchronously, before anything is downloaded, which is the
  * whole reason a local mirror of the consent exists at all.
+ *
+ * Google itself is reached through one of two doors, and `signInWithGoogle`
+ * below picks: Google's own library when this build has a client id, and
+ * Firebase's popup otherwise. `lib/googleIdentity.ts` is the argument for
+ * the first one; the second is what shipped before it.
  */
 
 /** The bits of a Google account this app has any use for. */
@@ -55,6 +62,12 @@ export interface CloudAuthValue {
   loading: boolean;
   /** Whether sync may run, and why not when it may not. */
   gate: SyncGate;
+  /**
+   * Fetch what a tap on "Entrar con Google" will need, before the tap. For a
+   * screen that has put the button on show and can afford the download;
+   * `prepareSignIn` says why the timing matters.
+   */
+  prepare: () => void;
   /** A session, and nothing more. What the encuesta route uses. */
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -73,6 +86,62 @@ function toCloudUser(user: User): CloudUser {
     email: user.email,
     name: user.displayName ?? user.email ?? "Vos",
   };
+}
+
+/**
+ * Fetch what a tap on "Entrar con Google" will need, before the tap.
+ *
+ * Safari lets a page open a window only while it is still handling the tap,
+ * and a download does not fit inside that: a button whose handler first
+ * fetches the SDK and then opens the popup is a button that, on a phone,
+ * sometimes does nothing. So the screens that can see the tap coming — the
+ * encuesta at boot, Encuestas the moment it shows the button, Tus datos when
+ * the consent dialog opens — ask for the SDK and Google's script now, and by
+ * the time the finger lands both are memoised and the popup opens inside
+ * the gesture. Failures are ignored here: the tap itself will try again and
+ * has a screen to report to.
+ *
+ * Not called from every screen with a button on it on purpose. La lista's
+ * panel sits on every match, and "download the cloud SDK because a match was
+ * opened" is exactly the cost `cloud/firebase.ts` exists to avoid.
+ */
+function prepareSignIn(): void {
+  if (!cloudConfigured) return;
+  void loadCloud().catch(() => {});
+  if (googleClientId !== null) void loadGoogleIdentity().catch(() => {});
+}
+
+/**
+ * Google, through whichever door this build has.
+ *
+ * With a client id, Google Identity Services: its popup goes straight to
+ * accounts.google.com and hands an access token back to this tab, and the
+ * token becomes a session through `signInWithCredential`, which is a plain
+ * request. Without one — or if Google's script would not load, which is an
+ * ad blocker or a network and not a reason to leave somebody stranded —
+ * Firebase's own popup, which bounces through a helper page on
+ * firebaseapp.com that has to keep state in its own sessionStorage across
+ * the round trip. `lib/googleIdentity.ts` is where that page lost an iPhone.
+ *
+ * The order inside is deliberate: the popup is opened before anything else
+ * is awaited, because Safari only lets a page open a window while it is
+ * still handling the tap. `prepareSignIn` exists so that the loads before
+ * it are already done by then.
+ */
+async function signInWithGoogle(auth: Auth): Promise<UserCredential> {
+  const direct =
+    googleClientId !== null &&
+    (await loadGoogleIdentity().then(
+      () => true,
+      () => false,
+    ));
+  if (direct) {
+    const token = await requestGoogleAccessToken();
+    const { GoogleAuthProvider, signInWithCredential } = await import("firebase/auth");
+    return signInWithCredential(auth, GoogleAuthProvider.credential(null, token));
+  }
+  const { GoogleAuthProvider, signInWithPopup } = await import("firebase/auth");
+  return signInWithPopup(auth, new GoogleAuthProvider());
 }
 
 export function CloudAuthProvider({ children }: { children: ReactNode }) {
@@ -119,6 +188,12 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
     if (!loading) return;
     let live = true;
     let unsubscribe: (() => void) | null = null;
+
+    // The encuesta's first screen is the button. Have Google's script there
+    // before the finger is; `prepareSignIn` says why that is not a nicety.
+    if (googleClientId !== null && hashNeedsGoogle(window.location.hash)) {
+      void loadGoogleIdentity().catch(() => {});
+    }
 
     void loadCloud()
       .then(async ({ auth }) => {
@@ -167,8 +242,7 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
     // that session wrote keep their old uid — on this device the organiser
     // can no longer edit those as "mine", which is a small price for not
     // linking a throwaway identity to a Google account by accident.
-    const { GoogleAuthProvider, signInWithPopup } = await import("firebase/auth");
-    const account = await signInWithPopup(auth, new GoogleAuthProvider());
+    const account = await signInWithGoogle(auth);
     setUser(toCloudUser(account.user));
     return account.user.uid;
   }, []);
@@ -221,6 +295,7 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       gate: syncGate({ configured: cloudConfigured, signedIn: user !== null, account }),
+      prepare: prepareSignIn,
       signIn,
       signOut,
       enableSync,

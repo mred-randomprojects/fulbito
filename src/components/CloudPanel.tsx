@@ -55,7 +55,7 @@ import type { CloudState } from "@/lib/cloudStatus";
  */
 
 export function CloudPanel({ state }: { state: CloudState }) {
-  const { available, user, loading, gate, signOut, enableSync, disableSync, wipeCloud } =
+  const { available, user, loading, gate, prepare, signOut, enableSync, disableSync, wipeCloud } =
     useCloudAuth();
   const [asking, setAsking] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -139,7 +139,15 @@ export function CloudPanel({ state }: { state: CloudState }) {
             Google y tus datos te siguen. Si no entrás, no cambia nada: todo
             sigue viviendo acá adentro nomás.
           </p>
-          <Button onClick={() => setAsking(true)} disabled={loading || working}>
+          {/* The dialog is read before it is answered, which is time enough
+              to have the SDK and Google's script in memory for the yes. */}
+          <Button
+            onClick={() => {
+              prepare();
+              setAsking(true);
+            }}
+            disabled={loading || working}
+          >
             {loading ? (
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
             ) : (

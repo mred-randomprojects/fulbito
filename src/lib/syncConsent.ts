@@ -106,3 +106,17 @@ export function hashNeedsAuth(hash: string): boolean {
   const path = hash.startsWith("#") ? hash.slice(1) : hash;
   return path.startsWith(POLL_ROUTE) || path.startsWith(LIST_ROUTE);
 }
+
+/**
+ * Will this URL put a Google button in front of somebody straight away?
+ *
+ * Narrower than `hashNeedsAuth` on purpose. La lista signs people in
+ * anonymously and never shows the button, so fetching Google's sign-in
+ * script there would be a download for nothing; the encuesta cannot be
+ * answered without it, and `cloud/auth.tsx` wants the script in memory
+ * before the tap, not during it — see `prepareSignIn` there.
+ */
+export function hashNeedsGoogle(hash: string): boolean {
+  const path = hash.startsWith("#") ? hash.slice(1) : hash;
+  return path.startsWith(POLL_ROUTE);
+}

@@ -61,6 +61,42 @@ rules can pin each name to the device that wrote it. Without it the list
 page says the list is not enabled yet. Anonymous sessions are nobody as far
 as sync is concerned — `cloud/auth.tsx` treats them as signed out.
 
+### Let the app talk to Google directly
+
+Out of the box, Firebase's Google popup does not go to Google: it goes to a
+helper page on `<project>.firebaseapp.com`, which parks a little state in
+its own `sessionStorage`, bounces the person to Google, and expects to find
+it again on the way back. Phones opening an encuesta from WhatsApp have come
+back to a white page saying "Unable to process request due to missing
+initial state" instead. With a client id the app uses Google's own library,
+whose popup goes straight to accounts.google.com and hands the token back to
+the tab that opened it — nothing is parked anywhere. `src/cloud/googleIdentity.ts`
+is the code; Firebase itself lists this as the way through for browsers that
+partition storage.
+
+1. Still under **Sign-in method → Google**, expand **Web SDK configuration**
+   and copy the **Web client ID** (it ends in `.apps.googleusercontent.com`).
+   Put it in `.env` as `VITE_GOOGLE_CLIENT_ID`.
+2. That client belongs to the Google Cloud project behind the Firebase one.
+   [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   → the same project → **Credentials → OAuth 2.0 Client IDs → Web client
+   (auto created by Google Service)** → **Authorized JavaScript origins** →
+   add:
+
+   - `https://mred-randomprojects.github.io`
+   - `http://localhost` and `http://localhost:5173` — Google wants both
+     spellings for local development.
+
+   Origins only, no paths, and leave the redirect URIs alone — the popup
+   posts the token back rather than redirecting anywhere. Google says the
+   change can take a few minutes to hours to be picked up; until it is, the
+   popup says the origin is not allowed for the client.
+3. Add the same value as a `VITE_GOOGLE_CLIENT_ID` secret in step 7.
+
+Leaving it out is a supported state: sign-in then goes through Firebase's
+popup exactly as before. The id is not a secret either — it names the client,
+and the origins list is what decides who may use it.
+
 ## 4. Authorized domains
 
 **Authentication → Settings → Authorized domains** must contain:
@@ -117,7 +153,7 @@ an island, and no signed-in user can read another's roster.
 
 The site is built in CI, so the Vite variables have to exist there too.
 
-Repo → **Settings → Secrets and variables → Actions** → add all seven:
+Repo → **Settings → Secrets and variables → Actions** → add all eight:
 
 ```text
 VITE_FIREBASE_API_KEY
@@ -127,10 +163,13 @@ VITE_FIREBASE_STORAGE_BUCKET
 VITE_FIREBASE_MESSAGING_SENDER_ID
 VITE_FIREBASE_APP_ID
 VITE_ALLOWED_EMAILS
+VITE_GOOGLE_CLIENT_ID
 ```
 
 Add `VITE_ALLOWED_EMAILS` as an empty secret rather than skipping it, so that
 turning the app invitational later is one edit and not a workflow change.
+`VITE_GOOGLE_CLIENT_ID` is the one from step 3; without it the site still
+builds and signs people in through Firebase's popup.
 
 `.github/workflows/deploy.yml` already passes them into `npm run build`.
 

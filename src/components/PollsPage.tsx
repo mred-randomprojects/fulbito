@@ -38,7 +38,7 @@ import {
   setIgnoredBallots,
   type PollSummary,
 } from "@/cloud/polls";
-import { isCancelledSignIn } from "@/lib/authErrors";
+import { isCancelledSignIn, isPopupBlocked } from "@/lib/authErrors";
 import { MIN_VOTERS, aggregateBallots, type CrowdPlayer } from "@/lib/crowd";
 import { pollOrder, type Poll, type PollIdentity, type VoteSummary } from "@/lib/poll";
 import {
@@ -105,7 +105,7 @@ function linkFor(pollId: string): string {
 }
 
 export function PollsPage({ players, matches, onSavePlayer }: Props) {
-  const { available, user, loading, signIn } = useCloudAuth();
+  const { available, user, loading, prepare, signIn } = useCloudAuth();
   const [view, setView] = useState<View>({ kind: "list" });
   const [polls, setPolls] = useState<PollSummary[] | null>(null);
   const [title, setTitle] = useState("");
@@ -153,13 +153,21 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
     void refresh();
   }, [refresh]);
 
+  // Nothing on this page works signed out, so the button is where everybody
+  // signed out is headed. Fetch what the tap will need while they read.
+  useEffect(() => {
+    if (available && !loading && user === null) prepare();
+  }, [available, loading, user, prepare]);
+
   async function enter() {
     setError(null);
     setSigningIn(true);
     try {
       await signIn();
     } catch (e: unknown) {
-      if (!isCancelledSignIn(e)) setError("No se pudo entrar con Google.");
+      if (!isCancelledSignIn(e)) {
+        setError(isPopupBlocked(e) ? "El navegador no dejó abrir la ventana de Google. Tocá de nuevo, que a la segunda sale." : "No se pudo entrar con Google.");
+      }
     } finally {
       setSigningIn(false);
     }

@@ -12,7 +12,7 @@ import {
   submitBallot,
   type Voter,
 } from "@/cloud/polls";
-import { isCancelledSignIn } from "@/lib/authErrors";
+import { isCancelledSignIn, isPopupBlocked } from "@/lib/authErrors";
 import { browserClock } from "@/lib/browserClock";
 import {
   ATTRIBUTE_LABELS,
@@ -203,7 +203,11 @@ export function PollPage() {
       await signIn();
     } catch (e: unknown) {
       if (!isCancelledSignIn(e)) {
-        setSignInError("No se pudo entrar con Google. Probá de nuevo en un rato.");
+        setSignInError(
+          isPopupBlocked(e)
+            ? "El navegador no dejó abrir la ventana de Google. Tocá de nuevo, que a la segunda sale."
+            : "No se pudo entrar con Google. Probá de nuevo en un rato.",
+        );
       }
     } finally {
       setSigningIn(false);

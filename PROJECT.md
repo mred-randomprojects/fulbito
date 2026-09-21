@@ -280,8 +280,10 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
-| `lib/syncConsent.ts` | Whether sync may run, and whether this tab needs the SDK at all |
-| `lib/authErrors.ts` | Reading a Firebase error code; which ones are somebody changing their mind |
+| `lib/syncConsent.ts` | Whether sync may run, whether this tab needs the SDK at all, and whether it needs Google's script before the first tap |
+| `lib/authErrors.ts` | Reading an error code off either Google door; which ones are somebody changing their mind, and which one wants a second tap rather than a wait |
+| `lib/googleIdentity.ts` | Why sign-in goes to Google directly rather than through Firebase's helper page, and what Google's answer amounts to |
+| `cloud/googleIdentity.ts` | Google's own sign-in script, fetched once, and one access token out of its popup |
 | `lib/lista.ts` | La lista: who is in and who is on the banco, the message for the grupo, and which typed name is which player |
 | `cloud/lists.ts` | La lista in Firestore: making one, watching it live, putting a name on it, taking one off |
 | `lib/track.ts` | The closed list of events the app can report, whether it may report at all, and holding the early ones until the vendor arrives |
@@ -290,7 +292,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `cloud/firebase.ts` | Whether this build has a cloud at all, and loading the SDK if so |
 | `cloud/polls.ts` | Encuestas in Firestore: sending one out, answering it, reading the answers |
 | `usePollHistory.ts` | Fetching that archive once a session, and whether a dot may carry a name |
-| `cloud/auth.tsx` | Who is signed in, and — separately — whether they agreed to sync |
+| `cloud/auth.tsx` | Who is signed in, and — separately — whether they agreed to sync; which Google door a build has, and fetching it before the tap |
 | `cloud/syncPrefs.ts` | The account's own yes or no, and deleting the cloud copy; `cloud/prefs.ts` mirrors it locally |
 | `cloud/adminPrefs.ts` | Whether the super admin switch is on in this browser; `useSuperAdmin.ts` reads it against the session |
 | `cloud/firestore.ts` | Documents in, documents out; `useCloudSync.ts` decides when |
@@ -832,7 +834,10 @@ sends on purpose. Four things about it are deliberate.
   this kind of reason: a voter was promised the one who made the list sees
   numbers and not names, and a recording of them putting a 4 on El Gordo
   would be a second way to break that promise. Nothing on that route
-  touches the tracker.
+  touches the tracker. The one third-party script that route does fetch,
+  when the build has a client id, is Google's sign-in library
+  (`cloud/googleIdentity.ts`) — the sign-in itself, from the party the
+  voter is signing in with, not a second one watching.
 - **What the recording is not allowed to see.** Typed fields are starred
   (`maskAllInputs`), and every inline photo is blocked
   (`blockSelector: img[src^="data:"]`) — twenty faces of somebody's friends
@@ -1183,6 +1188,35 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   roster would have had it uploaded for them, having agreed to nothing. So
   `signIn` gets a session and nothing else, and `enableSync` is the only thing
   that opens the gate.
+- **Google is reached directly when the build allows it, and the helper
+  page is the fallback, not the plan.** Firebase's `signInWithPopup` does
+  not go to Google: it opens a page on `<project>.firebaseapp.com` that
+  parks state in its own `sessionStorage`, bounces the person to Google and
+  expects to find it again on the way back. An iPhone opening an encuesta
+  from WhatsApp came back to "Unable to process request due to missing
+  initial state" instead — in English, in a tab that was not the app. With
+  `VITE_GOOGLE_CLIENT_ID` set, `signInWithGoogle` in `cloud/auth.tsx` uses
+  Google Identity Services: the popup goes straight to accounts.google.com,
+  hands an access token back to the tab that opened it, and
+  `signInWithCredential` turns it into a session with a plain request.
+  Nothing is parked on a third domain. Without the id — or if Google's
+  script would not load — it is Firebase's popup exactly as before, so a
+  fork with no client id is still a working build. Both doors throw errors
+  with a `code`, and `lib/authErrors.ts` reads both, so no screen knows
+  which one was used. `FIREBASE_SETUP.md` step 3 is the two console edits
+  that turn it on.
+- **What a tap on "Entrar con Google" needs is fetched before the tap.**
+  Safari lets a page open a window only while it is still handling the
+  gesture, and a download does not fit inside that: a handler that fetches
+  the SDK and then opens the popup is a button that sometimes does nothing
+  on a phone. `prepareSignIn` (exposed as `prepare` on the context) has the
+  SDK and Google's script memoised ahead of time on the screens that can
+  see the tap coming — the encuesta at boot (`hashNeedsGoogle`), Encuestas
+  the moment it shows the button, Tus datos when the consent dialog opens —
+  and `signInWithGoogle` opens the popup before awaiting anything it does
+  not already have. La lista's panel on the match page deliberately does
+  not preload: it sits on every match, and "download the cloud SDK because
+  a match was opened" is the cost `cloud/firebase.ts` exists to avoid.
 - **Nothing leaves the device without an explicit yes.** The dialog in
   `CloudPanel` is the only door out. Adding a code path that uploads before it
   would make every promise on the settings screen false.

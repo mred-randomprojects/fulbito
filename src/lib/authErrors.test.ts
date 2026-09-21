@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { errorCode, isCancelledSignIn } from "./authErrors.js";
+import { errorCode, isCancelledSignIn, isPopupBlocked } from "./authErrors.js";
 
 describe("errorCode", () => {
   it("reads the code off a Firebase-shaped error", () => {
@@ -29,5 +29,20 @@ describe("isCancelledSignIn", () => {
     assert.equal(isCancelledSignIn({ code: "auth/network-request-failed" }), false);
     assert.equal(isCancelledSignIn({ code: "auth/popup-blocked" }), false);
     assert.equal(isCancelledSignIn(new Error("boom")), false);
+  });
+});
+
+describe("isPopupBlocked", () => {
+  it("knows a refused window from either door", () => {
+    assert.equal(isPopupBlocked({ code: "auth/popup-blocked" }), true);
+    assert.equal(isPopupBlocked({ code: "google/popup-blocked" }), true);
+  });
+
+  it("does not call a closed window, or anything else, blocked", () => {
+    // A closed window is a decision; a network failure wants "later", not "again".
+    assert.equal(isPopupBlocked({ code: "auth/popup-closed-by-user" }), false);
+    assert.equal(isPopupBlocked({ code: "google/popup-closed" }), false);
+    assert.equal(isPopupBlocked({ code: "auth/network-request-failed" }), false);
+    assert.equal(isPopupBlocked(new Error("boom")), false);
   });
 });
