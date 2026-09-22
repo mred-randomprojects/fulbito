@@ -27,6 +27,8 @@
     "src/lib/balance.test.ts",
     "src/lib/groups.ts",
     "src/lib/groups.test.ts",
+    "src/lib/keepers.ts",
+    "src/lib/keepers.test.ts",
     "src/lib/clipboard.ts",
     "src/lib/clipboard.test.ts",
     "src/lib/autosave.ts",

@@ -19,6 +19,11 @@ import {
 } from "./balance.js";
 import { defaultFormation, type Formation } from "./formations.js";
 import {
+  EMPTY_KEEPERS,
+  keeperlessTeams,
+  KEEPER_PENALTY,
+} from "./keepers.js";
+import {
   EMPTY_TOGETHER_INDEX,
   keepTogether,
   separatedAcross,
@@ -73,6 +78,11 @@ export interface GroupSplitRequest {
   avoid?: AvoidIndex;
   /** Omit — or pass the empty index — to ignore who goes with whom. */
   together?: TogetherIndex;
+  /**
+   * Who can keep goal. Omit — or pass the empty set — to let the search put
+   * every keeper on the same team if the numbers happen to like it.
+   */
+  keepers?: ReadonlySet<PlayerId>;
   /** How many distinct options to return. */
   optionCount?: number;
   weights?: CostWeights;
@@ -101,6 +111,11 @@ export interface GroupSplitOption {
   conflicts: number;
   /** Pairs that wanted the same team and did not get it. Zero on a clean split. */
   separated: number;
+  /**
+   * Teams left with nobody who can keep goal. Zero when the rule is off, and
+   * zero when nobody in the squad is rated in goal — see `keeperlessTeams`.
+   */
+  keeperless: number;
 }
 
 export interface GroupSplitResult {
@@ -184,6 +199,7 @@ export interface GroupingRequest {
   basis: BalanceBasis;
   avoid?: AvoidIndex;
   together?: TogetherIndex;
+  keepers?: ReadonlySet<PlayerId>;
   weights?: CostWeights;
 }
 
@@ -207,6 +223,7 @@ export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
     basis,
     avoid = EMPTY_AVOID_INDEX,
     together = EMPTY_TOGETHER_INDEX,
+    keepers = EMPTY_KEEPERS,
     weights,
   } = request;
   const formations =
@@ -218,6 +235,7 @@ export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
   const ids = teams.map((team) => team.map((player) => player.id));
   const conflicts = ids.reduce((sum, team) => sum + conflictsWithin(avoid, team).length, 0);
   const separated = separatedAcross(together, ids).length;
+  const keeperless = keeperlessTeams(ids, keepers);
 
   return {
     teams: teams.map((team, index) => ({
@@ -230,10 +248,12 @@ export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
     cost:
       groupsCost(evaluations, basis, weights) +
       AVOID_PENALTY * conflicts +
-      TOGETHER_PENALTY * separated,
+      TOGETHER_PENALTY * separated +
+      KEEPER_PENALTY * keeperless,
     worstGap: worstGap(evaluations, basis),
     conflicts,
     separated,
+    keeperless,
   };
 }
 
@@ -301,6 +321,7 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     basis,
     avoid = EMPTY_AVOID_INDEX,
     together = EMPTY_TOGETHER_INDEX,
+    keepers = EMPTY_KEEPERS,
     optionCount = 5,
     weights,
   } = request;
@@ -413,6 +434,28 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     return found;
   };
 
+  /* ---- Who can go in goal, by squad position ------------------------ */
+
+  // Same trick as the two relations above: the count below runs once per
+  // candidate split — millions of times on the exhaustive path — so it reads a
+  // boolean out of an array rather than a `Set` of ids out of a closure.
+  const keepsGoal = players.map((player) => keepers.has(player.id));
+  const anyKeepers = keepsGoal.some(Boolean);
+
+  const countKeeperless = (teams: readonly (readonly number[])[]): number => {
+    if (!anyKeepers) return 0;
+    let without = 0;
+    for (let team = 0; team < teams.length; team++) {
+      const indices = teams[team];
+      let found = false;
+      for (let i = 0; i < indices.length && !found; i++) {
+        if (keepsGoal[indices[i]]) found = true;
+      }
+      if (!found) without += 1;
+    }
+    return without;
+  };
+
   /* ---- Scoring ------------------------------------------------------ */
 
   const evalCache = new Map<string, TeamEvaluation>();
@@ -433,6 +476,7 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     const conflicts = teams.reduce((sum, indices) => sum + countConflicts(indices), 0);
     const separated =
       togetherPairs - teams.reduce((sum, indices) => sum + countKept(indices), 0);
+    const keeperless = countKeeperless(teams);
     return {
       teams: teams.map((indices, team) => ({
         players: indices.map((i) => players[i]),
@@ -445,10 +489,12 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
       cost:
         groupsCost(evaluations, basis, weights) +
         AVOID_PENALTY * conflicts +
-        TOGETHER_PENALTY * separated,
+        TOGETHER_PENALTY * separated +
+        KEEPER_PENALTY * keeperless,
       worstGap: worstGap(evaluations, basis),
       conflicts,
       separated,
+      keeperless,
     };
   };
 

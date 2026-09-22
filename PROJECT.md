@@ -130,6 +130,12 @@ enters the app without going through `normalizeAppData` — a hand-edited
   satisfiable preference. `TOGETHER_PENALTY` is half of it per broken-up
   pair: still far above any balance cost, and below a feud on purpose, so
   when the two relations contradict each other the friendship gives.
+  `KEEPER_PENALTY` is a quarter of a feud (250) per team Repartir leaves
+  without a keeper — above the worst imaginable balance cost (about 170 under
+  the default weights), so no arrangement of ratings can buy its way out of
+  stranding a team, and below both of the other two, because those are things
+  somebody said about two named people while this is a switch about the squad.
+  `keepers.test.ts` asserts that ordering rather than trusting it.
 - **`Player.ratingScale` / `Match.ratingScale`** — which scale that record's
   numbers were written on, and the whole of the migration. **Absent means
   1–10.** It has to be a marker rather than a heuristic because a number cannot
@@ -239,6 +245,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/pairs.ts` | A symmetric relation between players stored on one side: the closure, the pairs inside and across teams, the chain from one person, and who named whom |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/together.ts` | Who had better share a side with whom, which pairs a split broke up, and everyone a player is chained to |
+| `lib/keepers.ts` | Who can actually go in goal, how many of Repartir's teams ended up without one, and who is being played outfield anyway |
 | `lib/squad.ts` | Anotar and desanotar, and everything a player is let go of on the way out — the pin, the payment, the slot |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
@@ -575,6 +582,26 @@ tonight, and the fourth is Los Pibes, who play every Thursday. That needs no
 new record type — a `Team` already exists, already syncs, already has a screen
 to find it on and comes back into a match in a tap — so the rule holds as
 written. Repartir keeps nothing *of its own*.
+
+Three switches sit above the button, all on by default: the two personal
+relations (`respectAvoids`, `respectTogether`) and "un arquero para cada
+equipo", which is `lib/keepers.ts`. That third one is Repartir's alone for now
+because that is where it was asked for, *not* because the question goes away
+with two sides: a group with two rated keepers can absolutely be dealt both of
+them on the same team by the match screen, and nothing there says so yet.
+None of the three is stored; Repartir keeps nothing of its own, switches
+included.
+
+**Pinning is the escape hatch none of the maths replaces.** The padlock beside
+each name in the squad list cycles somebody through the teams and leaves them
+there, and `findGroupSplits` treats that as a hard constraint — it fills the
+pinned seats first and searches only over what is left, so "él va conmigo" is
+answered by the best split *among the ones that obey it* rather than by a
+penalty that can be bought off. A pin also switches off the same-size symmetry
+break for the teams it touches, because two teams are only interchangeable
+while nobody is nailed to either. A pin pointing at a team that stopped
+existing — the team count was dialled back down — quietly stops applying
+instead of raising.
 
 Which of tonight's teams are already saved is looked up rather than remembered
 (`lib/savedTeams.ts`), and that is what keeps it honest through the swap
@@ -1087,6 +1114,35 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   Both screens read the broken pairs off the teams as they stand
   (`separatedAcross`), not off the search result, so a hand swap that splits a
   pair is warned about too.
+- **A keeper for every team is a third price, and it is the only one the
+  ratings cannot express.** `GK_PRIOR` exists so that being a good footballer
+  is not mistaken for being a good keeper — which means the strength numbers
+  are, correctly, almost blind to the thing that actually ruins a night of
+  rotating fives: the team that has to put its striker in goal. So Repartir
+  prices it, behind a switch that is on by default: `KEEPER_PENALTY` per team
+  holding nobody with an explicit GK rating of `KEEPER_BAR` (60) or better.
+  Explicit and nothing else — an `effectiveRating` in goal exists for
+  everybody, and reading that would hand the gloves to whoever is the best
+  player, which is the precise claim `GK_PRIOR` refuses to make. A squad where
+  nobody is rated in goal therefore has no keepers, and `keeperlessTeams`
+  returns zero rather than condemning every arrangement equally; the screen
+  says the other thing ("cargale nivel de arquero a alguien") from the squad
+  itself. Fewer keepers than teams is a price, not a failure: the search
+  strands as few as it can and the screen names how many. Like the two
+  relations, the warning is read off the teams as they stand, so a hand swap —
+  or a ficha edited from one of the cards — moves it.
+- **Having a keeper and playing one are two different things, and the screen
+  says which it means.** The rule decides who is *on* a team; who stands in
+  goal is still `bestAssignment`'s call, and it sometimes says no — a 95
+  outfielder who is a 90 in goal is worth about half a point more in front of
+  the 60 who takes the gloves instead, which is an opinion most grupos would
+  share about their best player. That reads on the card as "arco: Colo" under a
+  ticked switch, so `keepersOutfield` names those keepers in a line underneath
+  rather than leaving a working rule looking broken. It is explicitly *not*
+  fixed by teaching the search to move that player to another team: the search
+  chooses rosters, the arrangement inside one is a different question, and
+  pushing the first to fix the second would strand keepers to satisfy a
+  presentation detail.
 - **Bancar somebody shrinks the divisor, not the bill.** The cancha costs what
   it costs; letting one off means the other nine cover it. So the share is the
   cost over the *payers*, rounded **up** to the peso — 30.000 between 9 is

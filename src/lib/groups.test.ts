@@ -4,6 +4,7 @@ import type { Player, PlayerId } from "../types.js";
 import { balanceCost, evaluateSquad, SplitError } from "./balance.js";
 import { buildAvoidIndex } from "./avoid.js";
 import { buildTogetherIndex } from "./together.js";
+import { KEEPER_BAR, keepersAmong } from "./keepers.js";
 import { defaultFormation } from "./formations.js";
 import {
   findGroupSplits,
@@ -763,5 +764,166 @@ describe("swapPlayers", () => {
   it("is a no-op when both ids are the same player", () => {
     const teams = [[a, b], [c, d]];
     assert.deepEqual(ids(swapPlayers(teams, a.id, a.id)), ids(teams));
+  });
+});
+
+describe("findGroupSplits — keepers", () => {
+  /**
+   * A squad where spreading the keepers and balancing the teams pull in
+   * opposite directions.
+   *
+   * One star who also keeps, two specialists who are useless outfield, and
+   * nine ordinary players. Left to itself the search puts the star and one
+   * specialist on the same team — the specialist's 10 outfield drags that team
+   * down to roughly where the others are, which is the tidiest set of totals
+   * available — and strands the third team with nobody who can go in goal.
+   */
+  function keeperSquad(): Player[] {
+    return [
+      player(100, { roleRatings: { GK: 100 } }),
+      player(10, { roleRatings: { GK: 60 } }),
+      player(10, { roleRatings: { GK: 60 } }),
+      ...Array.from({ length: 9 }, () => player(50)),
+    ];
+  }
+
+  /** Teams holding nobody who can keep goal. */
+  function stranded(
+    option: GroupSplitOption,
+    keepers: ReadonlySet<PlayerId>,
+  ): number {
+    return option.teams.filter(
+      (team) => !team.players.some((p) => keepers.has(p.id)),
+    ).length;
+  }
+
+  it("leaves the split alone when it is not asked", () => {
+    const squad = keeperSquad();
+    const result = findGroupSplits({ players: squad, sizes: [4, 4, 4], basis: "total" });
+    assert.equal(result.options[0].keeperless, 0, "the rule is off, so nothing is owed");
+    assert.ok(
+      stranded(result.options[0], keepersAmong(squad)) > 0,
+      "construction no longer conflicts with balance — the test below proves nothing",
+    );
+  });
+
+  it("gives every team a keeper even when balance would rather stack them", () => {
+    const squad = keeperSquad();
+    const keepers = keepersAmong(squad);
+
+    const ruled = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      keepers,
+    });
+    const free = findGroupSplits({ players: squad, sizes: [4, 4, 4], basis: "total" });
+
+    assert.equal(ruled.options[0].keeperless, 0);
+    assert.equal(stranded(ruled.options[0], keepers), 0);
+    // And it genuinely cost something: the best split under the rule is a
+    // worse-balanced split than the one the search picks when left alone.
+    assert.ok(
+      ruled.options[0].cost > free.options[0].cost,
+      "the rule came for free, so it is not being enforced",
+    );
+  });
+
+  it("strands as few teams as it can when there are not enough keepers", () => {
+    // Two keepers, three teams: one team has to go without, and exactly one.
+    const squad = [
+      player(50, { roleRatings: { GK: 90 } }),
+      player(50, { roleRatings: { GK: 90 } }),
+      ...Array.from({ length: 10 }, () => player(50)),
+    ];
+    const result = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      keepers: keepersAmong(squad),
+    });
+    assert.equal(result.options[0].keeperless, 1);
+  });
+
+  it("ignores somebody rated badly in goal", () => {
+    const squad = [
+      player(50, { roleRatings: { GK: KEEPER_BAR - 1 } }),
+      ...Array.from({ length: 7 }, () => player(50)),
+    ];
+    assert.equal(keepersAmong(squad).size, 0);
+    const result = findGroupSplits({
+      players: squad,
+      sizes: [4, 4],
+      basis: "total",
+      keepers: keepersAmong(squad),
+    });
+    // Nothing to spread, so nothing is anybody's fault.
+    assert.equal(result.options[0].keeperless, 0);
+  });
+
+  it("honours the rule down the local-search path too", () => {
+    // Four fives out of twenty is far past exhaustive enumeration, so this is
+    // the hill-climb rather than the full sweep — and the penalty lives inside
+    // the one `cost` it climbs on precisely so both paths obey it.
+    const squad = [
+      ...Array.from({ length: 4 }, () => player(40, { roleRatings: { GK: 85 } })),
+      ...Array.from({ length: 16 }, (_, i) => player(((i % 10) + 1) * 10)),
+    ];
+    const result = findGroupSplits({
+      players: squad,
+      sizes: [5, 5, 5, 5],
+      basis: "total",
+      keepers: keepersAmong(squad),
+      random: seeded(7),
+    });
+    assert.equal(result.exhaustive, false, "twenty into four fives should be sampled");
+    assert.equal(result.options[0].keeperless, 0);
+  });
+
+  it("scoreGrouping counts keeperless teams the same way the search does", () => {
+    const squad = keeperSquad();
+    const keepers = keepersAmong(squad);
+    const option = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      keepers,
+    }).options[0];
+
+    const rescored = scoreGrouping({
+      teams: option.teams.map((team) => team.players),
+      basis: "total",
+      keepers,
+    });
+    assert.equal(rescored.keeperless, option.keeperless);
+    assert.ok(Math.abs(rescored.cost - option.cost) < 1e-9);
+  });
+
+  it("notices when a hand swap leaves a team without one", () => {
+    const squad = keeperSquad();
+    const keepers = keepersAmong(squad);
+    const option = findGroupSplits({
+      players: squad,
+      sizes: [4, 4, 4],
+      basis: "total",
+      keepers,
+    }).options[0];
+
+    // Team 1's keeper changes shirts with somebody from team 0 — the gesture
+    // the screen offers, and the reason the warning is read off the teams as
+    // they stand rather than off what the search once decided. Team 0 ends up
+    // with two keepers and team 1 with none.
+    const keeper = option.teams[1].players.find((p) => keepers.has(p.id))!;
+    const outfielder = option.teams[0].players.find((p) => !keepers.has(p.id))!;
+    const moved = scoreGrouping({
+      teams: swapPlayers(
+        option.teams.map((team) => team.players),
+        keeper.id,
+        outfielder.id,
+      ),
+      basis: "total",
+      keepers,
+    });
+    assert.equal(moved.keeperless, 1);
   });
 });

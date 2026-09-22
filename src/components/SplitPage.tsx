@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Hand,
   HeartCrack,
   HeartHandshake,
   ImageDown,
@@ -38,6 +39,14 @@ import {
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
 import { findByMembers, freeTeamName } from "@/lib/savedTeams";
 import { buildTogetherIndex, EMPTY_TOGETHER_INDEX, separatedAcross } from "@/lib/together";
+import {
+  EMPTY_KEEPERS,
+  KEEPER_BAR,
+  keeperShortfall,
+  keeperlessTeams,
+  keepersAmong,
+  keepersOutfield,
+} from "@/lib/keepers";
 import { defaultFormation, type Formation } from "@/lib/formations";
 import {
   buildFixture,
@@ -111,6 +120,10 @@ export function SplitPage({
   const [basis, setBasis] = useState<BalanceBasis>("total");
   const [respectAvoids, setRespectAvoids] = useState(true);
   const [respectTogether, setRespectTogether] = useState(true);
+  // On by default, like the other two preferences: a team with nobody who can
+  // keep goal is the complaint this whole screen exists to prevent, and on a
+  // squad where nobody is rated in goal the rule costs exactly nothing.
+  const [spreadKeepers, setSpreadKeepers] = useState(true);
   const [includeRatings, setIncludeRatings] = useState(false);
 
   // The torneito. It hangs off the split rather than living on its own screen:
@@ -154,6 +167,13 @@ export function SplitPage({
     () => setup.sizes.map((size) => defaultFormation(size)),
     [setup.sizes],
   );
+
+  /** Who among tonight's lot can actually go in goal. */
+  const keepers = useMemo(() => keepersAmong(squadPlayers), [squadPlayers]);
+  /** What the search is handed — the empty set turns the rule off entirely. */
+  const keeperRule = spreadKeepers ? keepers : EMPTY_KEEPERS;
+  /** Teams that cannot possibly get one, known before anybody presses a button. */
+  const shortfall = keeperShortfall(keepers.size, setup.teams);
 
   const tags = useMemo(() => TEAM_TAGS.slice(0, setup.teams), [setup.teams]);
 
@@ -298,6 +318,7 @@ export function SplitPage({
         basis,
         avoid: respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
         together: respectTogether ? togetherIndex : EMPTY_TOGETHER_INDEX,
+        keepers: keeperRule,
         optionCount: 6,
       });
       setResult(found);
@@ -322,6 +343,7 @@ export function SplitPage({
     avoidIndex,
     respectTogether,
     togetherIndex,
+    keeperRule,
   ]);
 
   const stepOption = useCallback(
@@ -375,6 +397,7 @@ export function SplitPage({
         basis,
         avoid: respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
         together: respectTogether ? togetherIndex : EMPTY_TOGETHER_INDEX,
+        keepers: keeperRule,
       });
 
       setResult((current) =>
@@ -400,6 +423,7 @@ export function SplitPage({
       avoidIndex,
       respectTogether,
       togetherIndex,
+      keeperRule,
     ],
   );
 
@@ -422,6 +446,44 @@ export function SplitPage({
       option.teams.map((team) => team.players.map((p) => p.id)),
     );
   }, [option, respectTogether, togetherIndex]);
+
+  /**
+   * Teams on screen with nobody who can go in goal.
+   *
+   * Read off the teams rather than off `option.keeperless`, for the same
+   * reason the two warnings above are: a hand swap re-scores through
+   * `scoreGrouping`, but somebody can also open a ficha from one of these
+   * cards and give the missing arquero his 80, and a warning that only knew
+   * the search's answer would still be sitting there calling him an outfielder.
+   */
+  const keeperless = useMemo(() => {
+    if (option == null || !spreadKeepers) return 0;
+    return keeperlessTeams(
+      option.teams.map((team) => team.players.map((p) => p.id)),
+      keepers,
+    );
+  }, [option, spreadKeepers, keepers]);
+
+  /**
+   * Keepers a team has but is not standing in goal.
+   *
+   * Not a failure of the rule — the team *has* its arquero — but it is what
+   * makes a card read "arco: Colo" under a ticked "un arquero para cada
+   * equipo", so the screen says why instead of leaving it looking broken.
+   */
+  const keepersInCancha = useMemo(() => {
+    if (option == null || !spreadKeepers) return [];
+    return keepersOutfield(
+      option.teams.map((team, index) => {
+        const slot = formations[index].slots.findIndex((s) => s.role === "GK");
+        return {
+          players: team.players.map((p) => p.id),
+          inGoal: slot < 0 ? null : (team.evaluation.lineup[slot]?.id ?? null),
+        };
+      }),
+      keepers,
+    );
+  }, [option, spreadKeepers, keepers, formations]);
 
   const nameOf = useCallback(
     (id: PlayerId): string => {
@@ -662,6 +724,42 @@ export function SplitPage({
                   </span>
                 </span>
               </label>
+
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={spreadKeepers}
+                  onChange={(e) => {
+                    setSpreadKeepers(e.target.checked);
+                    invalidate();
+                  }}
+                  className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+                />
+                <span className="text-xs">
+                  <span className="font-medium">Un arquero para cada equipo</span>
+                  <span className="block text-muted-foreground">
+                    Los que atajan se reparten de a uno, así nadie termina
+                    poniendo al 9 bajo los tres palos.
+                  </span>
+                  {/* Only ever says something when there is a problem: a line
+                      that also reports the happy case is a line nobody reads
+                      by the third time they see it. */}
+                  {spreadKeepers && keepers.size === 0 && (
+                    <span className="mt-1 block text-amber-300/90">
+                      Ojo: no hay ningún anotado con {KEEPER_BAR} o más al arco
+                      en la ficha, así que por ahora esto no cambia nada.
+                      Cargáselo a los que atajan.
+                    </span>
+                  )}
+                  {spreadKeepers && keepers.size > 0 && shortfall > 0 && (
+                    <span className="mt-1 block text-amber-300/90">
+                      Hay {keepers.size} arquero{keepers.size === 1 ? "" : "s"}{" "}
+                      para {setup.teams} equipos: {shortfall} se{" "}
+                      {shortfall === 1 ? "queda" : "quedan"} sin.
+                    </span>
+                  )}
+                </span>
+              </label>
             </div>
           </div>
 
@@ -730,6 +828,33 @@ export function SplitPage({
             </p>
           )}
 
+          {option != null && keeperless > 0 && (
+            <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+              <Hand className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {keeperless === 1
+                  ? "Un equipo se queda sin arquero"
+                  : `${keeperless} equipos se quedan sin arquero`}
+                : hay {keepers.size} para {option.teams.length}. El que se
+                anime, que se ponga los guantes.
+              </span>
+            </p>
+          )}
+
+          {keepersInCancha.length > 0 && (
+            <p className="flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
+              <Hand className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                {keepersInCancha.map(nameOf).join(", ")}{" "}
+                {keepersInCancha.length === 1 ? "ataja" : "atajan"}, pero al
+                equipo le rinde más {keepersInCancha.length === 1 ? "tenerlo" : "tenerlos"}{" "}
+                en cancha, así que el arco se lo queda otro. Igual{" "}
+                {keepersInCancha.length === 1 ? "está" : "están"} en el equipo:
+                quién se pone los guantes lo arreglan allá.
+              </span>
+            </p>
+          )}
+
           {option == null ? (
             <div className="rounded-xl border border-dashed border-border bg-card/40 p-6">
               <Users className="mb-3 h-9 w-9 text-muted-foreground/60" />
@@ -743,6 +868,11 @@ export function SplitPage({
                 Se busca que cualquier cruce sea parejo, no sólo que los totales
                 den parecido: rota todo el mundo contra todo el mundo, así que el
                 peor cruce de la noche es el que importa.
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                Si alguno tiene que caer sí o sí en un equipo, tocale el
+                candadito en la lista y dejalo fijo ahí: el resto se reparte
+                alrededor suyo.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 Después les ponés nombre a los equipos y sale el fixture, con la

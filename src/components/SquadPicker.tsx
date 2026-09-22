@@ -201,6 +201,16 @@ export function SquadPicker({
             Mantené apretado a alguien para ver su ficha.
           </p>
         )}
+        {/* Neither is a padlock, and this one is the escape hatch for the
+            single most common complaint about any team picker: "ese va
+            conmigo". Said out loud, next to the button, where somebody
+            wondering whether the app can do it will actually read it. */}
+        {showLocks && players.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">
+            El candadito lo deja fijo en un equipo — tocalo hasta llegar al que
+            querés y el resto se reparte alrededor.
+          </p>
+        )}
       </div>
 
       <ul className="max-h-[420px] overflow-y-auto p-2">

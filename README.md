@@ -81,7 +81,14 @@ any other app, full screen and with no signal needed.
   four fives, or two sevens and a six, and rotate on every goal. Every pair of
   teams gets played over a night like that, so the split is scored on how even
   the *worst* matchup is, not just on the totals. Locks and the two who cannot
-  be on the same side work here too.
+  be on the same side work here too — tocale el candadito a alguien en la lista
+  y queda fijo en ese equipo, con el resto repartido alrededor suyo.
+- **Un arquero para cada equipo.** Ticked by default on Repartir: whoever you
+  rated 60 or more al arco gets dealt out one per team, so nobody ends up
+  putting their 9 bajo los tres palos. It only counts a keeper somebody
+  actually rated in goal — being the best footballer is not the same as being
+  the best keeper, and the app refuses to pretend otherwise — and when there
+  are fewer keepers than teams it strands as few as it can and says how many.
 - **Move anybody, and watch the numbers move.** Tap a player, tap somebody on
   another team, they change shirts and every total, the worst cruce and the
   verdict recompute. It fixes the split the app got wrong — and it is how you
