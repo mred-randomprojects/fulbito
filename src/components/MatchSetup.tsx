@@ -1,3 +1,4 @@
+import { ScoresVisible } from "./ScorePrivacy";
 import { useState } from "react";
 import { HeartCrack, HeartHandshake, Minus, Plus, Scale, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -229,38 +230,40 @@ export function MatchSetup({
         </div>
       )}
 
-      <div>
-        <div className="mb-1.5 flex items-baseline justify-between gap-2">
-          <Label className="flex items-center gap-1.5">
-            <Scale className="h-3.5 w-3.5" />
-            Emparejar a mano
-          </Label>
-          <span className="tabular text-xs font-medium">
-            {handicap === 0 ? (
-              <span className="text-emerald-400">Partido parejo</span>
-            ) : (
-              <span style={{ color: KITS[handicap > 0 ? teamA.kit : teamB.kit].fill }}>
-                {(handicap > 0 ? teamA : teamB).name} +{Math.abs(handicap).toFixed(1)}
-              </span>
-            )}
-          </span>
+      <ScoresVisible>
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+            <Label className="flex items-center gap-1.5">
+              <Scale className="h-3.5 w-3.5" />
+              Emparejar a mano
+            </Label>
+            <span className="tabular text-xs font-medium">
+              {handicap === 0 ? (
+                <span className="text-emerald-400">Partido parejo</span>
+              ) : (
+                <span style={{ color: KITS[handicap > 0 ? teamA.kit : teamB.kit].fill }}>
+                  {(handicap > 0 ? teamA : teamB).name} +{Math.abs(handicap).toFixed(1)}
+                </span>
+              )}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={-HANDICAP_LIMIT / 2}
+            max={HANDICAP_LIMIT / 2}
+            step={2.5}
+            value={handicap}
+            onChange={(e) => onHandicapChange(Number(e.target.value))}
+            className="w-full"
+            aria-label="Emparejar a mano"
+          />
+          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+            Para cargar un equipo a propósito: revancha, apuesta de asado, o
+            cuando los números dicen que está parejo pero todos sabemos que no.
+            Se mide en puntos de nivel por cabeza.
+          </p>
         </div>
-        <input
-          type="range"
-          min={-HANDICAP_LIMIT / 2}
-          max={HANDICAP_LIMIT / 2}
-          step={2.5}
-          value={handicap}
-          onChange={(e) => onHandicapChange(Number(e.target.value))}
-          className="w-full"
-          aria-label="Emparejar a mano"
-        />
-        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-          Para cargar un equipo a propósito: revancha, apuesta de asado, o
-          cuando los números dicen que está parejo pero todos sabemos que no.
-          Se mide en puntos de nivel por cabeza.
-        </p>
-      </div>
+      </ScoresVisible>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { useScoresHidden } from "@/useScorePrivacy";
+import { ScoresVisible } from "./ScorePrivacy";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
@@ -522,7 +524,7 @@ function PickRow({
         <PlayerAvatar player={player} size={28} />
         <span className="flex-1 truncate text-sm">{playerDisplayName(player)}</span>
         <span className="tabular text-xs text-muted-foreground">
-          {player.rating.toFixed(0)}
+          <ScoresVisible fallback="—">{player.rating.toFixed(0)}</ScoresVisible>
         </span>
       </button>
     </li>
@@ -752,14 +754,16 @@ function Results({
       )}
 
       {showNames && audit !== null && loaded !== null && (
-        <AuditPanel
-          rows={audit}
-          names={names}
-          failed={loaded.identitiesFailed}
-          onToggleIgnored={toggleIgnored}
-          busy={settingAside}
-          toggleFailed={setAsideFailed}
-        />
+        <ScoresVisible>
+          <AuditPanel
+            rows={audit}
+            names={names}
+            failed={loaded.identitiesFailed}
+            onToggleIgnored={toggleIgnored}
+            busy={settingAside}
+            toggleFailed={setAsideFailed}
+          />
+        </ScoresVisible>
       )}
 
       <Button
@@ -1053,6 +1057,13 @@ function ResultRow({
   votes: PlayerVotes | null;
 }) {
   const [open, setOpen] = useState(false);
+  const hidden = useScoresHidden();
+  if (hidden) return (
+    <li className="flex items-center justify-between gap-3 px-3 py-3 text-sm">
+      <span>{name}</span>
+      <span className="text-xs text-muted-foreground">Puntajes ocultos</span>
+    </li>
+  );
 
   const readyRoles = (Object.entries(row.roleRatings) as [Role, CrowdPlayer["overall"]][])
     .filter(([, number]) => number.kind === "ready");

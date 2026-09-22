@@ -1,3 +1,4 @@
+import { ScoresVisible } from "./ScorePrivacy";
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -1281,9 +1282,9 @@ function TeamChip({
       <span className="truncate">{config.name}</span>
       <span className="tabular opacity-70">{size}</span>
       <span className="tabular rounded-full bg-black/15 px-1.5 py-0.5">
-        {evaluation.total.toFixed(1)}
+        <ScoresVisible fallback="—">{evaluation.total.toFixed(1)}</ScoresVisible>
       </span>
-      {favoured === true && <span title="Levemente favorito">★</span>}
+      <ScoresVisible>{favoured === true && <span title="Levemente favorito">★</span>}</ScoresVisible>
     </div>
   );
 }

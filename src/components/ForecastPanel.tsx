@@ -1,3 +1,4 @@
+import { ScoresVisible, HiddenScoresNotice } from "./ScorePrivacy";
 import { useState } from "react";
 import {
   Crosshair,
@@ -90,7 +91,7 @@ function withAlpha(hex: string, alpha: number): string {
  * question becomes who came closest. The choice of model is screen state
  * that dies with the tab, the way a filter does.
  */
-export function ForecastPanel({ match, players, matches, forecasts, onNotesChange }: Props) {
+function ForecastPanelContent({ match, players, matches, forecasts, onNotesChange }: Props) {
   const [choice, setChoice] = useState<ForecastChoice>(CONSENSUS_ID);
 
   if (forecasts === null) {
@@ -789,5 +790,13 @@ function TallyCard({ matches, players, currentId }: { matches: Match[]; players:
         exacto es muy bueno en un picado con diez goles: hay más de cien resultados posibles.
       </p>
     </section>
+  );
+}
+
+export function ForecastPanel(props: Props) {
+  return (
+    <ScoresVisible fallback={<HiddenScoresNotice />}>
+      <ForecastPanelContent {...props} />
+    </ScoresVisible>
   );
 }

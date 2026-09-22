@@ -1,3 +1,4 @@
+import { ScorePrivacyPanel } from "./ScorePrivacy";
 import { useRef, useState } from "react";
 import { Download, HardDrive, Info, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,8 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
           Todo vive en este navegador.
         </p>
       </header>
+
+      <ScorePrivacyPanel />
 
       <CloudPanel state={cloud} />
 

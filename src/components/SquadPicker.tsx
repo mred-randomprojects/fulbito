@@ -1,3 +1,4 @@
+import { ScoresVisible } from "./ScorePrivacy";
 import { useMemo, useState } from "react";
 import { Check, Lock, Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -313,7 +314,7 @@ function SquadRow({
           )}
         </span>
         <span className="tabular shrink-0 text-sm font-semibold text-muted-foreground">
-          {player.rating.toFixed(0)}
+          <ScoresVisible fallback="—">{player.rating.toFixed(0)}</ScoresVisible>
         </span>
       </button>
       {showLocks && (

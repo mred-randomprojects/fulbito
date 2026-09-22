@@ -1,3 +1,5 @@
+import { useScoresHidden } from "@/useScorePrivacy";
+import { ScoresVisible } from "./ScorePrivacy";
 import { useMemo, useState } from "react";
 import { Plus, Search, SlidersHorizontal, Star, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,7 +34,9 @@ type SortKey = "name" | "rating" | "record" | "detail";
 
 export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("name");
+  const [chosenSort, setSort] = useState<SortKey>("name");
+  const hidden = useScoresHidden();
+  const sort = hidden && chosenSort === "rating" ? "name" : chosenSort;
   const tagFilter = useTagFilter(players);
   // The same one dialog every other screen has, pointed the same way. This
   // screen has nothing to do on "cargar a alguien nuevo" beyond saving, so
@@ -111,7 +115,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
                 ["record", "Ganados"],
                 ["detail", "Detalle"],
               ] as [SortKey, string][]
-            ).map(([key, label]) => (
+            ).filter(([key]) => !hidden || key !== "rating").map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -239,7 +243,7 @@ function PlayerRow({
       </div>
       <div className="flex flex-col items-end">
         <span className="tabular text-lg font-semibold leading-none">
-          {player.rating.toFixed(0)}
+          <ScoresVisible fallback="—">{player.rating.toFixed(0)}</ScoresVisible>
         </span>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           nivel

@@ -1,3 +1,4 @@
+import { useScoresHidden } from "@/useScorePrivacy";
 import { Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RATING_MAX, RATING_MIN, clampRating } from "@/types";
@@ -48,6 +49,14 @@ export function RatingControl({
   placeholderValue,
   accent,
 }: Props) {
+  const hidden = useScoresHidden();
+  if (hidden) return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-sm font-medium">{label}</span>
+      <span className="text-xs text-muted-foreground">Puntaje oculto</span>
+    </div>
+  );
+
   /** Never lets a nudge or a drag leave the scale, or leave a fraction. */
   function set(next: number) {
     onChange(clampRating(Math.round(next)));

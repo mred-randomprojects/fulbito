@@ -1,3 +1,4 @@
+import { ScoresVisible } from "./ScorePrivacy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Loader2, LogIn, SlidersHorizontal } from "lucide-react";
@@ -588,9 +589,9 @@ function Recap({
                 {player.name === "" ? "Sin nombre" : player.name}
               </span>
               <span className="tabular text-sm text-muted-foreground">
-                {entry.vote.overall !== undefined
+                <ScoresVisible fallback="—">{entry.vote.overall !== undefined
                   ? entry.vote.overall
-                  : STATUS_LABEL[entry.status]}
+                  : STATUS_LABEL[entry.status]}</ScoresVisible>
               </span>
             </button>
           </li>

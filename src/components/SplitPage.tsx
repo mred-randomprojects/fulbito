@@ -1,3 +1,6 @@
+import { useScoresHidden } from "@/useScorePrivacy";
+import { canShareScores } from "@/lib/scorePrivacy";
+import { ScoresVisible } from "./ScorePrivacy";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
@@ -124,7 +127,9 @@ export function SplitPage({
   // keep goal is the complaint this whole screen exists to prevent, and on a
   // squad where nobody is rated in goal the rule costs exactly nothing.
   const [spreadKeepers, setSpreadKeepers] = useState(true);
-  const [includeRatings, setIncludeRatings] = useState(false);
+  const hidden = useScoresHidden();
+  const [requestedRatings, setIncludeRatings] = useState(false);
+  const includeRatings = canShareScores(hidden, requestedRatings);
 
   // The torneito. It hangs off the split rather than living on its own screen:
   // the fixture depends on nothing but how many teams there are, so flipping
@@ -984,13 +989,14 @@ export function SplitPage({
                   <input
                     type="checkbox"
                     checked={includeRatings}
+                    disabled={hidden}
                     onChange={(e) => setIncludeRatings(e.target.checked)}
                     className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
                   />
                   <span className="text-sm">
                     <span className="font-medium">Mandar los niveles también</span>
                     <span className="block text-xs text-muted-foreground">
-                      Va apagado porque a nadie le cae bien enterarse de que es un 4.
+                      {hidden ? "Desactivado mientras tengas los puntajes ocultos." : "Va apagado porque a nadie le cae bien enterarse de que es un 4."}
                     </span>
                   </span>
                 </label>
@@ -1220,6 +1226,8 @@ function FairnessBar({
   /** True once this option has been moved around by hand. */
   edited: boolean;
 }) {
+  const hidden = useScoresHidden();
+  if (hidden) return null;
   const verdict = verdictFor(option.worstGap);
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-border bg-card px-3 py-2">
@@ -1451,7 +1459,7 @@ function TeamCard({
         />
         <span className="tabular opacity-70">{team.players.length}</span>
         <span className="tabular rounded-full bg-black/15 px-1.5 py-0.5">
-          {team.evaluation.total.toFixed(1)}
+          <ScoresVisible fallback="—">{team.evaluation.total.toFixed(1)}</ScoresVisible>
         </span>
       </div>
       <ul className="divide-y divide-border/60 bg-card">
@@ -1525,7 +1533,7 @@ function TeamCardRow({
           {role}
         </span>
         <span className="tabular w-7 text-right text-xs font-medium text-muted-foreground">
-          {rating.toFixed(0)}
+          <ScoresVisible fallback="—">{rating.toFixed(0)}</ScoresVisible>
         </span>
       </button>
     </li>

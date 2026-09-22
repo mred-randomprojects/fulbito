@@ -1,3 +1,4 @@
+import { useScoresHidden } from "@/useScorePrivacy";
 import { useRef, type KeyboardEvent } from "react";
 import type { MatchTab, MatchTabId } from "@/lib/matchTabs";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ interface Props {
  * of the scrolling it replaced.
  */
 export function MatchTabsBar({ tabs, active, onSelect }: Props) {
+  const hidden = useScoresHidden();
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
 
   function move(from: number, delta: number) {
@@ -70,7 +72,7 @@ export function MatchTabsBar({ tabs, active, onSelect }: Props) {
             )}
           >
             {tab.label}
-            {tab.badge !== null && (
+            {tab.badge !== null && !(hidden && tab.id === "pronostico") && (
               <span className="rounded-full bg-secondary px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
                 {tab.badge}
               </span>

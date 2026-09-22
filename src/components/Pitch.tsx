@@ -1,3 +1,4 @@
+import { ScoresVisible } from "./ScorePrivacy";
 import { NotebookPen } from "lucide-react";
 import { StaticAvatar } from "./PlayerAvatar";
 import { useLongPress } from "@/useLongPress";
@@ -181,7 +182,7 @@ function Token({ token, half }: { token: PitchToken; half: boolean }) {
         )}
         {token.rating !== undefined && (
           <span className="tabular absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-black/85 px-1 text-[10px] font-bold text-white shadow ring-1 ring-white/20">
-            {token.rating.toFixed(0)}
+            <ScoresVisible fallback="—">{token.rating.toFixed(0)}</ScoresVisible>
           </span>
         )}
         {token.noted === true && (

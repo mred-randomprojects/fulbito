@@ -1,3 +1,4 @@
+import { ScorePrivacyStatus } from "./ScorePrivacy";
 import { Link, NavLink } from "react-router-dom";
 import { ClipboardList, Database, Shield, Shuffle, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ export function NavBar() {
           ))}
         </nav>
       </div>
+      <ScorePrivacyStatus />
     </header>
   );
 }

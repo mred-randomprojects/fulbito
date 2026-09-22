@@ -15,6 +15,8 @@
   },
   "include": [
     "src/types.ts",
+    "src/lib/scorePrivacy.ts",
+    "src/lib/scorePrivacy.test.ts",
     "src/mergeAppData.ts",
     "src/mergeAppData.test.ts",
     "src/appDataOps.ts",

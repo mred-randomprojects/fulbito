@@ -1,3 +1,4 @@
+import { ScoresVisible } from "./ScorePrivacy";
 import { useCallback, useMemo, useState } from "react";
 import { Plus, Shield, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -495,7 +496,7 @@ function MemberChip({ player, onView }: { player: Player; onView: () => void }) 
           {playerDisplayName(player)}
         </span>
         <span className="tabular text-[10px] text-muted-foreground">
-          {player.rating.toFixed(0)}
+          <ScoresVisible fallback="—">{player.rating.toFixed(0)}</ScoresVisible>
         </span>
       </button>
     </li>

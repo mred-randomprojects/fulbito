@@ -1,3 +1,5 @@
+import { useScoresHidden } from "@/useScorePrivacy";
+import { canShareScores } from "@/lib/scorePrivacy";
 import { useState } from "react";
 import { Check, Copy, ImageDown, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,7 +58,9 @@ export function ShareDialog({
   formationA,
   formationB,
 }: Props) {
-  const [includeRatings, setIncludeRatings] = useState(false);
+  const hidden = useScoresHidden();
+  const [requestedRatings, setIncludeRatings] = useState(false);
+  const includeRatings = canShareScores(hidden, requestedRatings);
   const { copied, copy: copyToClipboard } = useCopy();
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +108,7 @@ export function ShareDialog({
         <DialogHeader>
           <DialogTitle>Pasar los equipos</DialogTitle>
           <DialogDescription>
-            Los niveles no van, salvo que vos digas lo contrario.
+            {hidden ? "Los puntajes están ocultos: tampoco salen al compartir." : "Los niveles no van, salvo que vos digas lo contrario."}
           </DialogDescription>
         </DialogHeader>
 
@@ -112,6 +116,7 @@ export function ShareDialog({
           <input
             type="checkbox"
             checked={includeRatings}
+            disabled={hidden}
             onChange={(e) => setIncludeRatings(e.target.checked)}
             className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
           />

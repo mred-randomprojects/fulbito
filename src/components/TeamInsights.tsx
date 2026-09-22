@@ -1,3 +1,4 @@
+import { ScoresVisible, HiddenScoresNotice } from "./ScorePrivacy";
 import { Info, Scale, ShieldAlert, Sparkles } from "lucide-react";
 import { comparisons, insights, summarise, VERDICT_LABEL } from "@/lib/insights";
 import type { TeamEvaluation } from "@/lib/balance";
@@ -20,7 +21,7 @@ interface Props {
   edited: boolean;
 }
 
-export function TeamInsights({
+function TeamInsightsContent({
   evalA,
   evalB,
   teamA,
@@ -316,5 +317,13 @@ function ConfidenceMeter({ value }: { value: number }) {
         cargado el {percent}% de lo que haría más fino este reparto.
       </span>
     </>
+  );
+}
+
+export function TeamInsights(props: Props) {
+  return (
+    <ScoresVisible fallback={<HiddenScoresNotice />}>
+      <TeamInsightsContent {...props} />
+    </ScoresVisible>
   );
 }

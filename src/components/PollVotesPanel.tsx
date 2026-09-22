@@ -1,3 +1,4 @@
+import { ScoresVisible } from "./ScorePrivacy";
 import { useMemo, useState } from "react";
 import { ClipboardList, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { MIN_VOTERS } from "@/lib/crowd";
@@ -62,7 +63,7 @@ function x(value: number): number {
   return PAD + ((value - RATING_MIN) / RANGE) * SPAN;
 }
 
-export function PollVotesPanel({ player }: { player: Player }) {
+function PollVotesPanelContent({ player }: { player: Player }) {
   const { state, refresh } = usePollHistory(player.id);
   /** Only a mouse hovers; a finger pins. See the handlers below. */
   const [hovered, setHovered] = useState<string | null>(null);
@@ -284,5 +285,13 @@ export function PollVotesPanel({ player }: { player: Player }) {
         </p>
       )}
     </div>
+  );
+}
+
+export function PollVotesPanel(props: { player: Player }) {
+  return (
+    <ScoresVisible>
+      <PollVotesPanelContent {...props} />
+    </ScoresVisible>
   );
 }

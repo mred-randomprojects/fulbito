@@ -232,6 +232,29 @@ enters the app without going through `normalizeAppData` — a hand-edited
 Storage lives in `src/storage.ts`: one primary key, a rolling backup written
 before each save, and a corrupt-blob stash that loading falls back through.
 
+### Hiding scores while recording
+
+Tus datos → **Ocultar puntajes** hides overall, position and attribute ratings,
+team totals, comparisons, forecasts, poll results and voting summaries. Rating
+editors are replaced with a neutral label: sliders, selected steps, inherited
+estimates and value-dependent descriptions must not reveal the hidden number.
+`ScorePrivacy.tsx` provides the settings panel, navigation indicator and
+`ScoresVisible` gate, which unmounts sensitive content rather than blurring it.
+`RatingControl` applies the same rule on the standalone encuesta route.
+
+`useScorePrivacy.ts` subscribes to a single store from `lib/scorePrivacy.ts`.
+It reads `fulbito-hide-scores` before the first render, remembers the choice
+across reloads and applies changes from other tabs. Storage failure keeps the
+choice for this session and the settings panel reports that it was not saved.
+The preference is local to this browser, outside `AppData`, cloud sync and
+backups; it never rewrites player ratings or changes team balancing. Sorting
+the roster by rating is unavailable while hidden. Match results, attendance,
+payments and written notes remain visible. Backups remain complete.
+
+Both sharing flows use `canShareScores`: screen privacy overrides even an
+already-enabled sharing checkbox, for text previews, copied text and PNGs.
+New rating displays must use the gate, including tooltips and charts.
+
 ## Module map
 
 | Module | What it decides |

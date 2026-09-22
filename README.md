@@ -26,6 +26,12 @@ any other app, full screen and with no signal needed.
 
 ## What it does
 
+- **Hide ratings for screen recordings.** Turn on **Tus datos → Ocultar
+  puntajes** to hide player ratings, position and attribute scores, team totals,
+  comparisons, forecasts and poll results as you navigate. The choice stays
+  on in this browser after a reload. Shared teams also omit ratings while it
+  is on; match results remain visible and backups keep all your data.
+
 - **A roster you build once.** Name, photo, and one overall rating per player.
   That is a complete player — everything else is optional.
 - **Detail where you actually have an opinion.** Add a position rating for the
