@@ -41,6 +41,7 @@ export type TrackEvent =
   /** One of Repartir's teams kept as an equipo. */
   | { name: "split_team_saved"; players: number }
   | { name: "torneito_shared"; via: "text" | "image"; teams: number }
+  | { name: "tournament_created"; teams: number; matches: number; fields: number }
   | { name: "poll_created"; players: number }
   | { name: "crowd_adopted" }
   | { name: "backup_exported" }

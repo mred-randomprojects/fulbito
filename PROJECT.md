@@ -19,9 +19,11 @@ about the night, how each of them went one by one, who still owes you for
 the cancha, and where the recording of it lives. When more people turn
 up than two teams can hold, a second screen splits them into several, lets you
 name them, draws the torneito they are about to play, and offers to keep any
-of those sides for next week. And when it is the same two sides every week,
-you save them once, stand either of them on half a pitch to look at, and bring
-them both into a match in a tap. Once the sides are up, six models guess how
+of those sides for next week. And when the sides already exist, you can pick
+the saved teams, say how many pitches are running, edit the round-robin board
+and create every scheduled match with both lineups ready. The same saved teams
+can still stand on half a pitch to look at or come into one match in a tap.
+Once the sides are up, six models guess how
 it goes — who wins, with how many goals, as a
 probability for every scoreline — and once the result is in, the same screen
 says which of them came closest, tonight and over every game so far. And
@@ -270,6 +272,7 @@ New rating displays must use the gate, including tooltips and charts.
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
 | `lib/splitDraft.ts` | Repartir's device-local working copy: validation, compact result storage and re-scoring on restore |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
+| `lib/teamTournament.ts` | A saved-team round robin across simultaneous fields, manual fixture swaps, conflict checks and ready-to-score match creation |
 | `lib/teamMatch.ts` | What a match looks like when the two sides are the input, not the answer |
 | `lib/savedTeams.ts` | Keeping one of tonight's teams: whether these five are saved already, and a name nobody else is using |
 | `lib/pairs.ts` | A symmetric relation between players stored on one side: the closure, the pairs inside and across teams, the chain from one person, and who named whom |
@@ -349,7 +352,8 @@ move and the ficha under it; `ForecastPanel` is the Pronóstico tab), `SplitPage
 they play and the offer to keep any of them as an equipo), `TeamsPage`
 (Equipos: the sides that live between games, each of which can be stood up on
 half a pitch — `Pitch` draws one team's own half, in a shape picked on the
-screen and never stored),
+screen and never stored — plus the tournament board that schedules any saved
+teams across simultaneous fields and creates the resulting matches),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, every line of
 uno x uno ever written about them, which crews they belong to, who they will
 not play with, and — for the super admin, once an encuesta has asked about
@@ -658,9 +662,35 @@ keeps, and the whole point of it is that it is still there next Thursday.
 **The torneito on the bottom of that screen follows the same draft boundary.**
 Team names, the format and the "cada partido" line return with the rest of the
 screen, but they do not become a synced torneito record. A plan sent to the
-group has done its job; keeping results and standings would still mean a new
-record type, a place in the sync engine and a list screen to find it again.
-That durable feature remains in "Deliberately not built" below.
+group has done its job. Saved teams have the more durable path below, which
+creates ordinary matches; aggregate standings would still need a tournament
+record, a place in the sync engine and a list screen to find it again.
+
+### Tournaments from saved teams
+
+`TeamTournamentBuilder` starts from `Team` records rather than from a loose
+squad. It selects any playable saved teams, a date, a title and the number of
+simultaneous fields. `lib/teamTournament.ts` uses the same circle-method round
+robin as Repartir, then packs each non-conflicting round onto the fields that
+are actually available. Four teams on two fields therefore become six matches
+over three turns; four teams on one field become six turns.
+
+Every field is an editable slot. Its picker names all generated pairings, and
+choosing one swaps it with the pairing already in that slot rather than copying
+or deleting anything. That preserves the all-play-all promise. A manual swap
+can still put one team on two fields in the same turn, so validation names the
+double-booked team on that turn and blocks creation until the board is fixed.
+The auto-generate button is always the one-tap way back to a clean fixture.
+
+Confirming the board creates ordinary `Match` records, not a parallel kind of
+score. Each gets the tournament title, turn and field in its name, while
+`planTeamMatch` copies both saved rosters, pins every player to the intended
+side, picks fitting formations and fills both lineups. `saveMatches` persists
+the whole fixture as one local write. From then on every game uses the existing
+match screen for results, notes, payments, videos and forecasts, and syncs by
+the existing per-match path. There is deliberately no separate `Tournament`
+record yet: the matches keep every score, but aggregate standings and a table
+that groups them back into one competition remain a later feature.
 
 ### Sync, and why it is a side car
 
@@ -907,7 +937,8 @@ with no wiring), a session recording, and a short list of events the app
 sends on purpose. Four things about it are deliberate.
 
 - **The events are a closed list, and the vendor is one file.** `TrackEvent`
-  in `lib/track.ts` is the contract: `match_created`, `teams_generated`,
+  in `lib/track.ts` is the contract: `match_created`, `tournament_created`,
+  `teams_generated`,
   `lineup_shared`, `result_recorded`, `poll_created` and the rest — about
   fifteen, each fired once at the tap that means it, never per keystroke.
   Adding one is adding a member there; a typo at a call site is a build
@@ -1415,12 +1446,11 @@ touched anything and the two of them must go quiet.
   Both would be stored copies of something derivable, and the matches do not
   currently record *which* saved teams played — only the names they wore that
   night, which somebody can rename.
-- **A torneito that keeps score.** The fixture is a plan you send and then
-  live by; there is no standings table, and nowhere to type in that Equipo 3
-  beat Equipo 1. That needs a stored record — a new type, a sync path, a list
-  screen — while Repartir's local working draft is deliberately none of those.
-  Saving one of its teams is not a counter-example: an `Equipo` is a record
-  that was already there.
+- **Tournament standings.** A saved-team fixture now creates ordinary matches,
+  so Equipo 3 beating Equipo 1 has a real score and everything a match already
+  carries. There is still no separate tournament record, points table or
+  champion screen that groups those matches back together; that durable layer
+  would need its own type, sync path and list screen.
 
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
   devices. Two people cannot edit one plantel: there is no invite, no shared

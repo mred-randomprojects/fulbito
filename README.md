@@ -117,6 +117,14 @@ any other app, full screen and with no signal needed.
   match in a tap instead of being ticked off one by one. The same five are
   never saved twice, and a name another team already has becomes "Los Pibes
   (2)" rather than a second Los Pibes.
+- **A tournament from saved teams.** In Equipos, tick the sides that are
+  playing and how many pitches are running. Fulbito generates the complete
+  round robin in simultaneous turns — four teams on two pitches means two
+  games at once, three times — and every field has a picker to move a matchup
+  wherever you want it. If a manual change puts one team on two pitches at the
+  same time, the turn says so and refuses to create it. Confirm once and every
+  pairing becomes a real Partido with both rosters, formations and lineups
+  already loaded, ready for its score.
 - **La lista, before any of that.** Every match can put out a link where
   each person types their name and taps *Voy* — no account, no app — and
   sees who else is in, live. Past the cupo they are on the banco, in order
@@ -346,10 +354,10 @@ no secrets.
 - **A team's own record.** Saved teams have no won/lost tally and no rating.
   Both would be stored copies of something derivable, and a match records the
   *names* the two sides wore that night rather than which saved teams played.
-- **A torneito that keeps score.** The fixture is a plan you send and then live
-  by. There is no standings table and nowhere to record that Equipo 3 beat
-  Equipo 1 — that needs a stored record of its own, and the only thing Repartir
-  saves is a team, which was already one.
+- **Tournament standings.** A fixture made from saved teams now creates real
+  matches, so every score can be recorded. What does not exist yet is the
+  competition record around them: points, positions, champion and a screen
+  that groups all those matches back into one tournament.
 - **Free placement on the pitch.** Positions currently come from a formation;
   dragging a player anywhere on the grass is the obvious next step.
 - **Sharing a roster with somebody else.** Sync copies your data between *your*

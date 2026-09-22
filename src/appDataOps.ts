@@ -81,6 +81,15 @@ export function upsertMatch(data: AppData, match: Match, now: string): AppData {
   return { ...data, matches: matches.sort(byMatchOrder) };
 }
 
+/** One user action that creates a whole fixture should be one storage write. */
+export function upsertMatches(
+  data: AppData,
+  matches: readonly Match[],
+  now: string,
+): AppData {
+  return matches.reduce((current, match) => upsertMatch(current, match, now), data);
+}
+
 export function removeMatch(data: AppData, id: MatchId, now: string): AppData {
   const previous = data.matches.find((m) => m.id === id);
   const at = stampAtLeast(now, previous?.updatedAt, deletedAtFor(data.deletedMatches, id));

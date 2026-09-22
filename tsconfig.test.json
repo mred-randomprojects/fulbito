@@ -69,6 +69,8 @@
     "src/lib/googleIdentity.test.ts",
     "src/lib/tournament.ts",
     "src/lib/tournament.test.ts",
+    "src/lib/teamTournament.ts",
+    "src/lib/teamTournament.test.ts",
     "src/lib/teamMatch.ts",
     "src/lib/teamMatch.test.ts",
     "src/lib/savedTeams.ts",

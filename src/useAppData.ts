@@ -19,6 +19,7 @@ import {
   removePlayer,
   removeTeam,
   upsertMatch,
+  upsertMatches,
   upsertPlayer,
   upsertTeam,
 } from "./appDataOps";
@@ -53,6 +54,7 @@ export interface AppDataApi {
   savePlayer: (player: Player) => void;
   deletePlayer: (id: PlayerId) => void;
   saveMatch: (match: Match) => void;
+  saveMatches: (matches: readonly Match[]) => void;
   deleteMatch: (id: MatchId) => void;
   saveTeam: (team: Team) => void;
   deleteTeam: (id: TeamId) => void;
@@ -193,6 +195,12 @@ export function useAppData(): AppDataApi {
     [persist],
   );
 
+  const saveMatches = useCallback(
+    (matches: readonly Match[]) =>
+      persist((current) => upsertMatches(current, matches, now())),
+    [persist],
+  );
+
   const deleteMatch = useCallback(
     (id: MatchId) => persist((current) => removeMatch(current, id, now())),
     [persist],
@@ -293,6 +301,7 @@ export function useAppData(): AppDataApi {
     savePlayer,
     deletePlayer,
     saveMatch,
+    saveMatches,
     deleteMatch,
     saveTeam,
     deleteTeam,

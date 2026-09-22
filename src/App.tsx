@@ -68,6 +68,20 @@ export default function App() {
     navigate(`/matches/${match.id}`);
   }, [app, navigate]);
 
+  const createTournamentMatches = useCallback(
+    (matches: Match[], fields: number, teams: number) => {
+      app.saveMatches(matches);
+      track({
+        name: "tournament_created",
+        teams,
+        matches: matches.length,
+        fields,
+      });
+      navigate("/matches");
+    },
+    [app, navigate],
+  );
+
   return (
     <div className="min-h-dvh">
       <NavBar />
@@ -133,6 +147,7 @@ export default function App() {
                 onDelete={app.deleteTeam}
                 onSavePlayer={app.savePlayer}
                 onDeletePlayer={app.deletePlayer}
+                onCreateMatches={createTournamentMatches}
               />
             }
           />

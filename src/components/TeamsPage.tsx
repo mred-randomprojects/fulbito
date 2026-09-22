@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
+import { TeamTournamentBuilder } from "./TeamTournamentBuilder";
 import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { useLongPress } from "@/useLongPress";
 import { SquadPicker } from "./SquadPicker";
@@ -35,6 +36,7 @@ interface Props {
   onDelete: (id: TeamId) => void;
   onSavePlayer: (player: Player) => void;
   onDeletePlayer: (id: PlayerId) => void;
+  onCreateMatches: (matches: Match[], fields: number, teams: number) => void;
 }
 
 /**
@@ -58,6 +60,7 @@ export function TeamsPage({
   onDelete,
   onSavePlayer,
   onDeletePlayer,
+  onCreateMatches,
 }: Props) {
   const [openId, setOpenId] = useState<TeamId | null>(null);
   /** The one team currently standing on the grass, if any. */
@@ -154,6 +157,12 @@ export function TeamsPage({
           Equipo nuevo
         </Button>
       </header>
+
+      <TeamTournamentBuilder
+        teams={teams}
+        players={players}
+        onCreateMatches={onCreateMatches}
+      />
 
       {teams.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-card/40 p-6">

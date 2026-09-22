@@ -16,6 +16,7 @@ import {
   removePlayer,
   removeTeam,
   upsertMatch,
+  upsertMatches,
   upsertPlayer,
   upsertTeam,
 } from "./appDataOps.js";
@@ -128,6 +129,22 @@ describe("upsertMatch", () => {
     const next = upsertMatch(first, match("m1", { name: "Martes" }), NOW);
     assert.equal(next.matches.length, 1);
     assert.equal(next.matches[0]?.name, "Martes");
+  });
+});
+
+describe("upsertMatches", () => {
+  it("adds a whole fixture without dropping an existing match", () => {
+    const before = upsertMatch(EMPTY, match("old", { date: "2026-01-01" }), NOW);
+    const next = upsertMatches(
+      before,
+      [
+        match("cup-1", { name: "Copa · Turno 1", date: "2026-06-01" }),
+        match("cup-2", { name: "Copa · Turno 2", date: "2026-06-01" }),
+      ],
+      NOW,
+    );
+
+    assert.deepEqual(next.matches.map((entry) => entry.id), ["cup-1", "cup-2", "old"]);
   });
 });
 

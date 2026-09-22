@@ -69,11 +69,10 @@ export interface FixtureTeamLabel {
  * libre that round — which is the honest answer rather than an error, because
  * five teams on one pitch is a completely normal night.
  *
- * The rounds are also the running order: they play one match at a time on one
- * pitch, and consecutive rounds are the cheapest way to spread the rest around.
- * With four teams two of the six changeovers still put a team straight back on,
- * and no ordering avoids that — it is a property of six matches between four
- * teams, not of this function.
+ * A round is the stronger fact: nobody appears twice in it. Repartir can print
+ * those as fechas for one shared pitch; `teamTournament.ts` can put the same
+ * round on several pitches at once, or split it across turns when fewer are
+ * available. The pairing logic stays the same in both places.
  */
 export function roundRobin(teamCount: number): FixtureRound[] {
   const n = Math.max(2, Math.floor(teamCount));
