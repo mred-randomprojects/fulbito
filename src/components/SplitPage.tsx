@@ -1,7 +1,7 @@
 import { useScoresHidden } from "@/useScorePrivacy";
 import { canShareScores } from "@/lib/scorePrivacy";
 import { ScoresVisible } from "./ScorePrivacy";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -63,6 +63,12 @@ import { todayIso } from "@/lib/dates";
 import { SPLIT_VERDICT_LABEL, verdictFor } from "@/lib/insights";
 import { computeStats } from "@/lib/stats";
 import {
+  createSplitDraftStore,
+  restoreSplitResult,
+  SPLIT_DRAFT_VERSION,
+  storeSplitResult,
+} from "@/lib/splitDraft";
+import {
   ROLE_SHORT,
   newTeamId,
   playerDisplayName,
@@ -90,6 +96,8 @@ interface Props {
   onSaveTeam: (team: Team) => void;
 }
 
+const splitDraftStore = createSplitDraftStore(() => window.localStorage);
+
 /**
  * Repartir: one squad, several teams.
  *
@@ -100,11 +108,11 @@ interface Props {
  * a tool rather than a saved thing: pick who came, say how many teams, and take
  * the answer to the group chat.
  *
- * The reparto itself is not written to storage, deliberately. What comes out is
- * a message you paste, which is where the teams were always going to end up
- * anyway. The one exception is asked for out loud: any of tonight's teams can
- * be kept as an `Equipo`, which is a record that already exists, has a screen
- * of its own and comes back into a match in a tap.
+ * The reparto is kept as a local draft so navigating elsewhere cannot erase
+ * the work on this screen. It is still not a football-history record: it does
+ * not enter `AppData`, backups or cloud sync. The one durable domain write is
+ * still asked for out loud: any of tonight's teams can be kept as an `Equipo`,
+ * which already has a screen of its own and comes back into a match in a tap.
  */
 export function SplitPage({
   players,
@@ -114,40 +122,66 @@ export function SplitPage({
   onDeletePlayer,
   onSaveTeam,
 }: Props) {
-  const [setup, setSetup] = useState(() => {
-    const squad = lastNightsSquad(players, matches);
-    const teams = suggestTeamCount(squad.length);
-    return { squad, teams, sizes: splitSizes(squad.length, teams) };
+  const [initial] = useState(() => {
+    const draft = splitDraftStore.load(
+      players.map((player) => player.id),
+      lastNightsSquad(players, matches),
+    );
+    const draftedPlayers = draft.squad
+      .map((id) => players.find((player) => player.id === id))
+      .filter((player): player is Player => player !== undefined);
+    const restored = restoreSplitResult(draft.result, {
+      players,
+      formations: draft.sizes.map((size) => defaultFormation(size)),
+      basis: draft.basis,
+      avoid: draft.respectAvoids ? buildAvoidIndex(players) : EMPTY_AVOID_INDEX,
+      together: draft.respectTogether
+        ? buildTogetherIndex(players)
+        : EMPTY_TOGETHER_INDEX,
+      keepers: draft.spreadKeepers ? keepersAmong(draftedPlayers) : EMPTY_KEEPERS,
+    });
+    return { draft, result: restored };
   });
-  const [pins, setPins] = useState<Partial<Record<PlayerId, number>>>({});
-  const [basis, setBasis] = useState<BalanceBasis>("total");
-  const [respectAvoids, setRespectAvoids] = useState(true);
-  const [respectTogether, setRespectTogether] = useState(true);
+  const [setup, setSetup] = useState(() => ({
+    squad: initial.draft.squad,
+    teams: initial.draft.teams,
+    sizes: initial.draft.sizes,
+  }));
+  const [pins, setPins] = useState<Partial<Record<PlayerId, number>>>(initial.draft.pins);
+  const [basis, setBasis] = useState<BalanceBasis>(initial.draft.basis);
+  const [respectAvoids, setRespectAvoids] = useState(initial.draft.respectAvoids);
+  const [respectTogether, setRespectTogether] = useState(initial.draft.respectTogether);
   // On by default, like the other two preferences: a team with nobody who can
   // keep goal is the complaint this whole screen exists to prevent, and on a
   // squad where nobody is rated in goal the rule costs exactly nothing.
-  const [spreadKeepers, setSpreadKeepers] = useState(true);
+  const [spreadKeepers, setSpreadKeepers] = useState(initial.draft.spreadKeepers);
   const hidden = useScoresHidden();
-  const [requestedRatings, setIncludeRatings] = useState(false);
+  const [requestedRatings, setIncludeRatings] = useState(initial.draft.requestedRatings);
   const includeRatings = canShareScores(hidden, requestedRatings);
 
   // The torneito. It hangs off the split rather than living on its own screen:
   // the fixture depends on nothing but how many teams there are, so flipping
   // the format costs nothing, and re-rolling the split leaves it alone.
-  const [format, setFormat] = useState<TournamentFormat>("round-robin");
-  const [rule, setRule] = useState("");
+  const [format, setFormat] = useState<TournamentFormat>(initial.draft.format);
+  const [rule, setRule] = useState(initial.draft.rule);
   // Kept even for teams that stop existing, so going 4 → 3 → 4 brings the
   // names back rather than making somebody retype them.
-  const [names, setNames] = useState<Record<number, string>>({});
+  const [names, setNames] = useState<Record<number, string>>(initial.draft.names);
   const [rendering, setRendering] = useState(false);
 
-  const [result, setResult] = useState<GroupSplitResult | null>(null);
-  const [optionIndex, setOptionIndex] = useState(0);
+  const [result, setResult] = useState<GroupSplitResult | null>(initial.result);
+  const [optionIndex, setOptionIndex] = useState(
+    initial.result === null ? 0 : initial.draft.optionIndex,
+  );
   /** Whoever is being held, waiting for somebody on another team to tap. */
-  const [picked, setPicked] = useState<PlayerId | null>(null);
+  const [picked, setPicked] = useState<PlayerId | null>(
+    initial.result === null ? null : initial.draft.picked,
+  );
   /** Which options have been moved around by hand, so the app stops claiming
       they are what the search picked. */
-  const [handMade, setHandMade] = useState<ReadonlySet<number>>(() => new Set());
+  const [handMade, setHandMade] = useState<ReadonlySet<number>>(() =>
+    new Set(initial.result === null ? [] : initial.draft.handMade),
+  );
   const [error, setError] = useState<string | null>(null);
   const { copied, copy: copyToClipboard } = useCopy();
   const form = usePlayerFormTarget();
@@ -159,6 +193,48 @@ export function SplitPage({
   // Named for what it narrows, because `tags` down here is already the colours
   // the teams wear.
   const squadFilter = useTagFilter(players);
+
+  /**
+   * The whole meaningful screen is one local draft. React batches the related
+   * setters in each gesture, so this writes one coherent snapshot after a pin,
+   * repartition, rename, option change or hand swap has landed.
+   */
+  useEffect(() => {
+    splitDraftStore.save({
+      version: SPLIT_DRAFT_VERSION,
+      squad: setup.squad,
+      teams: setup.teams,
+      sizes: setup.sizes,
+      pins,
+      basis,
+      respectAvoids,
+      respectTogether,
+      spreadKeepers,
+      requestedRatings,
+      format,
+      rule,
+      names,
+      result: storeSplitResult(result),
+      optionIndex,
+      picked,
+      handMade: [...handMade].sort((a, b) => a - b),
+    });
+  }, [
+    setup,
+    pins,
+    basis,
+    respectAvoids,
+    respectTogether,
+    spreadKeepers,
+    requestedRatings,
+    format,
+    rule,
+    names,
+    result,
+    optionIndex,
+    picked,
+    handMade,
+  ]);
 
   const squadPlayers = useMemo(
     () =>
@@ -1139,17 +1215,6 @@ const FORMATS: { key: TournamentFormat; label: string }[] = [
   { key: "round-robin", label: "Todos contra todos" },
   { key: "winner-stays", label: "El que gana se queda" },
 ];
-
-/**
- * Teams of about five, which is what a shared pitch and a rotation want.
- *
- * Only ever the opening guess — the control right next to it is one tap away,
- * and every later change respects whatever the user set.
- */
-function suggestTeamCount(squadSize: number): number {
-  if (squadSize < 4) return 2;
-  return Math.min(MAX_TEAMS, Math.max(2, Math.round(squadSize / 5)));
-}
 
 /**
  * Whoever played the last game, minus anyone since removed from the roster.

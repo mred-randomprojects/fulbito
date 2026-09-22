@@ -268,6 +268,7 @@ New rating displays must use the gate, including tooltips and charts.
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
+| `lib/splitDraft.ts` | Repartir's device-local working copy: validation, compact result storage and re-scoring on restore |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/teamMatch.ts` | What a match looks like when the two sides are the input, not the answer |
 | `lib/savedTeams.ts` | Keeping one of tonight's teams: whether these five are saved already, and a name nobody else is using |
@@ -590,7 +591,9 @@ every game after the first visit is a cache hit and lands on the first tick.
 
 ### Repartir, and why it is not a match
 
-`SplitPage` is a tool, not a stored thing, and that is the whole design.
+`SplitPage` is a tool, not a stored football-history record. It does keep a
+device-local working draft, because opening another screen must not throw away
+the teams somebody just spent time arranging.
 
 A `Match` is a game: two sides, a pitch, one scoreline, and the records that
 come out of it. Twenty people sharing a pitch for two hours, rotating off on
@@ -599,18 +602,30 @@ arrangement of four teams a pitch can draw. Forcing it into `Match` would mean
 a `result: {goalsA, goalsB}` that lies and a `lineupA`/`lineupB` pair with
 nowhere to put teams three and four.
 
-So it writes nothing of its own. What comes out is the message you paste into
-the group chat — and a PNG of the whole thing — which is where the teams were
-always going to end up. The one thing it reads is the last match's squad, as an
-opening guess at who is playing again tonight.
+What comes out is still the message you paste into the group chat — and a PNG
+of the whole thing — rather than a fake `Match`. The screen's working state is
+saved separately under `fulbito-split-draft-v1`: squad, team count and sizes,
+pins, balance basis, the three constraint switches, all calculated options,
+the visible option, hand swaps, team names, fixture format/rule and the sharing
+choice. Results store player ids rather than duplicated player records, and
+`lib/splitDraft.ts` re-scores those exact teams from current ratings and roles
+when the screen returns. A corrupt or stale result is dropped without losing
+the surviving setup. If browser storage is unavailable, an in-memory mirror
+still protects route-to-route navigation for the current app session.
 
-**The one thing it can write is an `Equipo`, and only when asked out loud.**
+That draft deliberately lives outside `AppData`, backups and cloud sync. It is
+not a torneito archive and has no list screen; it just makes navigation and a
+reload harmless on this device. With no draft yet, the last match's squad is
+still the opening guess at who is playing again tonight.
+
+**The one durable domain record it can write is an `Equipo`, and only when
+asked out loud.**
 Under the cards is a row per side with a Guardar on it, because the *reparto*
 is disposable while a side sometimes is not: three of tonight's fives are for
 tonight, and the fourth is Los Pibes, who play every Thursday. That needs no
 new record type — a `Team` already exists, already syncs, already has a screen
 to find it on and comes back into a match in a tap — so the rule holds as
-written. Repartir keeps nothing *of its own*.
+written. The local draft does not turn the reparto into an `Equipo` by itself.
 
 Three switches sit above the button, all on by default: the two personal
 relations (`respectAvoids`, `respectTogether`) and "un arquero para cada
@@ -618,8 +633,8 @@ equipo", which is `lib/keepers.ts`. That third one is Repartir's alone for now
 because that is where it was asked for, *not* because the question goes away
 with two sides: a group with two rated keepers can absolutely be dealt both of
 them on the same team by the match screen, and nothing there says so yet.
-None of the three is stored; Repartir keeps nothing of its own, switches
-included.
+All three are part of the local draft, so a detour to another screen does not
+quietly change the rules before the next reparto.
 
 **Pinning is the escape hatch none of the maths replaces.** The padlock beside
 each name in the squad list cycles somebody through the teams and leaves them
@@ -640,14 +655,12 @@ five are never saved twice, and a name another team already has becomes "Los
 Pibes (2)" rather than a second Los Pibes — a saved team is something somebody
 keeps, and the whole point of it is that it is still there next Thursday.
 
-**The torneito on the bottom of that screen follows the same rule.** Team
-names, the format and the "cada partido" line are screen state that dies with
-the tab, because a torneito with no stored result is a *plan*, and a plan that
-has been sent to the group chat has already done its job. Storing it would mean
-a new record type, a place in the sync engine and a list screen to find them
-again, for something whose whole lifetime is the ten seconds between hitting
-Repartir and hitting share. Standings, and the stored thing they would need,
-are in "Deliberately not built" below.
+**The torneito on the bottom of that screen follows the same draft boundary.**
+Team names, the format and the "cada partido" line return with the rest of the
+screen, but they do not become a synced torneito record. A plan sent to the
+group has done its job; keeping results and standings would still mean a new
+record type, a place in the sync engine and a list screen to find it again.
+That durable feature remains in "Deliberately not built" below.
 
 ### Sync, and why it is a side car
 
@@ -1405,8 +1418,9 @@ touched anything and the two of them must go quiet.
 - **A torneito that keeps score.** The fixture is a plan you send and then
   live by; there is no standings table, and nowhere to type in that Equipo 3
   beat Equipo 1. That needs a stored record — a new type, a sync path, a list
-  screen — and Repartir keeps nothing of its own. Saving one of its teams is
-  not a counter-example: an `Equipo` is a record that was already there.
+  screen — while Repartir's local working draft is deliberately none of those.
+  Saving one of its teams is not a counter-example: an `Equipo` is a record
+  that was already there.
 
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
   devices. Two people cannot edit one plantel: there is no invite, no shared

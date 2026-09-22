@@ -88,7 +88,10 @@ any other app, full screen and with no signal needed.
   teams gets played over a night like that, so the split is scored on how even
   the *worst* matchup is, not just on the totals. Locks and the two who cannot
   be on the same side work here too — tocale el candadito a alguien en la lista
-  y queda fijo en ese equipo, con el resto repartido alrededor suyo.
+  y queda fijo en ese equipo, con el resto repartido alrededor suyo. Todo el
+  borrador queda en este dispositivo: podés ir a otra pantalla o recargar y
+  volver a encontrar los convocados, pines, opciones, cambios y nombres tal
+  como estaban.
 - **Un arquero para cada equipo.** Ticked by default on Repartir: whoever you
   rated 60 or more al arco gets dealt out one per team, so nobody ends up
   putting their 9 bajo los tres palos. It only counts a keeper somebody
@@ -107,7 +110,8 @@ any other app, full screen and with no signal needed.
   honestly be written down is who starts and what the queue is, because every
   pairing after the first depends on a result nobody has yet. Either way it
   comes out as one PNG — the teams, the faces and the fixture — for the group
-  chat. Nothing about the night is stored: the message you send is the record.
+  chat. El armado queda como borrador local para que navegar no lo borre; no se
+  convierte en un torneo del historial ni se sincroniza como uno.
   The exception is asked for out loud — if one of those fives is the same five
   every week, Guardar keeps it in Equipos, and next week it comes back into a
   match in a tap instead of being ticked off one by one. The same five are

@@ -18,8 +18,9 @@
  *   starts and what the queue is. Pretending otherwise would mean printing a
  *   schedule that is wrong from minute one.
  *
- * Nothing here is stored, for the same reason `SplitPage` stores nothing: the
- * message you paste into the group chat is the record.
+ * The fixture is derived rather than a durable record. `SplitPage` remembers
+ * its inputs in the device-local working draft, while the message pasted into
+ * the group chat remains the torneito's only shared record.
  */
 
 export type TournamentFormat = "round-robin" | "winner-stays";
