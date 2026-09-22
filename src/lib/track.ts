@@ -38,6 +38,8 @@ export type TrackEvent =
   /** `kind`: where the recording lives, never the address. */
   | { name: "video_added"; kind: VideoKind }
   | { name: "saved_teams_loaded" }
+  /** One of Repartir's teams kept as an equipo. */
+  | { name: "split_team_saved"; players: number }
   | { name: "torneito_shared"; via: "text" | "image"; teams: number }
   | { name: "poll_created"; players: number }
   | { name: "crowd_adopted" }

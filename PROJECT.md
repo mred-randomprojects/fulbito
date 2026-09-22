@@ -18,7 +18,8 @@ before kick-off. Then you record how it actually ended, whatever needs saying
 about the night, how each of them went one by one, who still owes you for
 the cancha, and where the recording of it lives. When more people turn
 up than two teams can hold, a second screen splits them into several, lets you
-name them, and draws the torneito they are about to play. And when it is the same two sides every week, you save
+name them, draws the torneito they are about to play, and offers to keep any of
+those sides for next week. And when it is the same two sides every week, you save
 them once and bring them both into a match in a tap. Once the sides are up,
 six models guess how it goes — who wins, with how many goals, as a
 probability for every scoreline — and once the result is in, the same screen
@@ -178,7 +179,8 @@ enters the app without going through `normalizeAppData` — a hand-edited
   red" would put two identical sides on one pitch; no formation, because the
   shape depends on how many turned up; no rating and no record, because both
   are read off the players and the matches. See `lib/teamMatch.ts` for what
-  happens when two of them meet.
+  happens when two of them meet, and `lib/savedTeams.ts` for keeping one of
+  Repartir's.
 - **`Match.notes`** — free text about the game: quién trajo la pelota, quién
   se lesionó, por qué el 8-1 no cuenta. Stored exactly as typed, because
   trimming as you go makes a space impossible to type; whether that adds up to
@@ -231,6 +233,7 @@ before each save, and a corrupt-blob stash that loading falls back through.
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/teamMatch.ts` | What a match looks like when the two sides are the input, not the answer |
+| `lib/savedTeams.ts` | Keeping one of tonight's teams: whether these five are saved already, and a name nobody else is using |
 | `lib/pairs.ts` | A symmetric relation between players stored on one side: the closure, the pairs inside and across teams, the chain from one person, and who named whom |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/together.ts` | Who had better share a side with whom, which pairs a split broke up, and everyone a player is chained to |
@@ -304,7 +307,8 @@ Ajustes, Pagos — under a result panel, a note and the recordings
 (`VideoPanel`) that are always there; on the
 cancha, a tap on a player opens `PitchPlayerCard`, the uno x uno box with the
 move and the ficha under it; `ForecastPanel` is the Pronóstico tab), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
-they play), `TeamsPage` (Equipos: the sides that live between games),
+they play and the offer to keep any of them as an equipo), `TeamsPage` (Equipos:
+the sides that live between games),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, every line of
 uno x uno ever written about them, which crews they belong to, who they will
 not play with, and — for the super admin, once an encuesta has asked about
@@ -555,10 +559,26 @@ arrangement of four teams a pitch can draw. Forcing it into `Match` would mean
 a `result: {goalsA, goalsB}` that lies and a `lineupA`/`lineupB` pair with
 nowhere to put teams three and four.
 
-So it writes nothing to storage. What comes out is the message you paste into
+So it writes nothing of its own. What comes out is the message you paste into
 the group chat — and a PNG of the whole thing — which is where the teams were
 always going to end up. The one thing it reads is the last match's squad, as an
 opening guess at who is playing again tonight.
+
+**The one thing it can write is an `Equipo`, and only when asked out loud.**
+Under the cards is a row per side with a Guardar on it, because the *reparto*
+is disposable while a side sometimes is not: three of tonight's fives are for
+tonight, and the fourth is Los Pibes, who play every Thursday. That needs no
+new record type — a `Team` already exists, already syncs, already has a screen
+to find it on and comes back into a match in a tap — so the rule holds as
+written. Repartir keeps nothing *of its own*.
+
+Which of tonight's teams are already saved is looked up rather than remembered
+(`lib/savedTeams.ts`), and that is what keeps it honest through the swap
+gesture right above it: move one player between two teams and neither is the
+side that was saved any more, so both offers come back on their own. The same
+five are never saved twice, and a name another team already has becomes "Los
+Pibes (2)" rather than a second Los Pibes — a saved team is something somebody
+keeps, and the whole point of it is that it is still there next Thursday.
 
 **The torneito on the bottom of that screen follows the same rule.** Team
 names, the format and the "cada partido" line are screen state that dies with
@@ -1296,7 +1316,8 @@ touched anything and the two of them must go quiet.
 - **A torneito that keeps score.** The fixture is a plan you send and then
   live by; there is no standings table, and nowhere to type in that Equipo 3
   beat Equipo 1. That needs a stored record — a new type, a sync path, a list
-  screen — and the whole of Repartir is built on storing nothing.
+  screen — and Repartir keeps nothing of its own. Saving one of its teams is
+  not a counter-example: an `Equipo` is a record that was already there.
 
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
   devices. Two people cannot edit one plantel: there is no invite, no shared

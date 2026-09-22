@@ -12,6 +12,7 @@ import {
   Minus,
   Plus,
   Scale,
+  Shield,
   Shuffle,
   Trophy,
   Users,
@@ -35,6 +36,7 @@ import {
   type GroupTeam,
 } from "@/lib/groups";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
+import { findByMembers, freeTeamName } from "@/lib/savedTeams";
 import { buildTogetherIndex, EMPTY_TOGETHER_INDEX, separatedAcross } from "@/lib/together";
 import { defaultFormation, type Formation } from "@/lib/formations";
 import {
@@ -50,12 +52,15 @@ import { SPLIT_VERDICT_LABEL, verdictFor } from "@/lib/insights";
 import { computeStats } from "@/lib/stats";
 import {
   ROLE_SHORT,
+  newTeamId,
   playerDisplayName,
   playerShortName,
+  teamDisplayName,
   type BalanceBasis,
   type Match,
   type Player,
   type PlayerId,
+  type Team,
 } from "@/types";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
@@ -66,8 +71,11 @@ interface Props {
   players: Player[];
   /** Every match, only to guess who is probably playing again tonight. */
   matches: Match[];
+  /** The sides that already live between games, so tonight's are not kept twice. */
+  savedTeams: Team[];
   onSavePlayer: (player: Player) => void;
   onDeletePlayer: (id: PlayerId) => void;
+  onSaveTeam: (team: Team) => void;
 }
 
 /**
@@ -80,10 +88,20 @@ interface Props {
  * a tool rather than a saved thing: pick who came, say how many teams, and take
  * the answer to the group chat.
  *
- * Nothing here is written to storage, deliberately. What comes out is a message
- * you paste, which is where the teams were always going to end up anyway.
+ * The reparto itself is not written to storage, deliberately. What comes out is
+ * a message you paste, which is where the teams were always going to end up
+ * anyway. The one exception is asked for out loud: any of tonight's teams can
+ * be kept as an `Equipo`, which is a record that already exists, has a screen
+ * of its own and comes back into a match in a tap.
  */
-export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Props) {
+export function SplitPage({
+  players,
+  matches,
+  savedTeams,
+  onSavePlayer,
+  onDeletePlayer,
+  onSaveTeam,
+}: Props) {
   const [setup, setSetup] = useState(() => {
     const squad = lastNightsSquad(players, matches);
     const teams = suggestTeamCount(squad.length);
@@ -413,6 +431,53 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
     [playersById],
   );
 
+  /* ---------------------------------------------------------------- */
+  /* Keeping one                                                       */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Which of tonight's teams are already saved, looked up rather than
+   * remembered.
+   *
+   * That is what keeps it honest through the gesture right above it: move one
+   * player between two teams and neither of them is the side that was saved
+   * any more, so both offers come back on their own. A flag set when the
+   * button was pressed would sit there claiming otherwise.
+   */
+  const savedAs = useMemo(
+    () =>
+      option == null
+        ? []
+        : option.teams.map((team) =>
+            findByMembers(
+              savedTeams,
+              team.players.map((player) => player.id),
+            ),
+          ),
+    [option, savedTeams],
+  );
+
+  const keepTeam = useCallback(
+    (index: number) => {
+      if (option == null) return;
+      const squad = option.teams[index].players.map((player) => player.id);
+      // Two taps that both land would otherwise leave two rows in Equipos
+      // that nothing afterwards can tell apart.
+      if (findByMembers(savedTeams, squad) !== undefined) return;
+      onSaveTeam({
+        id: newTeamId(),
+        name: freeTeamName(
+          savedTeams.map((entry) => entry.name),
+          teamLabels[index].name,
+        ),
+        players: squad,
+        updatedAt: new Date().toISOString(),
+      });
+      track({ name: "split_team_saved", players: squad.length });
+    },
+    [option, savedTeams, teamLabels, onSaveTeam],
+  );
+
   const fixture = useMemo(
     () => buildFixture(format, option?.teams.length ?? setup.teams),
     [format, option, setup.teams],
@@ -719,6 +784,30 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                 </span>
               </p>
 
+              <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  <Shield className="h-4 w-4" />
+                  ¿Te quedás con alguno?
+                </span>
+                <p className="text-xs leading-snug text-muted-foreground">
+                  Si alguno de estos es de los que se repiten todas las semanas,
+                  guardalo en Equipos y la próxima lo traés al partido de una, sin
+                  marcarlos uno por uno. Ponele el nombre acá arriba primero.
+                </p>
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {option.teams.map((team, index) => (
+                    <KeepTeamRow
+                      key={tags[index].name}
+                      tag={tags[index]}
+                      name={teamLabels[index].name}
+                      count={team.players.length}
+                      saved={savedAs[index]}
+                      onKeep={() => keepTeam(index)}
+                    />
+                  ))}
+                </ul>
+              </div>
+
               <div className="space-y-3 rounded-xl border border-border bg-card p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 text-sm font-medium">
@@ -796,8 +885,9 @@ export function SplitPage({ players, matches, onSavePlayer, onDeletePlayer }: Pr
                   {copied !== null ? "Copiado" : "Copiar para WhatsApp"}
                 </Button>
                 <p className="text-[11px] leading-snug text-muted-foreground">
-                  Esto no se guarda en ningún lado. Lo que mandás al grupo es el
-                  registro.
+                  Ni el reparto ni el torneito se guardan en ningún lado: lo que
+                  mandás al grupo es el registro. Lo único que queda es el equipo
+                  que hayas guardado a mano.
                 </p>
               </div>
             </>
@@ -1137,6 +1227,56 @@ function MatchRow({
         <TeamChip tag={tags[away]} index={away} />
       </span>
     </div>
+  );
+}
+
+/**
+ * One of tonight's teams, and the offer to keep it.
+ *
+ * `saved` is the equipo that already holds exactly these people, if there is
+ * one, and it is named rather than reduced to a tick: the useful thing to find
+ * out here is not "done", it is that tonight's Equipo 3 is the Los Pibes you
+ * saved back in marzo.
+ */
+function KeepTeamRow({
+  tag,
+  name,
+  count,
+  saved,
+  onKeep,
+}: {
+  tag: TeamTag;
+  /** What the chip above the team says, which is what it would be saved as. */
+  name: string;
+  count: number;
+  saved: Team | undefined;
+  onKeep: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5">
+      <span
+        aria-hidden
+        className="h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{ background: tag.fill }}
+      />
+      <span className="min-w-0 flex-1 truncate text-xs">
+        {name} <span className="text-muted-foreground">({count})</span>
+      </span>
+      {saved === undefined ? (
+        <Button variant="secondary" size="sm" onClick={onKeep}>
+          Guardar
+        </Button>
+      ) : (
+        <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <Check className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">
+            {teamDisplayName(saved) === name
+              ? "Guardado"
+              : `Ya lo tenés: ${teamDisplayName(saved)}`}
+          </span>
+        </span>
+      )}
+    </li>
   );
 }
 

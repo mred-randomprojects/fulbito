@@ -115,8 +115,10 @@ export default function App() {
               <SplitPage
                 players={app.players}
                 matches={app.matches}
+                savedTeams={app.teams}
                 onSavePlayer={app.savePlayer}
                 onDeletePlayer={app.deletePlayer}
+                onSaveTeam={app.saveTeam}
               />
             }
           />

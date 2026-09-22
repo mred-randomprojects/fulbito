@@ -3,8 +3,9 @@
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, let it work out the split, write down how it
 ended, and keep track of who still owes you for the cancha. Twenty turned up?
-Cut them into four fives, name them, and send the group the torneito. Same two
-sides every week? Save them once and bring both into a match in a tap. Want to
+Cut them into four fives, name them, send the group the torneito, and keep the
+one side that plays every week. Same two sides every week? Save them once and
+bring both into a match in a tap. Want to
 know how it goes before it goes? Six models will tell you, and afterwards the
 app tells you which of them was right.
 
@@ -89,7 +90,12 @@ any other app, full screen and with no signal needed.
   honestly be written down is who starts and what the queue is, because every
   pairing after the first depends on a result nobody has yet. Either way it
   comes out as one PNG — the teams, the faces and the fixture — for the group
-  chat. Nothing is stored: the message you send is the record.
+  chat. Nothing about the night is stored: the message you send is the record.
+  The exception is asked for out loud — if one of those fives is the same five
+  every week, Guardar keeps it in Equipos, and next week it comes back into a
+  match in a tap instead of being ticked off one by one. The same five are
+  never saved twice, and a name another team already has becomes "Los Pibes
+  (2)" rather than a second Los Pibes.
 - **La lista, before any of that.** Every match can put out a link where
   each person types their name and taps *Voy* — no account, no app — and
   sees who else is in, live. Past the cupo they are on the banco, in order
@@ -321,8 +327,8 @@ no secrets.
   *names* the two sides wore that night rather than which saved teams played.
 - **A torneito that keeps score.** The fixture is a plan you send and then live
   by. There is no standings table and nowhere to record that Equipo 3 beat
-  Equipo 1 — that needs a stored record, and Repartir is built on storing
-  nothing.
+  Equipo 1 — that needs a stored record of its own, and the only thing Repartir
+  saves is a team, which was already one.
 - **Free placement on the pitch.** Positions currently come from a formation;
   dragging a player anywhere on the grass is the obvious next step.
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
