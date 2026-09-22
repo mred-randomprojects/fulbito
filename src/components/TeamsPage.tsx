@@ -7,11 +7,15 @@ import { PlayerForm } from "./PlayerForm";
 import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { useLongPress } from "@/useLongPress";
 import { SquadPicker } from "./SquadPicker";
+import { Pitch, type PitchToken } from "./Pitch";
 import { useTagFilter } from "@/useTagFilter";
 import { computeStats } from "@/lib/stats";
+import { evaluateSquad } from "@/lib/balance";
+import { formationsForSize, resolveFormation } from "@/lib/formations";
 import {
   newTeamId,
   playerDisplayName,
+  playerShortName,
   teamDisplayName,
   type Match,
   type Player,
@@ -55,6 +59,14 @@ export function TeamsPage({
   onDeletePlayer,
 }: Props) {
   const [openId, setOpenId] = useState<TeamId | null>(null);
+  /** The one team currently standing on the grass, if any. */
+  const [pitchId, setPitchId] = useState<TeamId | null>(null);
+  /**
+   * The shape that team is standing in. Screen state on purpose — a saved team
+   * is a name and a list of people, and this is a way of looking at it rather
+   * than something it knows about itself.
+   */
+  const [shapeId, setShapeId] = useState("");
   const form = usePlayerFormTarget();
   const tagFilter = useTagFilter(players);
 
@@ -79,6 +91,13 @@ export function TeamsPage({
         .filter((p): p is Player => p !== undefined),
     [playersById],
   );
+
+  const togglePitch = useCallback((id: TeamId) => {
+    setPitchId((current) => (current === id ? null : id));
+    // The shape belonged to whoever was on the grass a moment ago; the next
+    // team gets whatever fits it instead of somebody else's 3-2-1.
+    setShapeId("");
+  }, []);
 
   const create = useCallback(() => {
     const team: Team = {
@@ -113,6 +132,7 @@ export function TeamsPage({
       // so deleting it cannot rewrite anything that already happened.
       onDelete(team.id);
       setOpenId((current) => (current === team.id ? null : current));
+      setPitchId((current) => (current === team.id ? null : current));
     },
     [onDelete],
   );
@@ -156,6 +176,7 @@ export function TeamsPage({
             {teams.map((team) => {
               const members = membersOf(team);
               const isOpen = team.id === open?.id;
+              const onGrass = team.id === pitchId;
               return (
                 <li
                   key={team.id}
@@ -172,7 +193,7 @@ export function TeamsPage({
                         placeholder="Los Pibes, Los del laburo, …"
                         maxLength={40}
                         aria-label="Nombre del equipo"
-                        className="h-9 flex-1 font-semibold"
+                        className="h-9 min-w-0 flex-1 font-semibold"
                       />
                     ) : (
                       <button
@@ -199,10 +220,30 @@ export function TeamsPage({
                         <Trash2 className="h-4 w-4" />
                       </button>
                     )}
+                    {members.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => togglePitch(team.id)}
+                        aria-pressed={onGrass}
+                        title={
+                          onGrass
+                            ? "Sacarlos de la cancha"
+                            : `Ver a ${teamDisplayName(team)} en la cancha`
+                        }
+                        className={cn(
+                          "shrink-0 px-2",
+                          onGrass && "bg-accent text-accent-foreground",
+                        )}
+                      >
+                        Cancha
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setOpenId(isOpen ? null : team.id)}
+                      className="shrink-0 px-2"
                     >
                       {isOpen ? "Listo" : "Editar"}
                     </Button>
@@ -218,6 +259,15 @@ export function TeamsPage({
                         />
                       ))}
                     </ul>
+                  )}
+
+                  {onGrass && members.length > 0 && (
+                    <TeamPitch
+                      members={members}
+                      shapeId={shapeId}
+                      onShape={setShapeId}
+                      onView={form.view}
+                    />
                   )}
 
                   {isOpen && members.length === 0 && (
@@ -306,6 +356,114 @@ export function TeamsPage({
           onDeletePlayer(player.id);
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * What the shirts wear on that grass.
+ *
+ * Not a kit: a kit is something one side picked for one match, and it comes
+ * with a claim about what those five are actually wearing tonight. A saved
+ * team has no colour by design, so the shirts get a neutral ring and a dark
+ * chip — readable on the grass, and claiming nothing.
+ */
+const NEUTRAL_RING = "rgba(255,255,255,0.82)";
+const NEUTRAL_CHIP = "rgba(0,0,0,0.62)";
+const NEUTRAL_CHIP_TEXT = "#f2f6fb";
+
+/**
+ * A saved team, standing on its own half.
+ *
+ * The match screen draws two sides facing each other, which is the wrong
+ * picture for a team that lives between games: there is nobody to face, and
+ * the empty end would be implying an opponent who is not coming. Cutting the
+ * pitch at the halfway line also hands the shape every millimetre of depth
+ * back, which is what a 3-3-1 on a phone needs most.
+ *
+ * Who stands where is `evaluateSquad`, the same call the match screen and
+ * Repartir make: the best arrangement of these people in this shape, so the
+ * keeper of the group is in goal rather than whoever was ticked first.
+ */
+function TeamPitch({
+  members,
+  shapeId,
+  onShape,
+  onView,
+}: {
+  members: Player[];
+  /** The shape last picked here; one that no longer fits falls back. */
+  shapeId: string;
+  onShape: (id: string) => void;
+  onView: (id: PlayerId) => void;
+}) {
+  const formation = useMemo(
+    () => resolveFormation(shapeId, members.length),
+    [shapeId, members.length],
+  );
+  const evaluation = useMemo(
+    () => evaluateSquad(members, formation),
+    [members, formation],
+  );
+  const shapes = useMemo(() => formationsForSize(members.length), [members.length]);
+
+  const tokens: PitchToken[] = formation.slots.flatMap((slot, index) => {
+    const player = evaluation.lineup[index];
+    if (player == null) return [];
+    return [
+      {
+        key: player.id,
+        x: slot.x,
+        y: slot.y,
+        // Everybody is at home here; there is no away side to mirror.
+        half: "A",
+        name: playerShortName(player),
+        avatar: player.avatar,
+        seed: player.id,
+        role: slot.role,
+        rating: evaluation.slotRatings[index],
+        ring: NEUTRAL_RING,
+        chip: NEUTRAL_CHIP,
+        chipText: NEUTRAL_CHIP_TEXT,
+        // Nothing else has claimed the tap on this screen, so it opens the
+        // ficha — and holding does the same rather than nothing.
+        onClick: () => onView(player.id),
+        onLongPress: () => onView(player.id),
+      },
+    ];
+  });
+
+  return (
+    <div className="space-y-2 border-t border-border p-3">
+      <Pitch tokens={tokens} half />
+
+      {shapes.length > 1 && (
+        <ul className="flex flex-wrap justify-center gap-1">
+          {shapes.map((shape) => (
+            <li key={shape.id}>
+              <button
+                type="button"
+                onClick={() => onShape(shape.id)}
+                title={shape.description}
+                aria-pressed={shape.id === formation.id}
+                className={cn(
+                  "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                  shape.id === formation.id
+                    ? "border-primary/60 bg-secondary font-medium text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {shape.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="text-center text-[11px] leading-snug text-muted-foreground">
+        {formation.description} El esquema es sólo para mirarlo: el equipo
+        guarda quiénes lo forman, nada más.
+      </p>
     </div>
   );
 }

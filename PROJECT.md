@@ -18,10 +18,11 @@ before kick-off. Then you record how it actually ended, whatever needs saying
 about the night, how each of them went one by one, who still owes you for
 the cancha, and where the recording of it lives. When more people turn
 up than two teams can hold, a second screen splits them into several, lets you
-name them, draws the torneito they are about to play, and offers to keep any of
-those sides for next week. And when it is the same two sides every week, you save
-them once and bring them both into a match in a tap. Once the sides are up,
-six models guess how it goes — who wins, with how many goals, as a
+name them, draws the torneito they are about to play, and offers to keep any
+of those sides for next week. And when it is the same two sides every week,
+you save them once, stand either of them on half a pitch to look at, and bring
+them both into a match in a tap. Once the sides are up, six models guess how
+it goes — who wins, with how many goals, as a
 probability for every scoreline — and once the result is in, the same screen
 says which of them came closest, tonight and over every game so far. And
 before any of that, a match can put out la lista: a link where each person
@@ -178,9 +179,10 @@ enters the app without going through `normalizeAppData` — a hand-edited
   the colour is a fact about a game — two saved teams both remembering "we wear
   red" would put two identical sides on one pitch; no formation, because the
   shape depends on how many turned up; no rating and no record, because both
-  are read off the players and the matches. See `lib/teamMatch.ts` for what
-  happens when two of them meet, and `lib/savedTeams.ts` for keeping one of
-  Repartir's.
+  are read off the players and the matches. Equipos can stand one on half a
+  pitch to look at, and the shape it stands in dies with the tab for exactly
+  that reason. See `lib/teamMatch.ts` for what happens when two of them meet,
+  and `lib/savedTeams.ts` for keeping one of Repartir's.
 - **`Match.notes`** — free text about the game: quién trajo la pelota, quién
   se lesionó, por qué el 8-1 no cuenta. Stored exactly as typed, because
   trimming as you go makes a space impossible to type; whether that adds up to
@@ -307,8 +309,10 @@ Ajustes, Pagos — under a result panel, a note and the recordings
 (`VideoPanel`) that are always there; on the
 cancha, a tap on a player opens `PitchPlayerCard`, the uno x uno box with the
 move and the ficha under it; `ForecastPanel` is the Pronóstico tab), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
-they play and the offer to keep any of them as an equipo), `TeamsPage` (Equipos:
-the sides that live between games),
+they play and the offer to keep any of them as an equipo), `TeamsPage`
+(Equipos: the sides that live between games, each of which can be stood up on
+half a pitch — `Pitch` draws one team's own half, in a shape picked on the
+screen and never stored),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, every line of
 uno x uno ever written about them, which crews they belong to, who they will
 not play with, and — for the super admin, once an encuesta has asked about

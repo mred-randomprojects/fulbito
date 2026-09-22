@@ -50,6 +50,17 @@ interface Props {
    */
   labelA?: React.ReactNode;
   labelB?: React.ReactNode;
+  /**
+   * One team's half, from its own goal line to the halfway line, instead of
+   * the whole pitch.
+   *
+   * For a side with nobody to face: a saved equipo between games. Drawing it
+   * on a full pitch would leave half the grass empty, implying an opponent who
+   * is not coming, and squeeze the shape into the bottom half for no reason.
+   * Every token is expected to be on half `"A"`; the far end is the halfway
+   * line rather than a goal.
+   */
+  half?: boolean;
   className?: string;
 }
 
@@ -67,6 +78,14 @@ const PITCH_ASPECT = "5 / 8";
 const MAX_WIDTH = "min(100%, 47dvh)";
 
 /**
+ * Half of that pitch is wider than it is tall, so nothing about the viewport's
+ * height constrains it. What decides its size is the column it sits in, and
+ * past about 26rem the shirts stop getting easier to read and just get bigger.
+ */
+const HALF_ASPECT = "5 / 4";
+const HALF_MAX_WIDTH = "min(100%, 26rem)";
+
+/**
  * Everything on the grass is sized in `cqw` — percentages of the pitch's own
  * width. One set of proportions then holds at every screen size, instead of a
  * fixed 52px avatar that fits a laptop and collides on a phone.
@@ -82,34 +101,41 @@ const NAME_MAX_WIDTH = "26cqw";
  * camera would show it. Everything is inset so that a 56px avatar centred on
  * an edge slot still sits fully inside the touchline.
  */
-function position(token: PitchToken): { left: string; top: string } {
+function position(token: PitchToken, half: boolean): { left: string; top: string } {
   const insetX = 9;
   const spanX = 100 - insetX * 2;
   const x = token.half === "A" ? token.x : 1 - token.x;
 
   // Each half owns 50% of the height; keep players off the exact goal line.
-  const depth = 3 + token.y * 45;
+  // On a half pitch that same 0..1 of depth has the whole box to spread over,
+  // so the numbers double and the shape breathes rather than scaling down.
+  const depth = half ? 6 + token.y * 90 : 3 + token.y * 45;
   const top = token.half === "A" ? 100 - depth : depth;
 
   return { left: `${insetX + x * spanX}%`, top: `${top}%` };
 }
 
-export function Pitch({ tokens, labelA, labelB, className }: Props) {
+export function Pitch({ tokens, labelA, labelB, half = false, className }: Props) {
   return (
     <div
       className={cn("mx-auto w-full", className)}
-      style={{ maxWidth: MAX_WIDTH }}
+      style={{ maxWidth: half ? HALF_MAX_WIDTH : MAX_WIDTH }}
     >
       {labelB != null && <div className="mb-2 flex justify-center">{labelB}</div>}
 
       <div
-        className="pitch-surface relative w-full overflow-hidden rounded-2xl border border-emerald-300/15 shadow-2xl shadow-black/40"
-        style={{ aspectRatio: PITCH_ASPECT }}
+        className={cn(
+          "pitch-surface relative w-full overflow-hidden rounded-2xl border border-emerald-300/15 shadow-2xl shadow-black/40",
+          // Half the height wants half as many stripes, or the mown grass
+          // comes out twice as fine as it does on every other screen.
+          half && "pitch-surface-half",
+        )}
+        style={{ aspectRatio: half ? HALF_ASPECT : PITCH_ASPECT }}
       >
-        <Markings />
+        {half ? <HalfMarkings /> : <Markings />}
 
         {tokens.map((token) => (
-          <Token key={token.key} token={token} />
+          <Token key={token.key} token={token} half={half} />
         ))}
       </div>
 
@@ -125,12 +151,12 @@ export function Pitch({ tokens, labelA, labelB, className }: Props) {
  * player's card, so the ficha is a held finger, and `useLongPress` cannot be
  * called from inside a `map` whose length changes with the formation.
  */
-function Token({ token }: { token: PitchToken }) {
+function Token({ token, half }: { token: PitchToken; half: boolean }) {
   const press = useLongPress({
     onClick: token.onClick,
     onLongPress: token.onLongPress,
   });
-  const { left, top } = position(token);
+  const { left, top } = position(token, half);
   const interactive = token.onClick != null || token.onLongPress != null;
 
   const content = (
@@ -229,6 +255,30 @@ function Markings() {
       {/* Goals. */}
       <div className="pitch-line left-1/2 top-[1.4%] h-[1.6%] w-[14%] -translate-x-1/2 border-x-2 border-t-2 bg-white/10" />
       <div className="pitch-line bottom-[1.4%] left-1/2 h-[1.6%] w-[14%] -translate-x-1/2 border-x-2 border-b-2 bg-white/10" />
+    </>
+  );
+}
+
+/**
+ * The same markings seen from the halfway line: one goal, one box, and the
+ * centre circle cut in half by the top edge.
+ *
+ * Every vertical number is twice its counterpart above, because the box is
+ * half as tall for the same width — the lines are in the same places on the
+ * grass, and this is the only way to say so in percentages.
+ */
+function HalfMarkings() {
+  return (
+    <>
+      <div className="pitch-line bottom-[6%] left-[3%] right-[3%] top-0 rounded-b-sm border-x-2 border-b-2" />
+      {/* The halfway line, which is the edge the team is facing. */}
+      <div className="pitch-line left-[3%] right-[3%] top-0 border-t-2" />
+      <div className="pitch-line left-1/2 top-0 h-[32%] w-[24%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2" />
+      <div className="pitch-line left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/25" />
+
+      <div className="pitch-line bottom-[6%] left-1/2 h-[28%] w-[46%] -translate-x-1/2 border-x-2 border-t-2" />
+      <div className="pitch-line bottom-[6%] left-1/2 h-[12%] w-[24%] -translate-x-1/2 border-x-2 border-t-2" />
+      <div className="pitch-line bottom-[2.8%] left-1/2 h-[3.2%] w-[14%] -translate-x-1/2 border-x-2 border-b-2 bg-white/10" />
     </>
   );
 }

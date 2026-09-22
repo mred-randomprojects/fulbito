@@ -4,10 +4,10 @@ Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, let it work out the split, write down how it
 ended, and keep track of who still owes you for the cancha. Twenty turned up?
 Cut them into four fives, name them, send the group the torneito, and keep the
-one side that plays every week. Same two sides every week? Save them once and
-bring both into a match in a tap. Want to
-know how it goes before it goes? Six models will tell you, and afterwards the
-app tells you which of them was right.
+one side that plays every week. Same two sides every week? Save them once, see
+either of them lined up on half a pitch, and bring both into a match in a tap.
+Want to know how it goes before it goes? Six models will tell you, and
+afterwards the app tells you which of them was right.
 
 `PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
@@ -44,8 +44,12 @@ any other app, full screen and with no signal needed.
   fits each, pins everybody to their own team and fills in both lineups. No
   balancing, because there is nothing to balance — the sides *are* the input.
   Somebody in both teams plays for the first and the app says whose name it
-  moved. A match keeps a copy of who played, so renaming a team, changing who
-  is in it, or deleting it never rewrites a game that already happened.
+  moved. Any saved team can also be stood up on half a pitch on its own — the
+  best arrangement of whoever is in it, keeper in goal, and a tap to try the
+  other shapes that fit that many. The shape is for looking at; a team stays a
+  name and a list of people. A match keeps a copy of who played, so renaming a
+  team, changing who is in it, or deleting it never rewrites a game that
+  already happened.
 - **A lineup you can argue with.** Drag nobody: tap a player, tap another, they
   swap, and every number updates.
 - **The bibs you actually brought.** Claros against oscuros is only where a

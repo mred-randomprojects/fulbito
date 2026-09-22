@@ -90,6 +90,20 @@ input[type="number"] {
       );
   }
 
+  /* Half the pitch is half the height, so the same percentages would mow the
+     grass twice as fine. Doubling them keeps a stripe the same width of cut
+     it is everywhere else. */
+  .pitch-surface-half {
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        hsl(146 45% 17%) 0px,
+        hsl(146 45% 17%) 14%,
+        hsl(146 42% 15%) 14%,
+        hsl(146 42% 15%) 28%
+      );
+  }
+
   .pitch-line {
     @apply absolute pointer-events-none;
     border-color: hsl(150 30% 88% / 0.28);
