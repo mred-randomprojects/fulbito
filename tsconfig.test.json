@@ -33,6 +33,8 @@
     "src/lib/keepers.test.ts",
     "src/lib/clipboard.ts",
     "src/lib/clipboard.test.ts",
+    "src/lib/avatarBytes.ts",
+    "src/lib/avatarBytes.test.ts",
     "src/lib/autosave.ts",
     "src/lib/autosave.test.ts",
     "src/lib/insights.ts",

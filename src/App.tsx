@@ -164,6 +164,7 @@ export default function App() {
                 data={app.data}
                 onImport={app.importData}
                 cloud={cloud}
+                avatarStorage={app.avatarStorage}
               />
             }
           />

@@ -13,14 +13,16 @@ import { UsagePanel } from "./UsagePanel";
 import { track } from "@/lib/track";
 import { downloadBlob } from "@/share";
 import type { CloudState } from "@/lib/cloudStatus";
+import type { AvatarStorageStatus } from "@/avatarStorage";
 
 interface Props {
   data: AppData;
   onImport: (data: AppData) => void;
   cloud: CloudState;
+  avatarStorage: AvatarStorageStatus;
 }
 
-export function SettingsPage({ data, onImport, cloud }: Props) {
+export function SettingsPage({ data, onImport, cloud, avatarStorage }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +133,7 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
           Si el navegador se limpia, esto se va: por eso conviene bajar el
           archivo de vez en cuando.
         </p>
+        <AvatarStorageLine status={avatarStorage} />
       </section>
 
       <section className="rounded-xl border border-border bg-card p-4">
@@ -190,5 +193,34 @@ export function SettingsPage({ data, onImport, cloud }: Props) {
         </ul>
       </section>
     </div>
+  );
+}
+
+function AvatarStorageLine({ status }: { status: AvatarStorageStatus }) {
+  if (status.kind === "copying") {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        Copiando {status.total} foto{status.total === 1 ? "" : "s"} a IndexedDB… La copia anterior sigue intacta.
+      </p>
+    );
+  }
+  if (status.kind === "ready") {
+    return (
+      <p className="mt-2 text-xs text-emerald-400">
+        IndexedDB: {status.verified} de {status.total} foto{status.total === 1 ? "" : "s"} verificadas byte por byte ({(status.storedBytes / 1024).toFixed(0)} KB). La copia anterior sigue intacta.
+      </p>
+    );
+  }
+  if (status.kind === "unsupported") {
+    return (
+      <p className="mt-2 text-xs text-amber-300">
+        Este navegador no ofrece IndexedDB. La copia anterior sigue intacta.
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2 text-xs text-destructive">
+      IndexedDB no quedó verificado: {status.message} La copia anterior sigue intacta.
+    </p>
   );
 }

@@ -229,8 +229,14 @@ enters the app without going through `normalizeAppData` — a hand-edited
 - **`AppData`** — players, matches, teams, and tombstones for all three, so a
   delete survives a merge with an older backup.
 
-Storage lives in `src/storage.ts`: one primary key, a rolling backup written
-before each save, and a corrupt-blob stash that loading falls back through.
+Structured storage lives in `src/storage.ts`: one primary key, a rolling backup
+written before each save, and a corrupt-blob stash that loading falls back
+through. Avatar migration is deliberately staged. `src/avatarStorage.ts`
+currently writes every photo as a binary `Blob` to IndexedDB and reads it back
+to verify the bytes, while leaving the complete data URL in the primary local
+copy, rolling backup, exports and Firestore. The "Tus datos" screen reports the
+verified count. IndexedDB must not become the only local avatar copy until that
+shadow path has been exercised in real browsers; this phase deletes nothing.
 
 ### Hiding scores while recording
 

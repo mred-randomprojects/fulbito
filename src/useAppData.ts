@@ -23,6 +23,10 @@ import {
   upsertTeam,
 } from "./appDataOps";
 import { track } from "./lib/track";
+import {
+  mirrorAndVerifyAvatars,
+  type AvatarStorageStatus,
+} from "./avatarStorage";
 
 /**
  * How long "Guardado" stays up after the last write. Long enough to be read
@@ -38,6 +42,8 @@ export interface AppDataApi {
   teams: Team[];
   /** Whether the last write landed, for the confirmation the whole app shares. */
   saveStatus: SaveStatus;
+  /** Shadow-copy migration state. Legacy photos remain untouched for now. */
+  avatarStorage: AvatarStorageStatus;
   /**
    * ⌘S. There is nothing to write — every change already wrote itself — so
    * this re-shows the receipt; unless the last write failed, in which case it
@@ -82,6 +88,22 @@ export interface AppDataApi {
  */
 export function useAppData(): AppDataApi {
   const [data, setData] = useState<AppData>(loadAppData);
+  const [avatarStorage, setAvatarStorage] = useState<AvatarStorageStatus>(() => ({
+    kind: "copying",
+    total: data.players.filter((player) => player.avatar !== "").length,
+  }));
+
+  useEffect(() => {
+    let current = true;
+    const total = data.players.filter((player) => player.avatar !== "").length;
+    setAvatarStorage({ kind: "copying", total });
+    void mirrorAndVerifyAvatars(data.players).then((status) => {
+      if (current) setAvatarStorage(status);
+    });
+    return () => {
+      current = false;
+    };
+  }, [data.players]);
 
   /**
    * The receipt for every write, shared by the whole app.
@@ -266,6 +288,7 @@ export function useAppData(): AppDataApi {
     matches: data.matches,
     teams: data.teams,
     saveStatus,
+    avatarStorage,
     save,
     savePlayer,
     deletePlayer,
