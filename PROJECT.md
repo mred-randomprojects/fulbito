@@ -274,7 +274,7 @@ New rating displays must use the gate, including tooltips and charts.
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/teamTournament.ts` | A saved-team round robin across simultaneous fields, manual fixture swaps, conflict checks and ready-to-score match creation |
 | `lib/teamMatch.ts` | What a match looks like when the two sides are the input, not the answer |
-| `lib/savedTeams.ts` | Keeping one of tonight's teams: whether these five are saved already, and a name nobody else is using |
+| `lib/savedTeams.ts` | Keeping one of tonight's teams: whether these five are saved already, and a name nobody else is using — plus holding the Equipos list still while one is being renamed |
 | `lib/pairs.ts` | A symmetric relation between players stored on one side: the closure, the pairs inside and across teams, the chain from one person, and who named whom |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/together.ts` | Who had better share a side with whom, which pairs a split broke up, and everyone a player is chained to |

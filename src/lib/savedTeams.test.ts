@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { findByMembers, freeTeamName, sameMembers, type TeamLike } from "./savedTeams.js";
+import {
+  findByMembers,
+  freeTeamName,
+  holdOrder,
+  sameMembers,
+  type TeamLike,
+} from "./savedTeams.js";
 
 describe("sameMembers", () => {
   it("does not care what order anybody was written in", () => {
@@ -64,5 +70,31 @@ describe("freeTeamName", () => {
 
   it("leaves a nameless team nameless", () => {
     assert.equal(freeTeamName(["Los Pibes"], "   "), "");
+  });
+});
+
+describe("holdOrder", () => {
+  const t = (id: string) => ({ id });
+  const ids = (items: readonly { id: string }[]) => items.map((item) => item.id);
+
+  it("passes the list through when nobody is editing", () => {
+    assert.deepEqual(ids(holdOrder([t("b"), t("a")], null)), ["b", "a"]);
+  });
+
+  it("keeps a renamed team where it was even though the sort moved it", () => {
+    // "Zeta" was renamed to "Alfa" and the store re-sorted it to the top.
+    assert.deepEqual(ids(holdOrder([t("z"), t("m"), t("n")], ["m", "n", "z"])), [
+      "m",
+      "n",
+      "z",
+    ]);
+  });
+
+  it("puts teams that appeared meanwhile at the end, and drops deleted ones", () => {
+    assert.deepEqual(ids(holdOrder([t("new"), t("a"), t("c")], ["a", "b", "c"])), [
+      "a",
+      "c",
+      "new",
+    ]);
   });
 });

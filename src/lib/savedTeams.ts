@@ -64,3 +64,25 @@ export function freeTeamName(taken: readonly string[], desired: string): string 
   }
   return candidate;
 }
+
+/**
+ * The list in the order it had when somebody started editing it.
+ *
+ * Teams are stored sorted by name, and renaming one saves on every keystroke —
+ * so without this the row you are typing into jumps up and down the list with
+ * each letter. While `held` is set the rows keep those places; teams that
+ * appeared since (a new one, or one from another device) go at the end, and
+ * ones that are gone are simply gone. `null` means nobody is editing: the list
+ * comes back in its own order.
+ */
+export function holdOrder<T extends { id: string }>(
+  items: readonly T[],
+  held: readonly string[] | null,
+): T[] {
+  if (held === null) return [...items];
+  const place = new Map(held.map((id, index) => [id, index]));
+  const known = items.filter((item) => place.has(item.id));
+  const fresh = items.filter((item) => !place.has(item.id));
+  known.sort((a, b) => (place.get(a.id) ?? 0) - (place.get(b.id) ?? 0));
+  return [...known, ...fresh];
+}

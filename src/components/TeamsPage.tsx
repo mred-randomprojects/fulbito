@@ -14,6 +14,7 @@ import { useTagFilter } from "@/useTagFilter";
 import { computeStats } from "@/lib/stats";
 import { evaluateSquad } from "@/lib/balance";
 import { formationsForSize, resolveFormation } from "@/lib/formations";
+import { holdOrder } from "@/lib/savedTeams";
 import {
   newTeamId,
   playerDisplayName,
@@ -63,6 +64,13 @@ export function TeamsPage({
   onCreateMatches,
 }: Props) {
   const [openId, setOpenId] = useState<TeamId | null>(null);
+  /**
+   * The order the list had when editing started. Teams are stored sorted by
+   * name and a rename saves on every keystroke, so without this the row being
+   * typed into would hop around the list with each letter. Only read while a
+   * team is open; "Listo" lets the list settle into its real order.
+   */
+  const [heldOrder, setHeldOrder] = useState<TeamId[]>([]);
   /** The one team currently standing on the grass, if any. */
   const [pitchId, setPitchId] = useState<TeamId | null>(null);
   /**
@@ -83,6 +91,19 @@ export function TeamsPage({
   // The open team is looked up rather than held in state, so an edit that
   // lands from another device — or from the tap that just happened — is the
   // one on screen.
+  const shown = useMemo(
+    () => holdOrder(teams, openId === null ? null : heldOrder),
+    [teams, openId, heldOrder],
+  );
+
+  const edit = useCallback(
+    (id: TeamId | null) => {
+      if (openId === null && id !== null) setHeldOrder(teams.map((t) => t.id));
+      setOpenId(id);
+    },
+    [openId, teams],
+  );
+
   const open = useMemo(
     () => teams.find((team) => team.id === openId) ?? null,
     [teams, openId],
@@ -111,8 +132,13 @@ export function TeamsPage({
       updatedAt: new Date().toISOString(),
     };
     onSave(team);
+    // Unnamed, it sorts to the top — which is also right under the button.
+    setHeldOrder((held) => [
+      team.id,
+      ...(openId === null ? teams.map((t) => t.id) : held),
+    ]);
     setOpenId(team.id);
-  }, [onSave]);
+  }, [onSave, openId, teams]);
 
   const patch = useCallback(
     (team: Team, changes: Partial<Team>) => onSave({ ...team, ...changes }),
@@ -183,7 +209,7 @@ export function TeamsPage({
       ) : (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
           <ul className="space-y-2">
-            {teams.map((team) => {
+            {shown.map((team) => {
               const members = membersOf(team);
               const isOpen = team.id === open?.id;
               const onGrass = team.id === pitchId;
@@ -208,7 +234,7 @@ export function TeamsPage({
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setOpenId(team.id)}
+                        onClick={() => edit(team.id)}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
                         <span className="truncate font-semibold">
@@ -252,7 +278,7 @@ export function TeamsPage({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setOpenId(isOpen ? null : team.id)}
+                      onClick={() => edit(isOpen ? null : team.id)}
                       className="shrink-0 px-2"
                     >
                       {isOpen ? "Listo" : "Editar"}
