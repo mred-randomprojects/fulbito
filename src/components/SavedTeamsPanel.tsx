@@ -10,6 +10,7 @@ import {
   type Player,
   type PlayerId,
   type Team,
+  type TeamId,
 } from "@/types";
 
 interface Props {
@@ -17,7 +18,11 @@ interface Props {
   playersById: ReadonlyMap<PlayerId, Player>;
   match: Match;
   /** Everything the plan decided, plus the two names to put on the sides. */
-  onLoad: (plan: TeamMatchPlan, names: { a: string; b: string }) => void;
+  onLoad: (
+    plan: TeamMatchPlan,
+    names: { a: string; b: string },
+    ids: { a: TeamId; b: TeamId },
+  ) => void;
 }
 
 /**
@@ -67,7 +72,7 @@ export function SavedTeamsPanel({ teams, playersById, match, onLoad }: Props) {
       formationIdA: match.teamA.formationId,
       formationIdB: match.teamB.formationId,
     });
-    onLoad(plan, { a: nameA, b: nameB });
+    onLoad(plan, { a: nameA, b: nameB }, { a: teamA.id, b: teamB.id });
   };
 
   return (

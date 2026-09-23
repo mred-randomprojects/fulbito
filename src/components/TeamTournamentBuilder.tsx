@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   CalendarDays,
   Check,
   MapPin,
   RotateCcw,
-  Sparkles,
   Swords,
   Trophy,
 } from "lucide-react";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/teamTournament";
 import { todayIso } from "@/lib/dates";
 import {
+  generateId,
   newMatchId,
   playerDisplayName,
   teamDisplayName,
@@ -37,17 +38,21 @@ interface Props {
   teams: Team[];
   players: Player[];
   onCreateMatches: (matches: Match[], fields: number, teams: number) => void;
+  onCancel?: () => void;
 }
 
 /**
  * A fixture board made from saved teams.
  *
- * It lives on Equipos because this flow starts with known sides, unlike
- * Repartir's "who turned up?" flow. The board is deliberately turn-first:
- * every card in one row starts together, so putting one team in two cards is
- * visibly and mechanically an error rather than a scheduling surprise.
+ * Built to get a liga going in one tap: every playable saved team is in, the
+ * canchas default to as many as the teams can fill (at most two), and the
+ * board is already drawn — "Arrancar" is the only thing left to press. The
+ * board stays editable for the night the turns need shuffling, and is
+ * deliberately turn-first: every card in one row starts together, so putting
+ * one team in two cards is visibly and mechanically an error rather than a
+ * scheduling surprise.
  */
-export function TeamTournamentBuilder({ teams, players, onCreateMatches }: Props) {
+export function TeamTournamentBuilder({ teams, players, onCreateMatches, onCancel }: Props) {
   const validPlayerIds = useMemo(
     () => new Set(players.map((player) => player.id)),
     [players],
@@ -56,24 +61,33 @@ export function TeamTournamentBuilder({ teams, players, onCreateMatches }: Props
     team.players.reduce((count, id) => count + (validPlayerIds.has(id) ? 1 : 0), 0);
   const playableTeams = teams.filter((team) => memberCount(team) > 0);
 
-  const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<TeamId>>(
     () => new Set(playableTeams.map((team) => team.id)),
   );
   const [fields, setFields] = useState(() =>
     Math.min(2, Math.max(1, Math.floor(playableTeams.length / 2))),
   );
-  const [title, setTitle] = useState("Torneito");
+  const [title, setTitle] = useState("Liga");
   const [date, setDate] = useState(todayIso);
-  const [schedule, setSchedule] = useState<TeamTournamentSchedule | null>(null);
+  /** Hand edits to the drawn board; `null` means the automatic one. */
+  const [edited, setEdited] = useState<TeamTournamentSchedule | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedTeams = teams.filter(
     (team) => selected.has(team.id) && memberCount(team) > 0,
   );
   const selectedIds = selectedTeams.map((team) => team.id);
+  const selectedKey = selectedIds.join("|");
   const maxFields = Math.max(1, Math.floor(selectedIds.length / 2));
   const usableFields = Math.min(fields, maxFields);
+  const automatic = useMemo(
+    () =>
+      selectedKey === "" || selectedKey.split("|").length < 2
+        ? null
+        : buildTeamTournamentSchedule(selectedKey.split("|") as TeamId[], usableFields),
+    [selectedKey, usableFields],
+  );
+  const schedule = edited ?? automatic;
   const teamsById = useMemo(
     () => new Map(teams.map((team) => [team.id, team])),
     [teams],
@@ -108,22 +122,14 @@ export function TeamTournamentBuilder({ teams, players, onCreateMatches }: Props
       if (!next.delete(team.id)) next.add(team.id);
       return next;
     });
-    setSchedule(null);
-    setError(null);
-  };
-
-  const generate = () => {
-    if (selectedIds.length < 2) return;
-    const next = buildTeamTournamentSchedule(selectedIds, usableFields);
-    setFields(next.fieldCount);
-    setSchedule(next);
+    setEdited(null);
     setError(null);
   };
 
   const swap = (target: TournamentSlotPosition, rawSource: string) => {
     if (schedule === null || rawSource === "") return;
     const [turn, field] = rawSource.split(":").map(Number);
-    setSchedule(swapTournamentSlots(schedule, target, { turn, field }));
+    setEdited(swapTournamentSlots(schedule, target, { turn, field }));
     setError(null);
   };
 
@@ -138,6 +144,7 @@ export function TeamTournamentBuilder({ teams, players, onCreateMatches }: Props
         title,
         now: new Date().toISOString(),
         makeId: () => newMatchId(),
+        tournamentId: generateId(),
       });
       onCreateMatches(created, schedule.fieldCount, schedule.teamIds.length);
     } catch (caught) {
@@ -145,37 +152,91 @@ export function TeamTournamentBuilder({ teams, players, onCreateMatches }: Props
     }
   };
 
-  if (teams.length < 2) return null;
+  if (playableTeams.length < 2) {
+    return (
+      <section className="rounded-2xl border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        Para armar un torneo necesitás al menos dos equipos con gente adentro.
+        Armalos en <Link to="/teams" className="font-medium text-foreground underline underline-offset-4">Equipos</Link> y volvé.
+      </section>
+    );
+  }
 
   return (
-    <section className="mb-5 overflow-hidden rounded-2xl border border-amber-400/25 bg-card shadow-[0_18px_60px_-40px_rgba(251,191,36,0.75)]">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-        className="group flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-amber-400/[0.04]"
-      >
+    <section className="overflow-hidden rounded-2xl border border-amber-400/25 bg-card shadow-[0_18px_60px_-40px_rgba(251,191,36,0.75)]">
+      <div className="flex items-center gap-3 border-b border-border p-4">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-300/10 text-amber-300">
           <Trophy className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold">Armar torneo con estos equipos</span>
+          <span className="block font-semibold">Torneo nuevo</span>
           <span className="block text-xs leading-relaxed text-muted-foreground">
-            Todos contra todos, varias canchas y cada cruce editable.
+            Todos contra todos. Ya está armado: tocá Arrancar y listo.
           </span>
         </span>
-        <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
-          {open ? "Cerrar" : "Armar"}
-        </span>
-      </button>
+        {onCancel !== undefined && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Cancelar
+          </button>
+        )}
+      </div>
 
-      {open && (
-        <div className="space-y-5 border-t border-border p-4">
+      <div className="space-y-5 p-4">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px]">
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Nombre</span>
+              <Input
+                aria-label="Nombre del torneo"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={40}
+                placeholder="Copa del barrio"
+              />
+            </label>
+            <label className="space-y-1.5">
+              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" /> Fecha
+              </span>
+              <Input
+                aria-label="Fecha del torneo"
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1.5">
+              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" /> Canchas
+              </span>
+              <select
+                value={usableFields}
+                onChange={(event) => {
+                  setFields(Number(event.target.value));
+                  setEdited(null);
+                  setError(null);
+                }}
+                disabled={selectedIds.length < 2}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                {Array.from({ length: maxFields }, (_, index) => index + 1).map(
+                  (count) => (
+                    <option key={count} value={count}>
+                      {count} cancha{count === 1 ? "" : "s"}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+          </div>
+
           <div className="space-y-2">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-semibold">1. Quiénes juegan</h2>
+              <h2 className="text-sm font-semibold">Quiénes juegan</h2>
               <span className="text-xs text-muted-foreground">
-                {selectedIds.length} seleccionado{selectedIds.length === 1 ? "" : "s"}
+                {selectedIds.length} equipo{selectedIds.length === 1 ? "" : "s"}
               </span>
             </div>
             <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -220,88 +281,31 @@ export function TeamTournamentBuilder({ teams, players, onCreateMatches }: Props
             </ul>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px]">
-            <label className="space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Nombre</span>
-              <Input
-                aria-label="Nombre del torneo"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                maxLength={40}
-                placeholder="Copa del barrio"
-              />
-            </label>
-            <label className="space-y-1.5">
-              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                <CalendarDays className="h-3.5 w-3.5" /> Fecha
-              </span>
-              <Input
-                aria-label="Fecha del torneo"
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-              />
-            </label>
-            <label className="space-y-1.5">
-              <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" /> Canchas
-              </span>
-              <select
-                value={usableFields}
-                onChange={(event) => {
-                  setFields(Number(event.target.value));
-                  setSchedule(null);
-                  setError(null);
-                }}
-                disabled={selectedIds.length < 2}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-              >
-                {Array.from({ length: maxFields }, (_, index) => index + 1).map(
-                  (count) => (
-                    <option key={count} value={count}>
-                      {count} cancha{count === 1 ? "" : "s"}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
-          </div>
-
           {overlaps.length > 0 && (
             <p className="rounded-xl border border-amber-400/30 bg-amber-400/[0.07] px-3 py-2 text-xs leading-relaxed text-amber-200">
               Ojo: {overlaps.map(([a, b]) => `${nameOf(a)} y ${nameOf(b)}`).join(", ")} comparten jugadores. En ese cruce, quien figure en ambos queda del primer lado.
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={generate} disabled={selectedIds.length < 2 || date === ""}>
-              <Sparkles className="mr-1.5 h-4 w-4" />
-              {schedule === null ? "Generar cruces" : "Generar de nuevo"}
-            </Button>
-            {schedule !== null && (
-              <button
-                type="button"
-                onClick={generate}
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                <RotateCcw className="h-3.5 w-3.5" /> Deshacer cambios manuales
-              </button>
-            )}
-          </div>
-
           {schedule !== null && (
             <div className="space-y-3 border-t border-border pt-4">
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-semibold">2. La planilla</h2>
+                  <h2 className="text-sm font-semibold">El fixture</h2>
                   <p className="text-xs text-muted-foreground">
                     {slots.length} partidos · {schedule.turns.length} turnos.
-                    Cambiá cualquier cruce desde su cancha.
+                    Si querés, tocá un cruce para cambiarlo de lugar.
                   </p>
                 </div>
-                <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground">
-                  Un turno arranca todo junto
-                </span>
+                {edited !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setEdited(null)}
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Volver al automático
+                  </button>
+                )}
               </div>
 
               <ol className="space-y-3">
@@ -404,24 +408,27 @@ export function TeamTournamentBuilder({ teams, players, onCreateMatches }: Props
 
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-secondary/35 p-3">
                 <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
-                  Al confirmar se crean {slots.length} partidos reales, con los
-                  dos planteles ya cargados. Después anotás cada resultado desde
-                  Partidos.
+                  Se crean {slots.length} partidos con los planteles cargados y
+                  atados a sus equipos: si cambiás un nombre o un jugador en
+                  Equipos, se actualiza acá también. Los goles se anotan desde
+                  la tabla del torneo.
                 </p>
                 <Button
                   onClick={createMatches}
                   disabled={
-                    issues.length > 0 || rosterIssues.length > 0 || slots.length === 0
+                    issues.length > 0 ||
+                    rosterIssues.length > 0 ||
+                    slots.length === 0 ||
+                    date === ""
                   }
                 >
                   <Trophy className="mr-1.5 h-4 w-4" />
-                  Crear {slots.length} partido{slots.length === 1 ? "" : "s"}
+                  Arrancar
                 </Button>
               </div>
             </div>
           )}
-        </div>
-      )}
+      </div>
     </section>
   );
 }

@@ -17,15 +17,33 @@ import {
 import { formatLongDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./PlayerAvatar";
+import { LigaRow } from "./TournamentsPage";
+import { groupLigas, type Liga } from "@/lib/liga";
 
 interface Props {
   matches: Match[];
   players: Player[];
   onOpen: (match: Match) => void;
+  onOpenTournament: (id: string) => void;
   onCreate: () => void;
 }
 
-export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
+export function MatchesPage({ matches, players, onOpen, onOpenTournament, onCreate }: Props) {
+  /**
+   * A torneo is one row here, where its first game would have been, rather
+   * than six rows of "A vs B" burying everything else. Its board is one tap in.
+   */
+  const ligaRows = useMemo(() => {
+    const byFirstMatch = new Map<string, Liga>();
+    const ligas = new Map(groupLigas(matches).map((liga) => [liga.id, liga]));
+    for (const match of matches) {
+      const liga = match.tournament === undefined ? undefined : ligas.get(match.tournament.id);
+      if (liga === undefined) continue;
+      byFirstMatch.set(match.id, liga);
+      ligas.delete(liga.id);
+    }
+    return byFirstMatch;
+  }, [matches]);
   /**
    * Who still exists, so the money on a row is split between the same people
    * the match screen splits it between. A player deleted from the roster stays
@@ -76,6 +94,16 @@ export function MatchesPage({ matches, players, onOpen, onCreate }: Props) {
       ) : (
         <ul className="space-y-2">
           {matches.map((match) => {
+            if (match.tournament !== undefined) {
+              // Only the first game the list reaches stands for the torneo.
+              const liga = ligaRows.get(match.id);
+              if (liga === undefined) return null;
+              return (
+                <li key={`liga-${liga.id}`}>
+                  <LigaRow liga={liga} onOpen={() => onOpenTournament(liga.id)} />
+                </li>
+              );
+            }
             // Who wears the coronita on this row, and `null` on the games
             // nobody wrote down and on the ones that finished level.
             const won = winningSide(match.result);

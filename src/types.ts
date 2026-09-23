@@ -135,6 +135,13 @@ export interface TeamConfig {
   /** Which bibs this side got tonight. See `KITS`, and `lib/kits.ts`. */
   kit: KitId;
   formationId: string;
+  /**
+   * The saved `Team` this side *is*, when it came from one. Absent on a side
+   * somebody picked by hand. It is what lets renaming Los Pibes on Equipos
+   * rename them on every match they play, and what a torneo's table groups
+   * results by. See `lib/teamLinks.ts`.
+   */
+  teamId?: TeamId;
 }
 
 /**
@@ -381,7 +388,22 @@ export interface Match {
    * the one thing about the night that *does* go out in the shared text.
    */
   videos: MatchVideo[];
+  /**
+   * Which torneo this game belongs to, and where on its board it sits. Absent
+   * on an ordinary match. There is no separate tournament record: a torneo is
+   * the set of matches carrying the same `id`, read back by `lib/liga.ts`.
+   */
+  tournament?: MatchTournament;
   updatedAt: string;
+}
+
+export interface MatchTournament {
+  id: string;
+  name: string;
+  /** 1-based. Every game in one turn kicks off together. */
+  turn: number;
+  /** 1-based. */
+  field: number;
 }
 
 /**
@@ -731,10 +753,31 @@ function normalizeKit(value: unknown, fallback: KitId): KitId {
 
 function normalizeTeamConfig(raw: unknown, fallback: TeamConfig): TeamConfig {
   if (!isRecord(raw)) return { ...fallback };
+  const teamId = str(raw.teamId);
   return {
     name: str(raw.name, fallback.name),
     kit: normalizeKit(raw.kit, fallback.kit),
     formationId: str(raw.formationId, fallback.formationId),
+    // Only present when set, so a side nobody linked round-trips as it was.
+    ...(teamId === "" ? {} : { teamId: teamId as TeamId }),
+  };
+}
+
+function positiveInt(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1
+    ? Math.floor(value)
+    : 1;
+}
+
+function normalizeMatchTournament(value: unknown): MatchTournament | undefined {
+  if (!isRecord(value)) return undefined;
+  const id = str(value.id);
+  if (id === "") return undefined;
+  return {
+    id,
+    name: str(value.name, "Torneo"),
+    turn: positiveInt(value.turn),
+    field: positiveInt(value.field),
   };
 }
 
@@ -892,8 +935,14 @@ function normalizeMatch(raw: unknown): Match | null {
     // Absent on any match saved before recordings had a home, which is the
     // same state as a match nobody filmed.
     videos: normalizeVideos(raw.videos),
+    ...tournamentField(raw.tournament),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
+}
+
+function tournamentField(value: unknown): { tournament?: MatchTournament } {
+  const tournament = normalizeMatchTournament(value);
+  return tournament === undefined ? {} : { tournament };
 }
 
 /**

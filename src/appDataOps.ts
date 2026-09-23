@@ -9,6 +9,7 @@ import type {
 } from "./types.js";
 import { stampAfter, stampAtLeast } from "./lib/stamp.js";
 import { byMatchOrder } from "./lib/matchOrder.js";
+import { syncMatchWithTeam } from "./lib/teamLinks.js";
 
 /**
  * Every change the app can make to its data, as plain functions.
@@ -113,7 +114,19 @@ export function upsertTeam(data: AppData, team: Team, now: string): AppData {
   const teams = exists
     ? data.teams.map((t) => (t.id === stamped.id ? stamped : t))
     : [...data.teams, stamped];
-  return { ...data, teams: teams.sort(byTeamName) };
+  const next = { ...data, teams: teams.sort(byTeamName) };
+
+  // Every match this team plays in follows it, in the same write. See
+  // `lib/teamLinks.ts` for what "follows" means on a game already played.
+  const changed = data.matches
+    .map((match) => syncMatchWithTeam(match, stamped, teams, data.players))
+    .filter((match, index) => match !== data.matches[index]);
+  return changed.length === 0 ? next : upsertMatches(next, changed, now);
+}
+
+/** A whole torneo going at once is one write, like creating it was. */
+export function removeMatches(data: AppData, ids: readonly MatchId[], now: string): AppData {
+  return ids.reduce((current, id) => removeMatch(current, id, now), data);
 }
 
 /**

@@ -117,14 +117,15 @@ any other app, full screen and with no signal needed.
   match in a tap instead of being ticked off one by one. The same five are
   never saved twice, and a name another team already has becomes "Los Pibes
   (2)" rather than a second Los Pibes.
-- **A tournament from saved teams.** In Equipos, tick the sides that are
-  playing and how many pitches are running. Fulbito generates the complete
-  round robin in simultaneous turns — four teams on two pitches means two
-  games at once, three times — and every field has a picker to move a matchup
-  wherever you want it. If a manual change puts one team on two pitches at the
-  same time, the turn says so and refuses to create it. Confirm once and every
-  pairing becomes a real Partido with both rosters, formations and lineups
-  already loaded, ready for its score.
+- **A liga from saved teams, in one tap.** Torneos opens with every saved
+  team ticked and the fixture already drawn — four teams on two pitches means
+  two games at once, three times — so Arrancar is all it takes. Each field
+  still has a picker to move a matchup around, and a turn that puts one team
+  on two pitches says so and refuses. Every game is a real Partido with both
+  rosters loaded and tied to its teams: rename a team or change who is in it
+  on Equipos and every game it has not played yet follows. The torneo screen
+  has the points table on top and a −/+ goal stepper on every game, a button
+  to copy it all for the group chat, and one for another vuelta.
 - **La lista, before any of that.** Every match can put out a link where
   each person types their name and taps *Voy* — no account, no app — and
   sees who else is in, live. Past the cupo they are on the banco, in order
@@ -351,13 +352,10 @@ no secrets.
 
 ## Not built yet
 
-- **A team's own record.** Saved teams have no won/lost tally and no rating.
-  Both would be stored copies of something derivable, and a match records the
-  *names* the two sides wore that night rather than which saved teams played.
-- **Tournament standings.** A fixture made from saved teams now creates real
-  matches, so every score can be recorded. What does not exist yet is the
-  competition record around them: points, positions, champion and a screen
-  that groups all those matches back into one tournament.
+- **A team's own record across torneos.** A torneo has its table, but a
+  saved team has no all-time won/lost tally and no rating yet.
+- **Other tournament formats.** Only todos contra todos: no knockout stages
+  or head-to-head tiebreaks.
 - **Free placement on the pitch.** Positions currently come from a formation;
   dragging a player anywhere on the grass is the obvious next step.
 - **Sharing a roster with somebody else.** Sync copies your data between *your*

@@ -9,6 +9,7 @@ import { MatchesPage } from "./components/MatchesPage";
 import { MatchBuilder } from "./components/MatchBuilder";
 import { SplitPage } from "./components/SplitPage";
 import { TeamsPage } from "./components/TeamsPage";
+import { TournamentPage, TournamentsPage } from "./components/TournamentsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { PollsPage } from "./components/PollsPage";
 import { SaveIndicator } from "./components/SaveIndicator";
@@ -22,6 +23,7 @@ import {
 } from "./types";
 import { defaultMatchName, todayIso } from "./lib/dates";
 import { track } from "./lib/track";
+import { findLiga } from "./lib/liga";
 import { interceptSave } from "cmd-s";
 
 export default function App() {
@@ -77,7 +79,8 @@ export default function App() {
         matches: matches.length,
         fields,
       });
-      navigate("/matches");
+      const id = matches[0]?.tournament?.id;
+      navigate(id === undefined ? "/matches" : `/torneos/${id}`);
     },
     [app, navigate],
   );
@@ -118,11 +121,25 @@ export default function App() {
                 matches={app.matches}
                 players={app.players}
                 onOpen={(match) => navigate(`/matches/${match.id}`)}
+                onOpenTournament={(id) => navigate(`/torneos/${id}`)}
                 onCreate={createMatch}
               />
             }
           />
           <Route path="/matches/:id" element={<MatchRoute app={app} />} />
+          <Route
+            path="/torneos"
+            element={
+              <TournamentsPage
+                matches={app.matches}
+                teams={app.teams}
+                players={app.players}
+                onCreateMatches={createTournamentMatches}
+                onOpen={(id) => navigate(`/torneos/${id}`)}
+              />
+            }
+          />
+          <Route path="/torneos/:id" element={<TournamentRoute app={app} />} />
           <Route
             path="/split"
             element={
@@ -147,7 +164,6 @@ export default function App() {
                 onDelete={app.deleteTeam}
                 onSavePlayer={app.savePlayer}
                 onDeletePlayer={app.deletePlayer}
-                onCreateMatches={createTournamentMatches}
               />
             }
           />
@@ -198,6 +214,9 @@ function MatchRoute({ app }: { app: ReturnType<typeof useAppData> }) {
   const match = id == null ? undefined : app.getMatch(id as MatchId);
 
   if (match === undefined) return <Navigate to="/matches" replace />;
+  // A torneo game belongs to its board: that is where you came from and where
+  // the next score gets written.
+  const home = match.tournament === undefined ? "/matches" : `/torneos/${match.tournament.id}`;
 
   return (
     <MatchBuilder
@@ -208,11 +227,35 @@ function MatchRoute({ app }: { app: ReturnType<typeof useAppData> }) {
       onChange={app.saveMatch}
       onDelete={() => {
         app.deleteMatch(match.id);
-        navigate("/matches");
+        navigate(home);
       }}
       onSavePlayer={app.savePlayer}
       onDeletePlayer={app.deletePlayer}
-      onBack={() => navigate("/matches")}
+      onBack={() => navigate(home)}
+    />
+  );
+}
+
+function TournamentRoute({ app }: { app: ReturnType<typeof useAppData> }) {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const liga = id == null ? undefined : findLiga(app.matches, id);
+
+  if (liga === undefined) return <Navigate to="/torneos" replace />;
+
+  return (
+    <TournamentPage
+      liga={liga}
+      teams={app.teams}
+      players={app.players}
+      onSaveMatch={app.saveMatch}
+      onSaveMatches={app.saveMatches}
+      onDelete={(ids) => {
+        app.deleteMatches(ids);
+        navigate("/torneos");
+      }}
+      onOpenMatch={(match) => navigate(`/matches/${match.id}`)}
+      onBack={() => navigate("/torneos")}
     />
   );
 }

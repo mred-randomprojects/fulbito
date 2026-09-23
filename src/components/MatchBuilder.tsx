@@ -10,6 +10,7 @@ import {
   HeartHandshake,
   Info,
   Lock,
+  Medal,
   NotebookPen,
   Share2,
   Shuffle,
@@ -72,6 +73,7 @@ import {
   type PlayerId,
   type Team,
   type TeamConfig,
+  type TeamId,
   type TeamKey,
 } from "@/types";
 import { cn } from "@/lib/utils";
@@ -319,7 +321,7 @@ export function MatchBuilder({
    * there.
    */
   const loadSavedTeams = useCallback(
-    (plan: TeamMatchPlan, names: { a: string; b: string }) => {
+    (plan: TeamMatchPlan, names: { a: string; b: string }, ids: { a: TeamId; b: TeamId }) => {
       const playing = new Set(plan.squad);
       // Same reason `setSquadMembership` drops them: a payment record for
       // somebody who is no longer anotado would quietly come back marked paid
@@ -337,8 +339,9 @@ export function MatchBuilder({
         lineupB: plan.lineupB,
         // The team keeps its name; the bibs stay whatever tonight's are. The
         // colour is a fact about a game, not about a team.
-        teamA: { ...match.teamA, name: names.a, formationId: plan.formationIdA },
-        teamB: { ...match.teamB, name: names.b, formationId: plan.formationIdB },
+        // Linked, so renaming the team on Equipos renames it here too.
+        teamA: { ...match.teamA, name: names.a, formationId: plan.formationIdA, teamId: ids.a },
+        teamB: { ...match.teamB, name: names.b, formationId: plan.formationIdB, teamId: ids.b },
         payments,
       });
 
@@ -673,8 +676,23 @@ export function MatchBuilder({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5">
+      {match.tournament !== undefined && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-300/10"
+        >
+          <Medal className="h-3.5 w-3.5" />
+          {match.tournament.name} · Turno {match.tournament.turn} · Cancha {match.tournament.field}
+        </button>
+      )}
       <header className="mb-4 flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Volver a los partidos">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onBack}
+          aria-label={match.tournament === undefined ? "Volver a los partidos" : "Volver al torneo"}
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Input

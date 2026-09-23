@@ -163,11 +163,18 @@ describe("building real matches", () => {
       title: "Copa del barrio",
       now: "2026-09-22T12:00:00.000Z",
       makeId: (index) => `m${index}` as MatchId,
+      tournamentId: "t1",
     });
 
     assert.equal(matches.length, 6);
     assert.equal(new Set(matches.map((match) => match.id)).size, 6);
-    assert.equal(matches[0].name, "Copa del barrio · Turno 1 · Cancha 1");
+    const first = matches[0];
+    assert.equal(first.name, `${first.teamA.name} vs ${first.teamB.name}`);
+    assert.deepEqual(first.tournament, { id: "t1", name: "Copa del barrio", turn: 1, field: 1 });
+    assert.equal(matches[1].tournament?.field, 2);
+    assert.equal(matches[5].tournament?.turn, 3);
+    assert.ok(matches.every((match) => match.teamA.teamId !== undefined));
+    assert.equal(teams.find((entry) => entry.id === first.teamA.teamId)?.name, first.teamA.name);
     assert.equal(matches[0].squad.length, 2);
     assert.equal(matches[0].sizeA, 1);
     assert.equal(matches[0].sizeB, 1);
@@ -187,8 +194,25 @@ describe("building real matches", () => {
         title: "Copa",
         now: "2026-09-22T12:00:00.000Z",
         makeId: () => "m1" as MatchId,
+        tournamentId: "t1",
       }),
       /lado vacío/,
     );
+  });
+
+  it("numbers a second vuelta after the turns already played", () => {
+    const teams = [team("A", "a"), team("B", "b")];
+    const matches = buildTeamTournamentMatches({
+      schedule: buildTeamTournamentSchedule(teams.map((entry) => entry.id), 1),
+      teams,
+      players: [player("a"), player("b")],
+      date: "2026-09-22",
+      title: "Liga",
+      now: "2026-09-22T12:00:00.000Z",
+      makeId: () => "m1" as MatchId,
+      tournamentId: "t1",
+      turnOffset: 3,
+    });
+    assert.equal(matches[0].tournament?.turn, 4);
   });
 });

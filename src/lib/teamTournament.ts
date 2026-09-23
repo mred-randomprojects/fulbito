@@ -1,4 +1,5 @@
 import { planTeamMatch } from "./teamMatch.js";
+import { tournamentMatchName } from "./teamLinks.js";
 import { roundRobin } from "./tournament.js";
 import {
   DEFAULT_TEAM_A,
@@ -225,6 +226,10 @@ export interface BuildTeamTournamentMatchesRequest {
   title: string;
   now: string;
   makeId: (index: number) => MatchId;
+  /** The torneo every created game is tagged with. See `lib/liga.ts`. */
+  tournamentId: string;
+  /** Turns already on the board, for a second vuelta added to an existing one. */
+  turnOffset?: number;
 }
 
 /** Turn a checked fixture into ordinary matches that already have both sides. */
@@ -240,6 +245,7 @@ export function buildTeamTournamentMatches(
   const teamsById = new Map(request.teams.map((team) => [team.id, team]));
   const playersById = new Map(request.players.map((player) => [player.id, player]));
   const title = request.title.trim() || "Torneito";
+  const turnOffset = request.turnOffset ?? 0;
   let matchIndex = 0;
   const matches: Match[] = [];
 
@@ -271,17 +277,19 @@ export function buildTeamTournamentMatches(
       matches.push({
         id: request.makeId(matchIndex),
         ratingScale: RATING_SCALE,
-        name: `${title} · Turno ${turnIndex + 1} · Cancha ${fieldIndex + 1}`,
+        name: tournamentMatchName(teamDisplayName(teamA), teamDisplayName(teamB)),
         date: request.date,
         teamA: {
           ...DEFAULT_TEAM_A,
           name: teamDisplayName(teamA),
           formationId: plan.formationIdA,
+          teamId: teamA.id,
         },
         teamB: {
           ...DEFAULT_TEAM_B,
           name: teamDisplayName(teamB),
           formationId: plan.formationIdB,
+          teamId: teamB.id,
         },
         squad: plan.squad,
         pins: plan.pins,
@@ -300,6 +308,12 @@ export function buildTeamTournamentMatches(
         reviews: {},
         forecastNotes: "",
         videos: [],
+        tournament: {
+          id: request.tournamentId,
+          name: title,
+          turn: turnOffset + turnIndex + 1,
+          field: fieldIndex + 1,
+        },
         updatedAt: request.now,
       });
       matchIndex += 1;

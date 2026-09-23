@@ -13,6 +13,7 @@ import {
 } from "./types.js";
 import {
   removeMatch,
+  removeMatches,
   removePlayer,
   removeTeam,
   upsertMatch,
@@ -252,5 +253,92 @@ describe("removeTeam", () => {
     const next = removeTeam(data, "t1" as TeamId, NOW);
     assert.equal(next.matches.length, 1);
     assert.deepEqual(next.matches[0].squad, ["a", "b"]);
+  });
+});
+
+describe("upsertTeam, with matches linked to it", () => {
+  const pibes: Team = {
+    id: "pibes" as TeamId,
+    name: "Los Pibes",
+    players: ["a" as PlayerId],
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const rivals: Team = {
+    id: "rivals" as TeamId,
+    name: "Rivales",
+    players: ["b" as PlayerId],
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const linked = (id: string, overrides: Partial<Match> = {}) =>
+    match(id, {
+      name: "Los Pibes vs Rivales",
+      teamA: { ...DEFAULT_TEAM_A, name: "Los Pibes", teamId: pibes.id },
+      teamB: { ...DEFAULT_TEAM_B, name: "Rivales", teamId: rivals.id },
+      squad: ["a" as PlayerId, "b" as PlayerId],
+      pins: { ["a" as PlayerId]: "A", ["b" as PlayerId]: "B" },
+      sizeA: 1,
+      sizeB: 1,
+      lineupA: ["a" as PlayerId],
+      lineupB: ["b" as PlayerId],
+      tournament: { id: "t", name: "Liga", turn: 1, field: 1 },
+      ...overrides,
+    });
+  const base: AppData = {
+    ...EMPTY,
+    players: [player("a"), player("b"), player("c")],
+    teams: [pibes, rivals],
+    matches: [linked("m1"), linked("m2", { result: { goalsA: 2, goalsB: 1 } }), match("loose")],
+  };
+
+  it("renames the side, and the torneo game's own name, in the same write", () => {
+    const next = upsertTeam(base, { ...pibes, name: "La Scaloneta" }, NOW);
+    const m1 = next.matches.find((entry) => entry.id === "m1");
+    const m2 = next.matches.find((entry) => entry.id === "m2");
+    assert.equal(m1?.teamA.name, "La Scaloneta");
+    assert.equal(m1?.name, "La Scaloneta vs Rivales");
+    // A played game gets the new name too: it is the same team.
+    assert.equal(m2?.teamA.name, "La Scaloneta");
+    assert.notEqual(m1?.updatedAt, base.matches[0].updatedAt);
+    // Untouched matches are the very same objects.
+    assert.equal(
+      next.matches.find((entry) => entry.id === "loose"),
+      base.matches.find((entry) => entry.id === "loose"),
+    );
+  });
+
+  it("moves a new player into an unplayed game, and leaves a played one alone", () => {
+    const next = upsertTeam(base, { ...pibes, players: ["a" as PlayerId, "c" as PlayerId] }, NOW);
+    const m1 = next.matches.find((entry) => entry.id === "m1");
+    const m2 = next.matches.find((entry) => entry.id === "m2");
+    assert.deepEqual(new Set(m1?.squad), new Set(["a", "b", "c"]));
+    assert.equal(m1?.sizeA, 2);
+    assert.equal(m1?.pins["c" as PlayerId], "A");
+    assert.deepEqual(m2?.squad, ["a", "b"]);
+  });
+
+  it("keeps a hand-picked match name", () => {
+    const custom = { ...base, matches: [linked("m1", { name: "La final" })] };
+    const next = upsertTeam(custom, { ...pibes, name: "La Scaloneta" }, NOW);
+    assert.equal(next.matches[0].name, "La final");
+    assert.equal(next.matches[0].teamA.name, "La Scaloneta");
+  });
+
+  it("writes no match when the save changed nothing they show", () => {
+    const next = upsertTeam(base, { ...pibes }, NOW);
+    assert.equal(next.matches, base.matches);
+  });
+
+  it("does not empty a side while a team is being rebuilt", () => {
+    const next = upsertTeam(base, { ...pibes, players: [] }, NOW);
+    assert.deepEqual(next.matches.find((entry) => entry.id === "m1")?.squad, ["a", "b"]);
+  });
+});
+
+describe("removeMatches", () => {
+  it("deletes a whole torneo and leaves a tombstone for each game", () => {
+    const before = upsertMatches(EMPTY, [match("x"), match("y"), match("z")], NOW);
+    const next = removeMatches(before, ["x" as MatchId, "y" as MatchId], NOW);
+    assert.deepEqual(next.matches.map((entry) => entry.id), ["z"]);
+    assert.deepEqual(next.deletedMatches.map((entry) => entry.id).sort(), ["x", "y"]);
   });
 });

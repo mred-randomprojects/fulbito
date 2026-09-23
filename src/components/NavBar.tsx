@@ -1,10 +1,11 @@
 import { ScorePrivacyStatus } from "./ScorePrivacy";
 import { Link, NavLink } from "react-router-dom";
-import { ClipboardList, Database, Shield, Shuffle, Trophy, Users } from "lucide-react";
+import { ClipboardList, Database, Medal, Shield, Shuffle, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { to: "/matches", label: "Partidos", icon: Trophy },
+  { to: "/torneos", label: "Torneos", icon: Medal },
   { to: "/split", label: "Repartir", icon: Shuffle },
   { to: "/teams", label: "Equipos", icon: Shield },
   { to: "/players", label: "Jugadores", icon: Users },

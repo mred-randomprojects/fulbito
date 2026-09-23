@@ -16,6 +16,7 @@ import { createSaveNotifier, type SaveStatus } from "./lib/saveStatus";
 import { sameVersions } from "./lib/syncPlan";
 import {
   removeMatch,
+  removeMatches,
   removePlayer,
   removeTeam,
   upsertMatch,
@@ -56,6 +57,7 @@ export interface AppDataApi {
   saveMatch: (match: Match) => void;
   saveMatches: (matches: readonly Match[]) => void;
   deleteMatch: (id: MatchId) => void;
+  deleteMatches: (ids: readonly MatchId[]) => void;
   saveTeam: (team: Team) => void;
   deleteTeam: (id: TeamId) => void;
   getPlayer: (id: PlayerId) => Player | undefined;
@@ -206,6 +208,11 @@ export function useAppData(): AppDataApi {
     [persist],
   );
 
+  const deleteMatches = useCallback(
+    (ids: readonly MatchId[]) => persist((current) => removeMatches(current, ids, now())),
+    [persist],
+  );
+
   const saveTeam = useCallback(
     (team: Team) => persist((current) => upsertTeam(current, team, now())),
     [persist],
@@ -303,6 +310,7 @@ export function useAppData(): AppDataApi {
     saveMatch,
     saveMatches,
     deleteMatch,
+    deleteMatches,
     saveTeam,
     deleteTeam,
     getPlayer,

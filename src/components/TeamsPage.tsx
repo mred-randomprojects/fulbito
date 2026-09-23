@@ -1,11 +1,11 @@
 import { ScoresVisible } from "./ScorePrivacy";
 import { useCallback, useMemo, useState } from "react";
-import { Plus, Shield, Trash2, Users } from "lucide-react";
+import { ChevronRight, Medal, Plus, Shield, Trash2, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { PlayerForm } from "./PlayerForm";
-import { TeamTournamentBuilder } from "./TeamTournamentBuilder";
 import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { useLongPress } from "@/useLongPress";
 import { SquadPicker } from "./SquadPicker";
@@ -37,7 +37,6 @@ interface Props {
   onDelete: (id: TeamId) => void;
   onSavePlayer: (player: Player) => void;
   onDeletePlayer: (id: PlayerId) => void;
-  onCreateMatches: (matches: Match[], fields: number, teams: number) => void;
 }
 
 /**
@@ -61,7 +60,6 @@ export function TeamsPage({
   onDelete,
   onSavePlayer,
   onDeletePlayer,
-  onCreateMatches,
 }: Props) {
   const [openId, setOpenId] = useState<TeamId | null>(null);
   /**
@@ -184,11 +182,23 @@ export function TeamsPage({
         </Button>
       </header>
 
-      <TeamTournamentBuilder
-        teams={teams}
-        players={players}
-        onCreateMatches={onCreateMatches}
-      />
+      {teams.length >= 2 && (
+        <Link
+          to="/torneos"
+          className="mb-5 flex items-center gap-3 rounded-2xl border border-amber-400/25 bg-card p-4 transition-colors hover:border-amber-300/50 hover:bg-amber-300/[0.04]"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-300/10 text-amber-300">
+            <Medal className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Armar un torneo con estos equipos</span>
+            <span className="block text-xs leading-relaxed text-muted-foreground">
+              Todos contra todos, con tabla y goles en vivo. Un toque y arranca.
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Link>
+      )}
 
       {teams.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-card/40 p-6">

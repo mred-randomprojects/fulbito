@@ -462,3 +462,30 @@ describe("the 1–10 to 0–100 migration", () => {
     assert.equal(normalizeAppData({ matches: [once] }).matches[0].handicap, 15);
   });
 });
+
+describe("torneo links on a stored match", () => {
+  const raw = {
+    id: "m",
+    teamA: { name: "Los Pibes", kit: "red", formationId: "", teamId: "pibes" },
+    teamB: { name: "Otros", kit: "dark", formationId: "" },
+    tournament: { id: "t", name: "Liga", turn: 2, field: 1 },
+  };
+
+  it("keeps the saved team and the torneo, and adds neither where absent", () => {
+    const [match] = normalizeAppData({ matches: [raw] }).matches;
+    assert.equal(match.teamA.teamId, "pibes");
+    assert.equal("teamId" in match.teamB, false);
+    assert.deepEqual(match.tournament, { id: "t", name: "Liga", turn: 2, field: 1 });
+    const [plain] = normalizeAppData({ matches: [{ id: "p" }] }).matches;
+    assert.equal("tournament" in plain, false);
+  });
+
+  it("drops a torneo tag with no id, and repairs a nonsense turn", () => {
+    const [noId] = normalizeAppData({ matches: [{ ...raw, tournament: { name: "x" } }] }).matches;
+    assert.equal(noId.tournament, undefined);
+    const [bad] = normalizeAppData({
+      matches: [{ ...raw, tournament: { id: "t", turn: -3, field: "dos" } }],
+    }).matches;
+    assert.deepEqual(bad.tournament, { id: "t", name: "Torneo", turn: 1, field: 1 });
+  });
+});
