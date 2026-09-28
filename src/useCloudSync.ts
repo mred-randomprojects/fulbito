@@ -10,6 +10,7 @@ import { maySync } from "./lib/syncConsent";
 import { useCloudAuth } from "./cloud/auth";
 import { ALLOWED_EMAILS, loadCloud, type CloudSdk } from "./cloud/firebase";
 import { applyPlan, subscribeCloud, type CloudView } from "./cloud/firestore";
+import { writeProfile } from "./cloud/accounts";
 
 /**
  * Keeping two devices holding the same roster.
@@ -84,6 +85,8 @@ export function useCloudSync(app: AppDataApi): CloudState {
   const timer = useRef<number | null>(null);
   const uidRef = useRef<string | null>(uid);
   uidRef.current = uid;
+  const userRef = useRef(user);
+  userRef.current = user;
 
   /** A push is in the air. Two at once would race to report the outcome. */
   const writing = useRef(false);
@@ -215,6 +218,16 @@ export function useCloudSync(app: AppDataApi): CloudState {
       .then(async (cloud) => {
         if (!live) return;
         sdk.current = cloud;
+        // Who this account is, for the owner's "Ver como" directory. Once per
+        // connection, best effort: a refusal (rules not yet republished) is
+        // nobody's problem but the directory's, and must not look like sync
+        // failing.
+        const me = userRef.current;
+        if (me !== null && me.email !== null) {
+          writeProfile(cloud.db, uid, { email: me.email, name: me.name }).catch(
+            (error: unknown) => console.warn("[cloud] profile not written:", error),
+          );
+        }
         const stop = await subscribeCloud(
           cloud.db,
           uid,

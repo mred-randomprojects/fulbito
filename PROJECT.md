@@ -336,6 +336,9 @@ New rating displays must use the gate, including tooltips and charts.
 | `lib/pollHistory.ts` | Every encuesta ever sent, stacked and read from one player's side |
 | `lib/voteSwarm.ts` | Where each dot lands when a pile of votes is drawn as a little mountain |
 | `lib/superAdmin.ts` | The two addresses that may see who voted, and that the switch alone is not a permission |
+| `lib/owner.ts` | The one address that owns the site, whose app is on screen under "Ver como", and the directory of accounts to pick from |
+| `cloud/accounts.ts` | Each account's profile at `users/{uid}`, and the owner's one query for every account there is |
+| `viewAs.tsx`, `useViewAsData.ts` | Whose app is on screen; somebody else's data held in memory, live, and never written anywhere |
 | `lib/syncPlan.ts` | What the cloud is missing, and whether a snapshot changed anything |
 | `lib/cloudStatus.ts` | What the app is allowed to claim about the cloud, and what the pill says |
 | `lib/allowlist.ts` | Who may sync — and that an empty list means everybody |
@@ -380,7 +383,9 @@ dialog, `InstallPanel` is the offer to install and renders nothing at all when
 there is nothing to offer, `UsagePanel` is the analytics switch and what it
 means, and renders nothing in a build with no key, `AdminPanel` is the super
 admin switch and renders for exactly the Google accounts in
-`lib/superAdmin.ts`). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
+`lib/superAdmin.ts`, `ViewAsPanel` is "Ver como" and renders for the owner
+alone — see "Ver como" below; `ViewAsBanner` sits under the NavBar on every
+screen while it is on). `PollsPage` (Encuestas) is the owner's side: pick who goes on the list, send
 the link, read the medians back and adopt them a tap at a time — with, for the
 super admins and only when the switch is on, two ways to see who is behind the
 numbers: "Quién lo votó" under each player, and a panel at the foot of the page
@@ -771,6 +776,54 @@ listeners ask for `includeMetadataChanges` precisely so that the moment of
 server acknowledgement arrives as an event. Everything short of that is
 `pending`, which the pill renders as "Guardado acá".
 
+### Ver como, and the one reader over the wall
+
+The owner of the site — `OWNER_EMAIL` in `lib/owner.ts`, and the same address
+in `isSiteOwner()` in `firestore.rules` — can open the app *as* anybody who
+syncs: their roster, partidos, equipos, torneos and encuestas, on the same
+screens, to see what they see when they say "no me anda". Tus datos → Ver
+como lists the accounts; a tap opens one; the banner under the NavBar says
+whose app it is and is the way back.
+
+- **It is one address, and not the super admins.** Hard-coded in both halves,
+  like `lib/superAdmin.ts`, and a separate list on purpose: auditing an
+  encuesta you were sent and reading every roster in the project are
+  different powers. The rules also want the address *verified*.
+- **The rules let it read and never write.** Everything under
+  `users/{uid}/…`, the `users/{uid}` profile, every `meta` in one
+  collection-group query, anybody's polls by `ownerUid` and their ballots —
+  all `allow read`. No write rule mentions it, and `rules.test.ts` pins
+  that it cannot write a record, a meta document or a profile.
+- **On screen it is a copy in memory.** `App` keeps the owner's own
+  `useAppData` and `useCloudSync` mounted and hands the routes a second
+  `AppDataApi` from `useViewAsData`: live off the target's collections
+  through the same `subscribeCloud`, edits applied to the copy and dying
+  with it, never `localStorage`, never the avatar store, never Firestore.
+  The pill is told the cloud is off and the copy's `saveStatus` is always
+  idle, so nothing claims a save that went nowhere.
+- **The screens that talk to Firestore themselves ask whose app it is.**
+  Encuestas and the ficha's swarm (`usePollHistory`) list the *target's*
+  polls; creating, deleting and setting a ballot aside are refused. La
+  lista is watched and never written — a list made from there would sit at
+  the target's match id under the owner's uid, and the rules would refuse
+  the target their own list for that partido forever. Repartir's draft goes
+  to a memory store instead of `fulbito-split-draft-v1`, which would
+  otherwise overwrite the owner's own.
+- **The pick lives in React state and nowhere else**, and `viewingAs`
+  re-checks it against the live session every render: a reload is always
+  the way back, and signing out takes the other person's data off screen.
+- **The directory has two sources.** `users/{uid}` is a profile — address
+  pinned to the token, name, `seenAt` — written by the account's own sync
+  engine once per connection, and deleted with the rest by "borrar la copia
+  de la nube". Every account with anything to look at also has a
+  `users/{uid}/meta/sync` or `meta/tombstones`, which a collection-group
+  query on `meta` finds, so somebody who has not opened the app since
+  profiles existed is still listed — as a uid. `accountDirectory` puts the
+  two together.
+- **The sync dialog says so.** It used to promise "nadie más que vos lo
+  puede leer"; it now says the owner can read it, and only read it. A promise
+  the code has quietly stopped keeping is worse than no promise.
+
 ### Encuestas, and the one thing outside the wall
 
 Everything above lives under `users/{uid}`, which is a wall. Asking other
@@ -1060,6 +1113,12 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   the vendor is downloaded at all. Mounting the hook in `main.tsx` "to catch
   everything" would put a recording on the voter's screen and break the
   promise printed above the sign-in button. See "Analytics".
+- **"Ver como" never writes.** Everything it shows is `useViewAsData`'s
+  in-memory copy or a Firestore read, and every screen that writes to
+  Firestore or to local storage on its own checks `useViewAs().target`
+  first. A new screen that does either has to as well — otherwise the
+  owner's tap lands in somebody else's cloud, or the target's data lands in
+  the owner's browser. See "Ver como".
 - **`firestore.rules` is tested, and a rules change comes with a test.**
   `src/cloud/rules.test.ts` is the only place a wrong edit is caught before
   it is live. A new collection or a loosened rule without a case there is a

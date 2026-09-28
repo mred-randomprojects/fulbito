@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCloudAuth } from "@/cloud/auth";
+import { VIEW_AS_READ_ONLY, useViewAs } from "@/viewAs";
 import { loadCloud } from "@/cloud/firebase";
 import {
   createList,
@@ -68,6 +69,10 @@ interface Props {
  */
 export function ListPanel({ match, players, onAnotar, onCreatePlayer }: Props) {
   const { available, user, loading, signIn } = useCloudAuth();
+  // Under "Ver como" the list is somebody else's: watched, never written. A
+  // list made from here would be the owner's, at their match's id, and the
+  // rules would then refuse them their own list for that partido forever.
+  const readOnly = useViewAs().target !== null;
   const [snapshot, setSnapshot] = useState<ListSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
   const [working, setWorking] = useState(false);
@@ -123,7 +128,7 @@ export function ListPanel({ match, players, onAnotar, onCreatePlayer }: Props) {
    * announcing last week's name.
    */
   useEffect(() => {
-    if (list === null) return;
+    if (list === null || readOnly) return;
     if (list.title === match.name && list.date === match.date) return;
     void (async () => {
       try {
@@ -133,7 +138,7 @@ export function ListPanel({ match, players, onAnotar, onCreatePlayer }: Props) {
         // The next render tries again; a stale title is not worth a message.
       }
     })();
-  }, [list, match.name, match.date]);
+  }, [list, match.name, match.date, readOnly]);
 
   const resolved = useMemo(() => resolveEntries(entries, players), [entries, players]);
   const toAnotar = useMemo(
@@ -147,6 +152,10 @@ export function ListPanel({ match, players, onAnotar, onCreatePlayer }: Props) {
   /* ---------------------------------------------------------------- */
 
   const run = async (job: () => Promise<void>, failure: string) => {
+    if (readOnly) {
+      setError(VIEW_AS_READ_ONLY);
+      return;
+    }
     setWorking(true);
     setError(null);
     try {

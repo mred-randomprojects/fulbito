@@ -13,6 +13,10 @@ import { TournamentPage, TournamentsPage } from "./components/TournamentsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { PollsPage } from "./components/PollsPage";
 import { SaveIndicator } from "./components/SaveIndicator";
+import { ViewAsBanner } from "./components/ViewAsBanner";
+import { ViewAsProvider, useViewAs } from "./viewAs";
+import { useViewAsData } from "./useViewAsData";
+import type { CloudState } from "./lib/cloudStatus";
 import {
   DEFAULT_TEAM_A,
   DEFAULT_TEAM_B,
@@ -27,10 +31,28 @@ import { findLiga } from "./lib/liga";
 import { interceptSave } from "cmd-s";
 
 export default function App() {
-  const app = useAppData();
-  const cloud = useCloudSync(app);
+  return (
+    <ViewAsProvider>
+      <AppBody />
+    </ViewAsProvider>
+  );
+}
+
+/** Never shown on the save pill while viewing as somebody: none of it is ours. */
+const CLOUD_OFF: CloudState = { kind: "off" };
+
+function AppBody() {
+  // Your own data and its sync stay mounted whoever is on screen: "Ver como"
+  // hands the routes a different object, it does not swap this one out, so
+  // nothing of somebody else's can reach your storage or your cloud copy.
+  const own = useAppData();
+  const ownCloud = useCloudSync(own);
   useTracking();
   const navigate = useNavigate();
+  const viewAs = useViewAs();
+  const other = useViewAsData(viewAs.target);
+  const app = other.kind === "ready" ? other.app : own;
+  const cloud = viewAs.target === null ? ownCloud : CLOUD_OFF;
 
   // ⌘S / Ctrl+S: keep the browser's "Save page" dialog away and answer with
   // the app's own receipt instead. `SaveIndicator` is that receipt, so no
@@ -88,13 +110,14 @@ export default function App() {
   return (
     <div className="min-h-dvh">
       <NavBar />
+      <ViewAsBanner data={other} />
 
       {/* The pill at the bottom says a save failed; this says what to do about
           it, and stays up for as long as it is true. */}
-      {app.saveStatus.kind === "error" && (
+      {own.saveStatus.kind === "error" && (
         <p className="mx-auto max-w-6xl px-4 pt-3">
           <span className="block rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-            {app.saveStatus.message}
+            {own.saveStatus.message}
           </span>
         </p>
       )}
@@ -103,15 +126,18 @@ export default function App() {
           is safe on this device either way — but it is the kind of thing you
           want to know about before you walk to the cancha expecting your phone
           to have tonight's teams on it. */}
-      {cloud.kind === "error" && (
+      {ownCloud.kind === "error" && (
         <p className="mx-auto max-w-6xl px-4 pt-3">
           <span className="block rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-            {cloud.message}
+            {ownCloud.message}
           </span>
         </p>
       )}
 
       <main>
+        {/* Somebody else's app, still on its way or refused: nothing of yours
+            is drawn under their name in the meantime. */}
+        {viewAs.target !== null && other.kind !== "ready" ? null : (
         <Routes>
           <Route path="/" element={<Navigate to="/matches" replace />} />
           <Route
@@ -194,13 +220,14 @@ export default function App() {
               <SettingsPage
                 data={app.data}
                 onImport={app.importData}
-                cloud={cloud}
+                cloud={ownCloud}
                 avatarStorage={app.avatarStorage}
               />
             }
           />
           <Route path="*" element={<Navigate to="/matches" replace />} />
         </Routes>
+        )}
       </main>
 
       <SaveIndicator status={app.saveStatus} cloud={cloud} />

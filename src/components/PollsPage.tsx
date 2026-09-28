@@ -29,6 +29,7 @@ import { PlayerForm } from "@/components/PlayerForm";
 import { useLongPress } from "@/useLongPress";
 import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { useCloudAuth } from "@/cloud/auth";
+import { VIEW_AS_READ_ONLY, useViewAs } from "@/viewAs";
 import { loadCloud } from "@/cloud/firebase";
 import {
   createPoll,
@@ -108,6 +109,11 @@ function linkFor(pollId: string): string {
 
 export function PollsPage({ players, matches, onSavePlayer }: Props) {
   const { available, user, loading, prepare, signIn } = useCloudAuth();
+  // Under "Ver como", the encuestas on screen are the target's: listed by
+  // their uid (the rules let the site owner), and never created, deleted or
+  // re-counted from here.
+  const viewAs = useViewAs().target;
+  const ownerUid = viewAs?.uid ?? user?.uid ?? null;
   const [view, setView] = useState<View>({ kind: "list" });
   const [polls, setPolls] = useState<PollSummary[] | null>(null);
   const [title, setTitle] = useState("");
@@ -142,14 +148,14 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
   );
 
   const refresh = useCallback(async () => {
-    if (user === null) return;
+    if (ownerUid === null) return;
     try {
       const { db } = await loadCloud();
-      setPolls(await listMyPolls(db, user.uid));
+      setPolls(await listMyPolls(db, ownerUid));
     } catch {
       setError("No se pudieron traer tus encuestas. Fijate la conexión.");
     }
-  }, [user]);
+  }, [ownerUid]);
 
   useEffect(() => {
     void refresh();
@@ -177,6 +183,10 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
 
   async function create() {
     if (user === null) return;
+    if (viewAs !== null) {
+      setError(VIEW_AS_READ_ONLY);
+      return;
+    }
     setError(null);
     setWorking(true);
     try {
@@ -204,6 +214,10 @@ export function PollsPage({ players, matches, onSavePlayer }: Props) {
   }
 
   async function remove(pollId: string) {
+    if (viewAs !== null) {
+      setError(VIEW_AS_READ_ONLY);
+      return;
+    }
     setError(null);
     setWorking(true);
     try {

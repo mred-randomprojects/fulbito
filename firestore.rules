@@ -7,7 +7,7 @@ rules_version = '2';
 // it decides whether the app offers to sync, and anybody can edit it out of
 // their own copy of the JavaScript. These rules cannot be edited by anybody.
 //
-// Three things are enforced here:
+// Four things are enforced here:
 //
 //   1. You can only ever touch documents under your own uid. That is what
 //      makes an open sign-up safe: every account is an island.
@@ -17,6 +17,8 @@ rules_version = '2';
 //      and keep it in step with the VITE_ALLOWED_EMAILS secret.
 //   3. Two addresses, and only those two, may read who sent which ballot. See
 //      `isSuperAdmin()` and the `identities` block near the bottom.
+//   4. One address — the owner of the site — may *read* under anybody's uid,
+//      for "ver como". Never write. See `isSiteOwner()`.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -46,7 +48,8 @@ service cloud.firestore {
     // It buys exactly one thing — `polls/{id}/identities` — plus the ability
     // to read the ballots of a poll whose link it holds. It is NOT added to
     // `allow list` on /polls: being able to audit an encuesta you were sent is
-    // a different power from being able to enumerate everybody's.
+    // a different power from being able to enumerate everybody's. (The site
+    // owner, below, does get that one — it is the power "Ver como" is.)
     function isSuperAdmin() {
       return request.auth != null
         && 'email' in request.auth.token
@@ -55,6 +58,27 @@ service cloud.firestore {
           'maxiredigonda@gmail.com',
           'bruno.david9914@gmail.com'
         ];
+    }
+
+    // The owner of the site: the one account that may read every island, so
+    // the app can be opened *as* somebody else when they say it broke. Keep
+    // in step with `OWNER_EMAIL` in `src/lib/owner.ts` — that half only
+    // decides whether the app offers "Ver como"; this one decides what comes
+    // back.
+    //
+    // A separate list from `isSuperAdmin()` on purpose. Auditing an encuesta
+    // somebody sent you and reading every roster in the project are two
+    // different powers, and holding one should not quietly grant the other.
+    //
+    // Read, never write: every rule below that mentions it is an `allow read`
+    // or an `allow list`/`get`. A verified address, because an unverified one
+    // is a claim anybody can type into a sign-up form.
+    function isSiteOwner() {
+      return request.auth != null
+        && 'email' in request.auth.token
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() == 'maxiredigonda@gmail.com';
     }
 
     // Somebody who signed in as themselves, as against a device that was
@@ -67,13 +91,37 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    // The account itself: who it says it is, so the owner's "Ver como" has a
+    // name to put on a uid. Written by the account's own syncing session and
+    // nobody else's, and the address is pinned to the token — a profile
+    // cannot claim to be somebody it is not.
+    match /users/{userId} {
+      allow read: if (isAllowedUser() && request.auth.uid == userId) || isSiteOwner();
+      allow create, update: if isAllowedUser()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['email', 'name', 'seenAt'])
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.seenAt is string;
+      allow delete: if isAllowedUser() && request.auth.uid == userId;
+    }
+
     // One document per record, under the owner's uid:
     //   users/{uid}/players/{playerId}
     //   users/{uid}/matches/{matchId}
     //   users/{uid}/teams/{teamId}
     //   users/{uid}/meta/tombstones
-    match /users/{userId}/{document=**} {
+    //   users/{uid}/meta/sync
+    match /users/{userId}/{sub}/{document=**} {
       allow read, write: if isAllowedUser() && request.auth.uid == userId;
+      allow read: if isSiteOwner();
+    }
+
+    // Every account's `meta`, in one query: the owner's directory of who
+    // there is to look at. `meta/sync` exists for everybody who ever answered
+    // the sync dialog, so this finds accounts that predate their profile.
+    match /{path=**}/meta/{docId} {
+      allow read: if isSiteOwner();
     }
 
     // ------------------------------------------------------------------
@@ -142,7 +190,10 @@ service cloud.firestore {
       // faces, so it is not readable by an unauthenticated crawler that
       // guessed an id, and it is never enumerable by anybody but its owner.
       allow get: if isPerson();
-      allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      // The site owner too, for "Ver como": somebody's Encuestas screen is a
+      // query for their polls. Not the super admins — see `isSuperAdmin()`.
+      allow list: if (request.auth != null && resource.data.ownerUid == request.auth.uid)
+        || isSiteOwner();
       allow create: if request.auth != null
         && request.resource.data.ownerUid == request.auth.uid;
       allow update: if request.auth != null
@@ -161,8 +212,8 @@ service cloud.firestore {
         // The owner reads the pile to work out the medians. A voter reads
         // exactly the one their marker names, which is how they come back to
         // a ballot they half filled in.
-        allow list: if isOwner() || isSuperAdmin();
-        allow get: if isOwner() || isSuperAdmin() || claims(ballotId);
+        allow list: if isOwner() || isSuperAdmin() || isSiteOwner();
+        allow get: if isOwner() || isSuperAdmin() || isSiteOwner() || claims(ballotId);
         allow create, update: if claims(ballotId)
           && request.resource.data.keys().hasOnly(['votes']);
         allow delete: if isOwner();

@@ -1,4 +1,6 @@
 import type { Firestore } from "firebase/firestore";
+import { deleteProfile } from "./accounts";
+import { errorCode } from "@/lib/authErrors";
 
 /**
  * The account's own answer about sync, and the way to take back what it kept.
@@ -78,5 +80,12 @@ export async function deleteCloudCopy(db: Firestore, uid: string): Promise<void>
       await batch.commit();
     }
   }
+  // Who the account said it was goes too: with nothing left to look at,
+  // there is no reason for the owner's directory to keep a name on it. A
+  // refusal means rules from before profiles existed — rules under which
+  // one could never have been written — so it is not a reason to fail.
+  await deleteProfile(db, uid).catch((error: unknown) => {
+    if (errorCode(error) !== "permission-denied") throw error;
+  });
   await deleteDoc(doc(db, "users", uid, META, "tombstones"));
 }

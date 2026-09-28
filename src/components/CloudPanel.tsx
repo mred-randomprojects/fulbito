@@ -187,8 +187,8 @@ export function CloudPanel({ state }: { state: CloudState }) {
           </div>
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             Si alguna vez sincronizaste, la copia de allá arriba sigue estando.
-            No molesta a nadie y nadie más que vos la puede leer, pero si querés
-            que no quede nada,{" "}
+            No molesta a nadie y fuera de vos solo la puede leer el dueño de la
+            app, pero si querés que no quede nada,{" "}
             <button
               type="button"
               className="text-destructive underline underline-offset-2"
@@ -252,10 +252,11 @@ export function CloudPanel({ state }: { state: CloudState }) {
               amigos los cargaste vos, y ellos no eligieron nada de esto.
             </li>
             <li>
-              Queda en un Firebase mío, atado a tu cuenta de Google. Nadie más
-              que vos lo puede leer, pero es un proyecto personal, no una
-              empresa con abogados: si te parece mucho, quedate con el archivo
-              de backup y listo.
+              Queda en un Firebase mío, atado a tu cuenta de Google. Fuera de
+              vos, lo puedo ver yo, el dueño de la app — solo leerlo, para
+              entender qué te pasa cuando algo no anda — y nadie más. Es un
+              proyecto personal, no una empresa con abogados: si te parece
+              mucho, quedate con el archivo de backup y listo.
             </li>
             <li>
               Lo de este navegador no se va a ningún lado. La nube es una

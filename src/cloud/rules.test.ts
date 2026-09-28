@@ -32,9 +32,11 @@ import {
   fetchBallotEntries,
   fetchIdentities,
   fetchPoll,
+  listMyPolls,
   setIgnoredBallots,
   submitBallot,
 } from "./polls";
+import { listAccounts, writeProfile } from "./accounts";
 
 /**
  * `firestore.rules`, run against the emulator with the app's own cloud
@@ -55,7 +57,7 @@ const PROJECT = "demo-fulbito";
 const [HOST, PORT] = (process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8080").split(":");
 
 /** Somebody, as the emulator will see them. `null` is a visitor with no session. */
-type Who = { uid: string; email?: string; anonymous?: boolean } | null;
+type Who = { uid: string; email?: string; anonymous?: boolean; unverified?: boolean } | null;
 
 const apps: FirebaseApp[] = [];
 
@@ -73,7 +75,9 @@ function as(who: Who): Firestore {
           mockUserToken: {
             sub: who.uid,
             user_id: who.uid,
-            ...(who.email === undefined ? {} : { email: who.email, email_verified: true }),
+            ...(who.email === undefined
+              ? {}
+              : { email: who.email, email_verified: who.unverified !== true }),
             firebase: { sign_in_provider: who.anonymous === true ? "anonymous" : "google.com" },
           },
         },
@@ -137,6 +141,10 @@ const DEVICE_B: Who = { uid: "anon-b", anonymous: true };
 const STRANGER: Who = { uid: "stranger", email: "stranger@example.com" };
 /** In `isSuperAdmin()`, verbatim. The test would go red if that list changed. */
 const ADMIN: Who = { uid: "admin-1", email: "maxiredigonda@gmail.com" };
+/** The same address is `isSiteOwner()` too; named apart for what each test is about. */
+const SITE_OWNER: Who = ADMIN;
+/** A super admin who is not the site owner: audits encuestas, reads no rosters. */
+const OTHER_ADMIN: Who = { uid: "admin-2", email: "bruno.david9914@gmail.com" };
 
 before(async () => {
   await wipe();
@@ -167,6 +175,102 @@ describe("users/{uid}", () => {
     await denied(getDoc(doc(as(STRANGER), "users", "owner-1", "players", "p1")));
     await denied(getDoc(doc(as(null), "users", "owner-1", "players", "p1")));
     await denied(setDoc(doc(as(STRANGER), "users", "owner-1", "players", "p2"), {}));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* the site owner: "Ver como" reads every island and writes none       */
+/* ------------------------------------------------------------------ */
+
+describe("the site owner", () => {
+  beforeEach(async () => {
+    const db = as(OWNER);
+    await setDoc(doc(db, "users", "owner-1", "players", "p1"), { firstName: "Maxi" });
+    await setDoc(doc(db, "users", "owner-1", "meta", "sync"), { enabled: true });
+    await writeProfile(db, "owner-1", { email: "owner@example.com", name: "Owner" });
+  });
+
+  it("reads under somebody else's uid", async () => {
+    const back = await getDoc(doc(as(SITE_OWNER), "users", "owner-1", "players", "p1"));
+    assert.equal(back.data()?.firstName, "Maxi");
+    const all = await getDocs(collection(as(SITE_OWNER), "users", "owner-1", "players"));
+    assert.equal(all.size, 1);
+  });
+
+  it("writes nothing there: not a record, not the meta, not the profile", async () => {
+    const db = as(SITE_OWNER);
+    await denied(setDoc(doc(db, "users", "owner-1", "players", "p1"), { firstName: "X" }));
+    await denied(setDoc(doc(db, "users", "owner-1", "meta", "sync"), { enabled: false }));
+    await denied(setDoc(doc(db, "users", "owner-1"), { email: "maxiredigonda@gmail.com", name: "", seenAt: "" }));
+  });
+
+  it("finds every account, with a name where there is one", async () => {
+    // An account from before profiles: meta, and nothing else.
+    await setDoc(doc(as(STRANGER), "users", "stranger", "meta", "tombstones"), {});
+    const { metas, profiles } = await listAccounts(as(SITE_OWNER));
+    assert.deepEqual(
+      metas.map((m) => [m.uid, m.id, m.enabled]).sort(),
+      [
+        ["owner-1", "sync", true],
+        ["stranger", "tombstones", undefined],
+      ],
+    );
+    assert.deepEqual(
+      profiles.map((p) => [p.uid, p.email, p.name]),
+      [["owner-1", "owner@example.com", "Owner"]],
+    );
+  });
+
+  it("is the only one who can: not a stranger, not the other super admin", async () => {
+    await denied(listAccounts(as(STRANGER)));
+    await denied(listAccounts(as(OTHER_ADMIN)));
+    await denied(getDoc(doc(as(OTHER_ADMIN), "users", "owner-1", "players", "p1")));
+    await denied(getDoc(doc(as(STRANGER), "users", "owner-1")));
+  });
+
+  it("needs a verified address, not just the right one typed in", async () => {
+    const unverified: Who = { uid: "fake", email: "maxiredigonda@gmail.com", unverified: true };
+    await denied(getDoc(doc(as(unverified), "users", "owner-1", "players", "p1")));
+    await denied(listAccounts(as(unverified)));
+  });
+
+  it("sees somebody's encuestas, the pile included, and still not the names", async () => {
+    const pollId = await createPoll(as(OWNER), "owner-1", {
+      title: "Ranking",
+      players: [{ id: "p1" as PlayerId, name: "Maxi", avatar: "" }],
+    });
+    const polls = await listMyPolls(as(SITE_OWNER), "owner-1");
+    assert.deepEqual(
+      polls.map((p) => p.id),
+      [pollId],
+    );
+    assert.deepEqual(await fetchBallotEntries(as(SITE_OWNER), pollId), []);
+    await denied(listMyPolls(as(OTHER_ADMIN), "owner-1"));
+    await denied(listMyPolls(as(STRANGER), "owner-1"));
+    // Reading is not running it: the owner of the site is not the owner of the poll.
+    await denied(setIgnoredBallots(as(SITE_OWNER), pollId, ["x"]));
+  });
+});
+
+describe("users/{uid} itself: the profile", () => {
+  it("is written by its own account, with its own token's address", async () => {
+    const db = as(OWNER);
+    await writeProfile(db, "owner-1", { email: "owner@example.com", name: "Owner" });
+    const back = await getDoc(doc(db, "users", "owner-1"));
+    assert.equal(back.data()?.email, "owner@example.com");
+  });
+
+  it("cannot claim somebody else's address, carry anything else, or be written by another", async () => {
+    await denied(writeProfile(as(OWNER), "owner-1", { email: "maxiredigonda@gmail.com", name: "" }));
+    await denied(
+      setDoc(doc(as(OWNER), "users", "owner-1"), {
+        email: "owner@example.com",
+        name: "",
+        seenAt: "",
+        admin: true,
+      }),
+    );
+    await denied(writeProfile(as(STRANGER), "owner-1", { email: "stranger@example.com", name: "" }));
   });
 });
 

@@ -225,3 +225,20 @@ the rules' list with an address nobody owns.
 Everything it buys is `polls/{id}/identities` plus the ballots of a poll whose
 link it already holds. It is not on `allow list` for `/polls`: auditing an
 encuesta you were sent is a different power from enumerating everybody's.
+
+## 11. Who owns the site ("Ver como")
+
+One Google address may read every account's data, to open the app as
+somebody else from Tus datos → Ver como. Two places again, and they must
+agree:
+
+1. `isSiteOwner()` in [`firestore.rules`](./firestore.rules) → Publish. This
+   is what lets the reads through; it grants no write anywhere.
+2. `OWNER_EMAIL` in [`src/lib/owner.ts`](./src/lib/owner.ts) → re-run the
+   deploy. This only decides whether the app shows "Ver como".
+
+It is a different list from the super admins in step 10 on purpose. Until
+the rules are republished, Ver como says Firebase will not let it list the
+accounts, and nothing else changes. Accounts only get a name in the list
+once they open the app with sync on under the new rules (that is when
+`users/{uid}` is written); until then they are listed by uid.

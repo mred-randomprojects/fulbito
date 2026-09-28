@@ -84,6 +84,7 @@ import { cn } from "@/lib/utils";
 import { track } from "@/lib/track";
 import { COPY_REFUSED, downloadBlob } from "@/share";
 import { useCopy } from "@/useCopy";
+import { useViewAs } from "@/viewAs";
 
 interface Props {
   players: Player[];
@@ -97,6 +98,16 @@ interface Props {
 }
 
 const splitDraftStore = createSplitDraftStore(() => window.localStorage);
+
+/**
+ * Somebody else's reparto, under "Ver como": kept for the tab like any
+ * draft, and never on disk, where it would overwrite the owner's own.
+ */
+const viewAsDraftMemory = new Map<string, string>();
+const viewAsDraftStore = createSplitDraftStore(() => ({
+  getItem: (key) => viewAsDraftMemory.get(key) ?? null,
+  setItem: (key, value) => void viewAsDraftMemory.set(key, value),
+}));
 
 /**
  * Repartir: one squad, several teams.
@@ -122,8 +133,9 @@ export function SplitPage({
   onDeletePlayer,
   onSaveTeam,
 }: Props) {
+  const draftStore = useViewAs().target === null ? splitDraftStore : viewAsDraftStore;
   const [initial] = useState(() => {
-    const draft = splitDraftStore.load(
+    const draft = draftStore.load(
       players.map((player) => player.id),
       lastNightsSquad(players, matches),
     );
@@ -200,7 +212,7 @@ export function SplitPage({
    * repartition, rename, option change or hand swap has landed.
    */
   useEffect(() => {
-    splitDraftStore.save({
+    draftStore.save({
       version: SPLIT_DRAFT_VERSION,
       squad: setup.squad,
       teams: setup.teams,
@@ -220,6 +232,7 @@ export function SplitPage({
       handMade: [...handMade].sort((a, b) => a - b),
     });
   }, [
+    draftStore,
     setup,
     pins,
     basis,

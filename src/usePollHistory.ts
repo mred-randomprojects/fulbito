@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCloudAuth } from "@/cloud/auth";
+import { useViewAs } from "@/viewAs";
 import { loadCloud } from "@/cloud/firebase";
 import {
   fetchBallotEntries,
@@ -111,7 +112,10 @@ function archive(uid: string): Promise<PollRecord[]> {
 export function usePollHistory(playerId: PlayerId | undefined): PollHistoryView {
   const { available, user } = useCloudAuth();
   const admin = useSuperAdmin();
-  const uid = user?.uid ?? null;
+  // Under "Ver como", the archive is the target's encuestas, not the owner's.
+  // The memo is keyed by this uid, so switching back fetches your own again.
+  const viewAs = useViewAs().target;
+  const uid = user === null ? null : (viewAs?.uid ?? user.uid);
   /** Recomputed every render against the live session, like `superAdminSees`. */
   const allowed = available && uid !== null && admin.on;
 

@@ -7,6 +7,7 @@ import { normalizeAppData, type AppData } from "@/types";
 import { allRubrics } from "@/lib/scales";
 import { todayIso } from "@/lib/dates";
 import { AdminPanel } from "./AdminPanel";
+import { ViewAsPanel } from "./ViewAsPanel";
 import { CloudPanel } from "./CloudPanel";
 import { InstallPanel } from "./InstallPanel";
 import { UsagePanel } from "./UsagePanel";
@@ -71,6 +72,8 @@ export function SettingsPage({ data, onImport, cloud, avatarStorage }: Props) {
       <CloudPanel state={cloud} />
 
       <AdminPanel />
+
+      <ViewAsPanel />
 
       <InstallPanel />
 
