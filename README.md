@@ -204,6 +204,11 @@ any other app, full screen and with no signal needed.
   were in the middle of arranging. The tap still does what it always did:
   open their card on the cancha, anotarlos, take them off. On a laptop it is
   the right-click.
+- **Typing the squad in.** In the list of who plays, type part of a name and
+  hit Enter: the top match is anotado and the box empties for the next one —
+  "juan ↵ gordo ↵ tincho ↵", without touching the mouse. Accents do not
+  matter, the start of a name beats the middle of one, and Enter never takes
+  anybody out.
 - **Groups, for a plantel bigger than one game.** Tag a player with the crews
   they belong to — the laburo, the barrio, the ones who only turn up in
   summer — and the chips above the roster and above the squad list narrow it to

@@ -62,6 +62,7 @@ import { formatMatchDate } from "@/lib/dates";
 import { openDatePicker } from "@/lib/datePicker";
 import { track } from "@/lib/track";
 import { useTagFilter } from "@/useTagFilter";
+import { useSquadSearch } from "@/useSquadSearch";
 import {
   KITS,
   ROLE_LABELS,
@@ -219,6 +220,7 @@ export function MatchBuilder({
   );
 
   const tagFilter = useTagFilter(players);
+  const squadSearch = useSquadSearch();
 
   /**
    * Anota, or desanota, a batch of players at once. The tap, "Todos", la
@@ -779,6 +781,7 @@ export function MatchBuilder({
               onSelectAll={selectAll}
               onClear={clearSquad}
               tagFilter={tagFilter}
+              search={squadSearch}
               onAddPlayer={form.create}
               onViewPlayer={form.view}
             />
@@ -1013,6 +1016,7 @@ export function MatchBuilder({
                   onSelectAll={selectAll}
                   onClear={clearSquad}
                   tagFilter={tagFilter}
+                  search={squadSearch}
                   onAddPlayer={form.create}
                   onViewPlayer={form.view}
                 />

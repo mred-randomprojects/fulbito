@@ -294,6 +294,7 @@ New rating displays must use the gate, including tooltips and charts.
 | `lib/together.ts` | Who had better share a side with whom, which pairs a split broke up, and everyone a player is chained to |
 | `lib/keepers.ts` | Who can actually go in goal, how many of Repartir's teams ended up without one, and who is being played outfield anyway |
 | `lib/squad.ts` | Anotar and desanotar, and everything a player is let go of on the way out — the pin, the payment, the slot |
+| `lib/squadSearch.ts` | Who the squad list's search finds and in what order, and what Enter in it does; `useSquadSearch.ts` holds the box above a picker that gets remounted |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
 | `lib/matchTabs.ts` | Which of a match's five tabs is worth a count or a warning dot |
@@ -420,6 +421,18 @@ pretending to be one.
 `MatchBuilder` renders a different `SquadPicker` element once the squad reaches
 two, and a filter living inside the list would be thrown away on the second
 tap.
+
+The search box above that list is how a squad gets typed in without the
+mouse: "juan ↵ gordo ↵ tincho ↵". Enter anota the top row and empties the
+box; Escape empties it. That makes the top row a promise, so under a query
+the list is ordered by how well each name matches (start of a word beats the
+middle of one, accents ignored), the not-yet-playing before the playing, and
+the row Enter would take is outlined with a ↵. Enter never desanota, and if
+the top row is already in it only clears — it does not reach past them to the
+second-best match. The same remount as the filter would drop the cursor on
+exactly the second name, so on the match screen `useSquadSearch` holds the
+text *and* whether the box had focus, and the new picker takes it back in a
+layout effect. `lib/squadSearch.ts` has the ordering and the Enter decision.
 
 ### Getting to a player from wherever they are
 

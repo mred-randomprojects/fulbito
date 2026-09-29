@@ -1,6 +1,6 @@
 import { ScoresVisible } from "./ScorePrivacy";
-import { useMemo, useState } from "react";
-import { Check, Lock, Search, UserPlus } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent } from "react";
+import { Check, CornerDownLeft, Lock, Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
@@ -8,6 +8,8 @@ import { TagFilter } from "./TagFilter";
 import { useLongPress } from "@/useLongPress";
 import { matchesTags } from "@/lib/tags";
 import type { TagFilterState } from "@/useTagFilter";
+import { useSquadSearch, type SquadSearchState } from "@/useSquadSearch";
+import { enterAction, foldForSearch, orderForSearch } from "@/lib/squadSearch";
 import { playerDisplayName, type Player, type PlayerId } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +78,13 @@ interface Props {
    * exactly halfway through anotando a group.
    */
   tagFilter: TagFilterState;
+  /**
+   * The search box, when the screen has to hold it.
+   *
+   * Only the match screen does, for the same remount as `tagFilter`; see
+   * `useSquadSearch`. Everywhere else the picker keeps its own.
+   */
+  search?: SquadSearchState;
   onAddPlayer: () => void;
   /**
    * Show me who this is.
@@ -112,31 +121,66 @@ export function SquadPicker({
   onSelectAll,
   onClear,
   tagFilter,
+  search,
   onAddPlayer,
   onViewPlayer,
   showLocks = true,
 }: Props) {
-  const [query, setQuery] = useState("");
+  const ownSearch = useSquadSearch();
+  const { query, setQuery, refocus } = search ?? ownSearch;
   const squadSet = useMemo(() => new Set(squad), [squad]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const filtered = players.filter(
-      (player) =>
-        matchesTags(player, tagFilter.selected) &&
-        (needle === "" ||
-          `${player.firstName} ${player.lastName} ${player.nickname}`
-            .toLowerCase()
-            .includes(needle)),
-    );
-    // Everyone playing floats to the top, so the list stays useful as it grows.
-    return [...filtered].sort((a, b) => {
-      const inA = squadSet.has(a.id) ? 0 : 1;
-      const inB = squadSet.has(b.id) ? 0 : 1;
-      if (inA !== inB) return inA - inB;
-      return playerDisplayName(a).localeCompare(playerDisplayName(b));
-    });
-  }, [players, query, squadSet, tagFilter.selected]);
+  // Take the cursor back if the picker this one replaced had it. Layout
+  // effects, so the old one's cleanup runs while its box is still in the page
+  // and still focused, and this one's runs before anybody can type a letter.
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (refocus.current) {
+      refocus.current = false;
+      input?.focus();
+    }
+    return () => {
+      refocus.current = input != null && document.activeElement === input;
+    };
+  }, [refocus]);
+
+  // Enter anota the top row, so the top row has to be on screen.
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [query]);
+
+  const visible = useMemo(
+    () =>
+      orderForSearch(
+        players.filter((player) => matchesTags(player, tagFilter.selected)),
+        query,
+        (player) => squadSet.has(player.id),
+        playerDisplayName,
+      ),
+    [players, query, squadSet, tagFilter.selected],
+  );
+
+  const typing = foldForSearch(query) !== "";
+  const armedId = (() => {
+    const action = enterAction(query, visible, (id) => squadSet.has(id));
+    return action.kind === "anotar" ? action.id : null;
+  })();
+
+  const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Enter that confirms an accent or a predictive-text word is the
+    // keyboard's, not ours.
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (armedId != null) onToggle(armedId);
+      if (typing) setQuery("");
+    } else if (e.key === "Escape" && query !== "") {
+      e.preventDefault();
+      setQuery("");
+    }
+  };
 
   /**
    * Is the list showing less than the whole plantel?
@@ -183,9 +227,16 @@ export function SquadPicker({
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar en el plantel"
+            onKeyDown={onSearchKey}
+            placeholder="Escribí un nombre y dale Enter"
+            aria-label="Buscar en el plantel"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             className="pl-9"
           />
         </div>
@@ -214,12 +265,13 @@ export function SquadPicker({
         )}
       </div>
 
-      <ul className="max-h-[420px] overflow-y-auto p-2">
+      <ul ref={listRef} className="max-h-[420px] overflow-y-auto p-2">
         {visible.map((player) => (
           <SquadRow
             key={player.id}
             player={player}
             playing={squadSet.has(player.id)}
+            armed={player.id === armedId}
             lock={lockedTo(player.id)}
             showLocks={showLocks}
             onToggle={() => onToggle(player.id)}
@@ -232,7 +284,7 @@ export function SquadPicker({
           <li className="px-2 py-8 text-center text-sm text-muted-foreground">
             {players.length === 0
               ? "Todavía no hay nadie en el plantel."
-              : tagFilter.selected.size > 0 && query.trim() === ""
+              : tagFilter.selected.size > 0 && !typing
                 ? "No hay nadie en ese grupo."
                 : "No hay nadie que se llame así."}
           </li>
@@ -261,6 +313,7 @@ export function SquadPicker({
 function SquadRow({
   player,
   playing,
+  armed,
   lock,
   showLocks,
   onToggle,
@@ -269,6 +322,8 @@ function SquadRow({
 }: {
   player: Player;
   playing: boolean;
+  /** Whether Enter in the search box would anota this one. */
+  armed: boolean;
   lock: LockTarget | null;
   showLocks: boolean;
   onToggle: () => void;
@@ -287,6 +342,7 @@ function SquadRow({
           press.className,
           "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-2 text-left transition-colors",
           playing ? "bg-primary/10" : "hover:bg-accent/40",
+          armed && "bg-accent/40 ring-1 ring-inset ring-primary/60",
         )}
       >
         <span
@@ -313,6 +369,12 @@ function SquadRow({
             </span>
           )}
         </span>
+        {armed && (
+          <CornerDownLeft
+            className="h-3.5 w-3.5 shrink-0 text-primary"
+            aria-label="Enter lo suma"
+          />
+        )}
         <span className="tabular shrink-0 text-sm font-semibold text-muted-foreground">
           <ScoresVisible fallback="—">{player.rating.toFixed(0)}</ScoresVisible>
         </span>

@@ -136,6 +136,8 @@
     "src/lib/lista.test.ts",
     "src/lib/squad.ts",
     "src/lib/squad.test.ts",
+    "src/lib/squadSearch.ts",
+    "src/lib/squadSearch.test.ts",
     "src/lib/video.ts",
     "src/lib/video.test.ts",
     "src/syncRoundTrip.test.ts"
