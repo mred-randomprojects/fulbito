@@ -19,10 +19,10 @@ rules_version = '2';
 //      `isSuperAdmin()` and the `identities` block near the bottom.
 //   4. One address — the owner of the site — may *read* under anybody's uid,
 //      for "ver como". Never write. See `isSiteOwner()`.
-//   5. Three collections live outside `users/{uid}`, because somebody who is
-//      not you has to read them: `polls` (an encuesta), `lists` (la lista)
-//      and `recaps` (el tercer tiempo). Each block says what it pays for
-//      that with.
+//   5. Four collections live outside `users/{uid}`, because somebody who is
+//      not you has to read them: `polls` (an encuesta), `lists` (la lista),
+//      `recaps` (el tercer tiempo) and `picks` (la votación de los equipos).
+//      Each block says what it pays for that with.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -523,6 +523,113 @@ service cloud.firestore {
           && request.resource.data.at == request.time;
         allow delete: if request.auth != null
           && (request.auth.uid == voterId || isRecapOwner() || isSuperAdmin());
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // La votación — which of the six splits we play.
+    //
+    // The fourth thing outside `users/{uid}`, and a fourth temperament. The
+    // encuesta is private and anonymous, la lista is public and asks for
+    // nothing, el tercer tiempo is public and asks for a name. This is
+    // anonymous *and* public: a vote for an arrangement of ten people is
+    // nobody's confession, so there is no name on a ballot, no `identities`
+    // collection, and no address written down anywhere.
+    //
+    //   - **Reading costs a session of any kind**, which the page mints
+    //     anonymously on open, so the link works for whoever it reached and a
+    //     crawler that guessed an id gets nothing. What is behind it is the
+    //     two side names, the bibs and who is on which side: `lib/teamPick.ts`
+    //     decides that, its test pins the field list, and the `hasOnly` below
+    //     is the second lock. **No rating, no team total and no balance index
+    //     ever goes out** — a total is ten ratings anybody can nearly invert,
+    //     and a page saying which option the app prefers is a page where the
+    //     vote is a formality.
+    //
+    //   - **The ballots are readable by whoever holds the link.** There is no
+    //     server here to add them up, so the page does it. The screen holds the
+    //     counts back until you have voted — that is manners, not a wall, and
+    //     it is there so the first three votes do not decide the rest.
+    //
+    //   - **One ballot per device, by shape.** It lives at `ballots/{uid}`,
+    //     writable by that uid alone and rewritable by it: somebody who ticks a
+    //     fourth option is still answering once.
+    //
+    //   - **`options` can never change.** `allow update` lets the organiser
+    //     touch the title, the date and their own words about the vote —
+    //     `closed`, `chosen`, `drawn` — and nothing else, so there is no
+    //     republish and no way for "voté la 3" to become a vote for teams that
+    //     device never saw. Changing the options means deleting the votación
+    //     and holding another one.
+    //
+    // `chosen` is the option that got played, and `drawn` says it came out of
+    // the sorteo rather than off the top of the count. Both are the organiser's
+    // word, written when they pick, and they shut the vote in the same write.
+    //
+    // Not defended: a ballot's numbers are not checked against the options that
+    // exist — `normalizeBallot` is what every reader goes through, and an index
+    // pointing at nothing counts for nothing. And a device that clears its
+    // storage is a new device, the same hole la lista has, with the same
+    // answer: the link lives in a private grupo and the organiser can take the
+    // whole thing down.
+    // ------------------------------------------------------------------
+    match /picks/{pickId} {
+      function pick() {
+        return get(/databases/$(database)/documents/picks/$(pickId)).data;
+      }
+      function isPickOwner() {
+        return request.auth != null && pick().ownerUid == request.auth.uid;
+      }
+      // `closed` is absent until somebody shuts the vote, and reading a field
+      // that is not there is an evaluation error rather than a false — the
+      // same trap `isOpen()` on a recap fell into, caught by `rules.test.ts`.
+      function isOpen() {
+        return pick().get('closed', false) != true;
+      }
+
+      allow get: if request.auth != null;
+      // Never enumerable by anybody but the organiser. The site owner too, so
+      // "Ver como" sees somebody's own matches as they see them.
+      allow list: if (request.auth != null && resource.data.ownerUid == request.auth.uid)
+        || isSiteOwner();
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(
+             ['ownerUid', 'title', 'date', 'options', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.options is list
+        && request.resource.data.options.size() >= 2
+        && request.resource.data.options.size() <= 8;
+      // The options are not on this list, and that is the whole rule.
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['title', 'date', 'closed', 'chosen', 'drawn'])
+        && (!('chosen' in request.resource.data) || request.resource.data.chosen is int);
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      // The faces, one document each: an avatar is an inline data URL of up
+      // to 60 KB and twenty on one document cross Firestore's 1 MiB cap.
+      match /players/{playerId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      }
+
+      match /ballots/{voterId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && request.auth.uid == voterId
+          && isOpen()
+          && request.resource.data.keys().hasOnly(['options', 'at'])
+          && request.resource.data.options is list
+          && request.resource.data.options.size() > 0
+          && request.resource.data.options.size() <= 8
+          && request.resource.data.at == request.time;
+        allow delete: if request.auth != null
+          && (request.auth.uid == voterId || isPickOwner());
       }
     }
 

@@ -7,7 +7,9 @@ Cut them into four fives, name them, send the group the torneito, and keep the
 one side that plays every week. Same two sides every week? Save them once, see
 either of them lined up on half a pitch, and bring both into a match in a tap.
 Want to know how it goes before it goes? Six models will tell you, and
-afterwards the app tells you which of them was right.
+afterwards the app tells you which of them was right. And if the grupo would
+rather choose the sides themselves, send them the six splits and play the one
+that wins the vote — sorteo included when the top ties.
 
 `PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
 
@@ -135,6 +137,21 @@ any other app, full screen and with no signal needed.
   themselves to the plantel where it is obvious, you pick where it is not or
   load a new player with the name already typed, and "Pasar al partido"
   ticks them all in.
+- **Let the grupo pick the teams.** The app finds six genuinely different
+  splits; deciding between them is an argument, so put it to the people who
+  have to play. "Que vote el grupo" sends a link with the six formations on it
+  — names and bibs, no puntajes, no totals, nothing saying which one the app
+  liked — and each person tildá todas las que le cierren: approval, not
+  one-of-six, because "con cualquiera de estas dos juego" is the true answer
+  most of the time. No account and no name: the page signs the device in on its
+  own, so voting is one tap from WhatsApp, and nobody can see who voted what.
+  The counts stay hidden until you send your own, so the first three votes do
+  not decide the rest. On your side the votes come in live and *Jugar ésta*
+  puts that split on the cancha; if two or more tie at the top, the Sortear
+  button draws one and the page says it came out of the sorteo. The options are
+  frozen the moment the link goes out — the server refuses to change them — so
+  "voté la 3" can never turn into teams that person never saw; to put different
+  splits up you take the votación down and open another.
 - **Ask the group what they think.** Send the whole list to the grupo — not one
   player, so everybody judges against the same field — and each person scores
   who they know and skips who they do not. They sign in with Google so nobody

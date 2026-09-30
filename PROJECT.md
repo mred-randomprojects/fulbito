@@ -37,7 +37,10 @@ says which of them came closest, tonight and over every game so far. And
 before any of that, a match can put out la lista: a link where each person
 types a name and taps Voy, sees who else is in, and lands on the banco once
 the cupo is full — the numbered message from the grupo, live, and one tap
-from being tonight's squad.
+from being tonight's squad. And between those two, when the argument is not
+about who is coming but about which of the six splits we play, the six of them
+can go out as a votación: names and bibs, no numbers, tick as many as you like,
+and the one that wins goes onto the cancha — drawn by sorteo when the top ties.
 
 Three constraints shape every decision here:
 
@@ -357,6 +360,8 @@ New rating displays must use the gate, including tooltips and charts.
 | `cloud/googleIdentity.ts` | Google's own sign-in script, fetched once, and one access token out of its popup |
 | `lib/lista.ts` | La lista: who is in and who is on the banco, the message for the grupo, and which typed name is which player |
 | `cloud/lists.ts` | La lista in Firestore: making one, watching it live, putting a name on it, taking one off |
+| `lib/teamPick.ts` | La votación: which of the splits goes out, what a pile of ticks adds up to, the tie and the draw that breaks it, and whether the answer still fits the match |
+| `cloud/picks.ts` | La votación in Firestore: publishing the options once, watching the ballots, one per device, and the option that got played |
 | `lib/track.ts` | The closed list of events the app can report, whether it may report at all, and holding the early ones until the vendor arrives |
 | `analytics/posthog.ts` | The vendor, in one file; `analytics/tracking.ts` is the switch from both ends, `analytics/prefs.ts` is where it is remembered, `useTracking.ts` is the wiring |
 | `appDataOps.ts`, `mergeAppData.ts` | Upserts and deletes; last-write-wins merge on `updatedAt` |
@@ -407,7 +412,11 @@ back with who each one is, pass them to the partido.
 ours to load and no permission to upload one, so that route touches neither
 `useAppData` nor `useCloudSync`, and it has no NavBar because the person on it
 is not using the app. `ListPage` (Lista) is mounted the same way for the same
-reason, and is where somebody with the link puts their name down. `SaveIndicator` floats over all the others. `ErrorBoundary` sits under
+reason, and is where somebody with the link puts their name down. `VotePage`
+(Votación) is the fourth of those, mounted the same way again: the six splits,
+a tick on each one somebody would be happy with, and the counts once they have
+answered — `VotePanel`, on the Cancha tab beside the analysis, is the
+organiser's side of it. `SaveIndicator` floats over all the others. `ErrorBoundary` sits under
 everything in `main.tsx`: a screen that throws gets "Se rompió algo", the
 backup straight off `localStorage`, and a reload, instead of a white page. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams
@@ -1134,6 +1143,81 @@ It is tracked: `recap_published`, `recap_shared`, `recap_commented`,
 `recap_reviewed` and `recap_adopted`, plus the `page_viewed` the page sends
 like any other. Nothing anybody wrote is in an event.
 
+### La votación, the fourth thing outside the wall
+
+An encuesta asks what somebody is worth, in private. La lista asks for a
+"voy". El tercer tiempo asks what people made of the night. This one asks the
+question the app had always answered by itself: **which of these teams do we
+play?** It is also the only one of the four whose answer comes back *into* the
+app as a decision — the winner becomes the two lineups on the cancha.
+
+Same shape as the other three — a root collection, one document per match, a
+page mounted beside `App`:
+
+```
+picks/{matchId}                      { ownerUid, title, date, options,
+                                       createdAt, closed?, chosen?, drawn? }
+picks/{matchId}/players/{playerId}   { ownerUid, name, avatar }
+picks/{matchId}/ballots/{uid}        { options, at }
+```
+
+- **It publishes the options, and nothing that scores them.** The six splits
+  live in `MatchBuilder`'s memory and nowhere else — a split is read and never
+  written, like a forecast — so `pickFromOptions` copies out the two side
+  names, the bibs and who is on each side, and `teamPick.test.ts` pins that key
+  set with `firestore.rules` pinning it again. **No rating, no team total, no
+  balance index, and no hint of which one the search preferred**, which is the
+  decision that shapes the whole feature: a total is ten ratings anybody can
+  nearly invert, and a page that said "ésta es la más parecida" is a page where
+  the vote is a formality. The grupo is being asked which teams they want to
+  play, which is a *different question* from which teams are fairest, and is
+  the only reason to ask at all. The options go out in the order the search
+  handed them over.
+- **Approval, not one-of-six.** The options differ by two or three moves, so
+  forcing one pick makes a winner out of noise and leaves five arrangements
+  nobody said anything about. "Con cualquiera de estas dos juego" is the true
+  answer most of the time, and it is worth being able to give.
+- **Nobody signs in and nothing is attributed.** The page mints an anonymous
+  session like la lista's, because this happens in the ten minutes before
+  kick-off and a Google dialog in that window is a vote nobody casts. One
+  ballot per device at `ballots/{uid}`, rewritable by its own device. There is
+  no name on a ballot and **no `identities` collection at all**, unlike a
+  recap's: a sentence about one player is something to answer for, and a
+  preference between two arrangements of ten people is not. A device that
+  clears its storage is a new device — la lista's hole, with la lista's answer.
+- **The counts are hidden until you vote, and that is manners rather than a
+  wall.** The ballots are readable by whoever holds the link, because there is
+  no server here to add them up; the screen holds the totals back until this
+  device has answered. Same reason an encuesta shows the voter no ratings: a
+  running total is how the first three votes decide the rest.
+- **The options can never change under the ballots.** There is no republish:
+  `publishPick` refuses when one exists, and the rules allow an update to touch
+  only `title`, `date`, `closed`, `chosen` and `drawn`. Rearmar after the link
+  went out would silently turn "voté la 3" into a vote for teams that person
+  never saw. Changing what is on offer means taking the votación down and
+  holding another, and the panel says so where somebody would go looking for a
+  republish button. The other half of the same rule is `pickApplies`: if
+  somebody was unticked or the sides changed size since the link went out, the
+  published options no longer describe tonight, and the panel refuses to put
+  them on the pitch rather than seating somebody who is not anotado.
+- **The sorteo is drawn once and written down.** When the top is shared,
+  `drawWinner` rolls for it on the organiser's screen and the answer is stored
+  (`chosen`, plus `drawn` so the page can say "salió sorteada" rather than
+  "ganó"). Deliberately not a seeded shuffle every device recomputes: that is a
+  lottery whose result was already sitting in the data before anybody pressed
+  anything, and two phones with different amounts of the vote would draw
+  different winners. Picking shuts the vote in the same write, because a ballot
+  arriving after the sides are on the pitch counts for nothing.
+- **The app never picks for you.** The winner is applied by a tap — somebody
+  who has to leave at ten is a reason no count can see — and applying clears
+  the search on screen the way bringing in saved teams does, because "Opción
+  3/6" would then be about an arrangement nobody is looking at.
+
+It is tracked, like la lista and el tercer tiempo: `vote_published`,
+`vote_shared`, `vote_cast` and `vote_chosen`, plus the `page_viewed` the page
+sends like any other. No ballot's contents are in an event beyond how many
+options it ticked.
+
 ### Analytics, and what it is allowed to see
 
 The deployed app reports how it is used, because the point of the next few
@@ -1233,7 +1317,8 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
 ## Invariants worth not breaking
 
 - **Nothing about usage is sent from the encuesta, and nothing is sent
-  before the gate says so.** `useTracking` lives in `App` and in `ListPage`
+  before the gate says so.** `useTracking` lives in `App` and in the pages
+  outside the wall that are allowed it — `ListPage`, `RecapPage`, `VotePage` —
   and nowhere above them; `lib/track.ts` decides on the first render whether
   the vendor is downloaded at all. Mounting the hook in `main.tsx` "to catch
   everything" would put a recording on the voter's screen and break the
@@ -1310,6 +1395,17 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   is stored; `lib/forecastMatch.ts` is a memo and not a record, and the
   answer is the same with it or without it. Storing one would freeze it to
   the model version that produced it and make the tally a mix of vintages.
+- **A split is read and never written either — except the moment it is put to
+  a vote.** `picks/{matchId}` is the one place an arrangement the search
+  produced is stored, and it is stored because ten people are about to tick it
+  rather than because the app needs it back. What goes with it is names, bibs
+  and sides: **no rating, no total, no balance index and no hint of which
+  option the search liked**, pinned by `teamPick.test.ts` and by a `hasOnly`
+  in `firestore.rules`. And what is stored is **immutable** — the rules let an
+  update touch only the title, the date and the organiser's own words about
+  the vote, so a Rearmar after the link went out cannot turn "voté la 3" into
+  a vote for teams nobody saw. There is no code path that republishes one;
+  changing the offer means deleting it. See "La votación".
 - **The history models see only what came before.** `buildForecastInput`
   cuts the history at the match itself, by `byMatchOrder`, and
   `forecast.test.ts` pins both the cut and the same-night tie-break. A model
@@ -1676,9 +1772,11 @@ touched anything and the two of them must go quiet.
   each in one direction only: an encuesta sends a read-only snapshot out and
   gets anonymous numbers back; la lista sends a title out and gets names
   back; el tercer tiempo sends a finished game out and gets puntajes and
-  comments back. None of them lets anybody touch the plantel — what comes
+  comments back; la votación sends tonight's splits out and gets anonymous
+  ticks back. None of them lets anybody touch the plantel — what comes
   back from the third is read beside your own uno x uno and adopted by a
-  deliberate tap, never merged into it.
+  deliberate tap, never merged into it, and what comes back from the fourth
+  moves two lineups on one match and nothing else.
 - **Free placement on the pitch.** Positions come from a formation; dragging a
   player anywhere on the grass is the obvious next step.
 - **Head-to-head history.** A player's own record exists, but "wins 80% of the

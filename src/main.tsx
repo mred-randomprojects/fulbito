@@ -6,6 +6,7 @@ import App from "./App";
 import { PollPage } from "./components/PollPage";
 import { ListPage } from "./components/ListPage";
 import { RecapPage } from "./components/RecapPage";
+import { VotePage } from "./components/VotePage";
 import { CloudAuthProvider } from "./cloud/auth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { registerServiceWorker } from "./registerServiceWorker";
@@ -24,6 +25,10 @@ const router = createHashRouter([
   // And the third: the game after the game. Same reason again — the person
   // arguing about the second goal has no roster of ours to load.
   { path: "/partido/:matchId", element: <RecapPage /> },
+  // And the fourth: which of tonight's splits we play. Before the game rather
+  // than after it, and the only one of the four whose answer changes what the
+  // app does next — the winner becomes the two lineups on the cancha.
+  { path: "/votacion/:matchId", element: <VotePage /> },
   { path: "*", element: <App /> },
 ]);
 

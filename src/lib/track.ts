@@ -59,6 +59,13 @@ export type TrackEvent =
   | { name: "recap_commented" }
   | { name: "recap_reviewed"; players: number }
   | { name: "recap_adopted" }
+  /** La votación opened. `options`: how many arrangements went out. */
+  | { name: "vote_published"; options: number }
+  | { name: "vote_shared"; via: "text" | "link" }
+  /** One device's ballot. `options`: how many of them it ticked. */
+  | { name: "vote_cast"; options: number }
+  /** The teams picked off the vote. `drawn`: the top was tied and sorteado. */
+  | { name: "vote_chosen"; drawn: boolean }
   /** A render error the boundary caught. The vendor's own capture never sees these. */
   | { name: "app_crashed"; message: string };
 

@@ -138,6 +138,8 @@
     "src/lib/squad.test.ts",
     "src/lib/squadSearch.ts",
     "src/lib/squadSearch.test.ts",
+    "src/lib/teamPick.ts",
+    "src/lib/teamPick.test.ts",
     "src/lib/recap.ts",
     "src/lib/recap.test.ts",
     "src/lib/recapFeedback.ts",

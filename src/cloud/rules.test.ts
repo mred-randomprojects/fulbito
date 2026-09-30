@@ -16,7 +16,7 @@ import {
   where,
   type Firestore,
 } from "firebase/firestore";
-import type { MatchId, PlayerId } from "@/types";
+import type { MatchId, Player, PlayerId } from "@/types";
 import {
   createList,
   deleteList,
@@ -48,6 +48,15 @@ import {
   setRecapClosed,
   writeIdentity,
 } from "./recaps";
+import {
+  choosePickOption,
+  clearMyBallot,
+  deletePick,
+  publishPick,
+  setMyBallot,
+  setPickClosed,
+  updatePickHeading,
+} from "./picks";
 import { listAccounts, writeProfile } from "./accounts";
 
 /**
@@ -859,5 +868,244 @@ describe("recaps", () => {
     const id = await publish();
     await denied(getDoc(doc(as(DEVICE_A), "users", "owner-1", "players", MAXI)));
     await denied(getDoc(doc(as(STRANGER), "users", "owner-1", "matches", id)));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* picks: la votación — anonymous, public, and frozen against the vote */
+/* ------------------------------------------------------------------ */
+
+describe("picks", () => {
+  const MAXI = "maxi" as PlayerId;
+  const JUAN = "juan" as PlayerId;
+  const GORDO = "gordo" as PlayerId;
+  const TINCHO = "tincho" as PlayerId;
+
+  const match = {
+    id: "match-9" as MatchId,
+    name: "Martes",
+    date: "2026-03-10",
+    teamA: { name: "Claros", kit: "light" as const, formationId: "f" },
+    teamB: { name: "Oscuros", kit: "dark" as const, formationId: "f" },
+    squad: [MAXI, JUAN, GORDO, TINCHO],
+  };
+
+  const options = [
+    { a: [MAXI, JUAN], b: [GORDO, TINCHO] },
+    { a: [MAXI, GORDO], b: [JUAN, TINCHO] },
+  ];
+
+  function roster(): Player[] {
+    return [MAXI, JUAN, GORDO, TINCHO].map((id) => ({
+      id,
+      firstName: id,
+      lastName: "",
+      nickname: "",
+      avatar: "",
+      ratingScale: 100 as const,
+      rating: 77,
+      roleRatings: {},
+      attributes: {},
+      avoid: [],
+      together: [],
+      tags: [],
+      notes: "una nota privada",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }));
+  }
+
+  /** The votación up, as the organiser, ready for a device to vote on. */
+  async function open(): Promise<string> {
+    const outcome = await publishPick(as(OWNER), "owner-1", match, options, roster());
+    assert.equal(outcome, "published");
+    return match.id;
+  }
+
+  it("lets whoever holds the link read it, with no account at all", async () => {
+    const id = await open();
+    const snap = await getDoc(doc(as(DEVICE_A), "picks", id));
+    assert.equal(snap.exists(), true);
+    assert.equal(snap.data()?.options.length, 2);
+  });
+
+  it("gives nothing to somebody with no session at all", async () => {
+    const id = await open();
+    await denied(getDoc(doc(as(null), "picks", id)));
+  });
+
+  it("is never enumerable by anybody but the organiser", async () => {
+    await open();
+    const mine = query(collection(as(OWNER), "picks"), where("ownerUid", "==", "owner-1"));
+    assert.equal((await getDocs(mine)).size, 1);
+    await denied(getDocs(collection(as(DEVICE_A), "picks")));
+    await denied(
+      getDocs(query(collection(as(STRANGER), "picks"), where("ownerUid", "==", "owner-1"))),
+    );
+  });
+
+  it("publishes no rating and nothing written for the organiser", async () => {
+    const id = await open();
+    const json = JSON.stringify((await getDoc(doc(as(DEVICE_A), "picks", id))).data());
+    assert.equal(json.includes("rating"), false);
+    assert.equal(json.includes("una nota privada"), false);
+    // No total, no balance index, no "the search liked this one": decision 2.
+    assert.equal(/total|score|balance|cost/i.test(json), false);
+  });
+
+  it("refuses one published under somebody else's uid", async () => {
+    await denied(
+      setDoc(doc(as(STRANGER), "picks", "match-10"), {
+        ownerUid: "owner-1",
+        title: "Robada",
+        date: "2026-03-10",
+        options,
+        createdAt: "now",
+      }),
+    );
+  });
+
+  it("refuses a field nobody agreed to publish", async () => {
+    await denied(
+      setDoc(doc(as(OWNER), "picks", "match-11"), {
+        ownerUid: "owner-1",
+        title: "Martes",
+        date: "2026-03-10",
+        options,
+        createdAt: "now",
+        ratings: { maxi: 77 },
+      }),
+    );
+  });
+
+  it("refuses a vote with fewer than two options, or with too many", async () => {
+    await denied(
+      setDoc(doc(as(OWNER), "picks", "match-12"), {
+        ownerUid: "owner-1",
+        title: "Martes",
+        date: "2026-03-10",
+        options: [options[0]],
+        createdAt: "now",
+      }),
+    );
+    await denied(
+      setDoc(doc(as(OWNER), "picks", "match-13"), {
+        ownerUid: "owner-1",
+        title: "Martes",
+        date: "2026-03-10",
+        options: Array.from({ length: 9 }, () => options[0]),
+        createdAt: "now",
+      }),
+    );
+  });
+
+  /**
+   * The load-bearing rule of this feature. A ballot says "the third one", so
+   * the third one has to still be the teams that device looked at — see
+   * decision 6 in `lib/teamPick.ts`. There is no republish anywhere in the app;
+   * this is the half that cannot be edited out of a copy of the JavaScript.
+   */
+  it("never lets the options change under the ballots", async () => {
+    const id = await open();
+    await denied(
+      updateDoc(doc(as(OWNER), "picks", id), {
+        options: [
+          { a: { name: "Claros", kit: "light", players: [MAXI, TINCHO] }, b: { name: "Oscuros", kit: "dark", players: [JUAN, GORDO] } },
+          options[1],
+        ],
+      }),
+    );
+    // And a second publish over the top is refused for the same reason.
+    assert.equal(await publishPick(as(OWNER), "owner-1", match, options, roster()), "already-open");
+  });
+
+  it("lets the organiser fix the title and the date, and nothing else", async () => {
+    const id = await open();
+    await updatePickHeading(as(OWNER), id, { title: "Miércoles", date: "2026-03-11" });
+    assert.equal((await getDoc(doc(as(DEVICE_A), "picks", id))).data()?.title, "Miércoles");
+    await denied(updateDoc(doc(as(OWNER), "picks", id), { ownerUid: "stranger" }));
+    await denied(updateDoc(doc(as(OWNER), "picks", id), { createdAt: "otro día" }));
+    await denied(updatePickHeading(as(STRANGER), id, { title: "Mía", date: "2026-03-11" }));
+  });
+
+  it("takes a ballot from a device with no account, and shows the count to everybody", async () => {
+    const id = await open();
+    await setMyBallot(as(DEVICE_A), id, "anon-a", [0, 1]);
+    await setMyBallot(as(DEVICE_B), id, "anon-b", [1]);
+    const seen = await getDocs(collection(as(DEVICE_A), "picks", id, "ballots"));
+    assert.equal(seen.size, 2);
+    // No name and no address on it: nothing here is attributed. Decision 5.
+    assert.deepEqual(Object.keys(seen.docs[0].data()).sort(), ["at", "options"]);
+  });
+
+  it("keeps one device out of another's ballot", async () => {
+    const id = await open();
+    await setMyBallot(as(DEVICE_A), id, "anon-a", [0]);
+    await denied(setMyBallot(as(DEVICE_B), id, "anon-a", [1]));
+    await denied(clearMyBallot(as(DEVICE_B), id, "anon-a"));
+    // Its own, as many times as it changes its mind.
+    await setMyBallot(as(DEVICE_A), id, "anon-a", [1]);
+    assert.deepEqual(
+      (await getDoc(doc(as(DEVICE_A), "picks", id, "ballots", "anon-a"))).data()?.options,
+      [1],
+    );
+    await clearMyBallot(as(DEVICE_A), id, "anon-a");
+  });
+
+  it("refuses a ballot stamped with the phone's own clock", async () => {
+    const id = await open();
+    await denied(
+      setDoc(doc(as(DEVICE_A), "picks", id, "ballots", "anon-a"), {
+        options: [0],
+        at: "2020-01-01T00:00:00.000Z",
+      }),
+    );
+  });
+
+  it("refuses an empty ballot rather than storing a vote for nothing", async () => {
+    const id = await open();
+    await denied(
+      setDoc(doc(as(DEVICE_A), "picks", id, "ballots", "anon-a"), {
+        options: [],
+        at: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("stops new ballots once the vote is shut, and everything stays readable", async () => {
+    const id = await open();
+    await setPickClosed(as(OWNER), id, true);
+    await denied(setMyBallot(as(DEVICE_A), id, "anon-a", [0]));
+    assert.equal((await getDoc(doc(as(DEVICE_B), "picks", id))).exists(), true);
+  });
+
+  it("shuts the vote in the same write that picks the teams", async () => {
+    const id = await open();
+    await setMyBallot(as(DEVICE_A), id, "anon-a", [1]);
+    await choosePickOption(as(OWNER), id, 1, true);
+    const back = (await getDoc(doc(as(DEVICE_A), "picks", id))).data();
+    assert.equal(back?.chosen, 1);
+    assert.equal(back?.drawn, true);
+    assert.equal(back?.closed, true);
+    await denied(setMyBallot(as(DEVICE_B), id, "anon-b", [0]));
+  });
+
+  it("lets only the organiser close it, pick the teams, or take it down", async () => {
+    const id = await open();
+    await denied(setPickClosed(as(DEVICE_A), id, true));
+    await denied(choosePickOption(as(STRANGER), id, 0, false));
+    await denied(deletePick(as(DEVICE_A), id));
+    await setMyBallot(as(DEVICE_A), id, "anon-a", [0]);
+    await deletePick(as(OWNER), id);
+    assert.equal((await getDoc(doc(as(OWNER), "picks", id))).exists(), false);
+    assert.equal(
+      (await getDoc(doc(as(DEVICE_A), "picks", id, "ballots", "anon-a"))).exists(),
+      false,
+    );
+  });
+
+  it("still keeps the roster behind the wall for whoever holds the link", async () => {
+    const id = await open();
+    await denied(getDoc(doc(as(DEVICE_A), "users", "owner-1", "players", MAXI)));
+    await denied(getDoc(doc(as(DEVICE_A), "users", "owner-1", "matches", id)));
   });
 });

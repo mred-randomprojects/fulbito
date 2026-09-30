@@ -32,6 +32,8 @@ import { useMatchRecap } from "@/useMatchRecap";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { ListPanel } from "./ListPanel";
+import { VotePanel } from "./VotePanel";
+import type { OptionLineups } from "@/lib/teamPick";
 import { TeamInsights } from "./TeamInsights";
 import { ForecastPanel } from "./ForecastPanel";
 import { ShareDialog } from "./ShareDialog";
@@ -322,6 +324,24 @@ export function MatchBuilder({
   const [options, setOptions] = useState<ReturnType<typeof findSplits> | null>(null);
 
   /**
+   * The arrangements as la votación needs them: two lineups of ids and nothing
+   * else.
+   *
+   * Deliberately not the `SplitOption`s themselves. Those carry the two
+   * evaluations, and the evaluations carry every number `lib/teamPick.ts`
+   * refuses to publish — handing them over and trusting the redaction is how a
+   * team total ends up in a group chat.
+   */
+  const voteOptions = useMemo<OptionLineups[]>(
+    () =>
+      (options?.options ?? []).map((option) => ({
+        a: option.evalA.lineup.map((p) => p?.id ?? null),
+        b: option.evalB.lineup.map((p) => p?.id ?? null),
+      })),
+    [options],
+  );
+
+  /**
    * Two saved teams, brought in whole.
    *
    * The one place in this screen where the sides are an input rather than an
@@ -373,6 +393,27 @@ export function MatchBuilder({
         lineupA: option.evalA.lineup.map((p) => p?.id ?? null),
         lineupB: option.evalB.lineup.map((p) => p?.id ?? null),
       });
+    },
+    [patch],
+  );
+
+  /**
+   * The teams the grupo voted for, onto the pitch.
+   *
+   * It clears the search on screen for the same reason `loadSavedTeams` does:
+   * the six options were an answer to a question the vote has now settled, and
+   * "Opción 3/6" next to the pitch would be about an arrangement nobody is
+   * looking at any more. The lineups come from the published votación rather
+   * than from memory, so this works just as well on a phone that reloaded
+   * since the link went out.
+   */
+  const applyVoted = useCallback(
+    (lineups: { lineupA: (PlayerId | null)[]; lineupB: (PlayerId | null)[] }) => {
+      patch(lineups);
+      setOptions(null);
+      setSelection(null);
+      setEdited(false);
+      setBalanceError(null);
     },
     [patch],
   );
@@ -971,22 +1012,36 @@ export function MatchBuilder({
                   )}
                 </div>
 
-                {hasLineup && (
-                  <TeamInsights
-                    evalA={evalA}
-                    evalB={evalB}
-                    teamA={match.teamA}
-                    teamB={match.teamB}
-                    basis={match.basis}
-                    handicap={match.handicap}
-                    search={
-                      options == null
-                        ? null
-                        : { exhaustive: options.exhaustive, evaluated: options.evaluated }
-                    }
-                    edited={edited}
+                <div className="space-y-4">
+                  {hasLineup && (
+                    <TeamInsights
+                      evalA={evalA}
+                      evalB={evalB}
+                      teamA={match.teamA}
+                      teamB={match.teamB}
+                      basis={match.basis}
+                      handicap={match.handicap}
+                      search={
+                        options == null
+                          ? null
+                          : { exhaustive: options.exhaustive, evaluated: options.evaluated }
+                      }
+                      edited={edited}
+                    />
+                  )}
+
+                  {/* Beside the analysis rather than under the pitch: the
+                      numbers here are votes, and the two things somebody
+                      compares are "lo que dice la app" and "lo que dijo el
+                      grupo". It renders nothing at all before Armar. */}
+                  <VotePanel
+                    match={match}
+                    players={players}
+                    options={voteOptions}
+                    slots={{ a: formationA.slots.length, b: formationB.slots.length }}
+                    onApply={applyVoted}
                   />
-                )}
+                </div>
               </div>
             )}
 
