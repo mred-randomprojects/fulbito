@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   Check,
+  ChevronDown,
   Copy,
   Loader2,
   Lock,
@@ -380,10 +381,14 @@ export function RecapPage() {
       {/* ---------------------------------------------------------- */}
 
       <section className="mb-6">
-        <h2 className="mb-1 text-lg font-semibold tracking-tight">El uno x uno</h2>
-        <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-          Tocá a cualquiera para ponerle nota, decir cómo jugó, o darle la
-          estrella de figura.{" "}
+        <h2 className="mb-1 text-xl font-semibold tracking-tight">El uno x uno</h2>
+        <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+          <span className="text-foreground">
+            Tocá a cada uno y ponele la nota
+          </span>{" "}
+          — de 0 a 100, un pulgar para arriba o para abajo, cómo jugó en una
+          línea, y la estrella al que fue la figura. El casillero de la derecha
+          es tu nota: mientras diga «—» todavía no le pusiste.{" "}
           <span className="text-foreground">
             Esto lo ve nada más que el que armó el partido
           </span>{" "}
@@ -400,28 +405,32 @@ export function RecapPage() {
           </p>
         )}
 
-        <Side
-          side={recap.a}
-          faces={faces}
-          draft={draft}
-          open={open}
-          onOpen={setOpen}
-          onVerdict={setVerdict}
-          onMvp={(id) => draft !== null && edit({ ...draft, mvp: draft.mvp === id ? undefined : id })}
-          writable={author !== null && !recap.closed}
-          closed={recap.closed}
-        />
-        <Side
-          side={recap.b}
-          faces={faces}
-          draft={draft}
-          open={open}
-          onOpen={setOpen}
-          onVerdict={setVerdict}
-          onMvp={(id) => draft !== null && edit({ ...draft, mvp: draft.mvp === id ? undefined : id })}
-          writable={author !== null && !recap.closed}
-          closed={recap.closed}
-        />
+        {/* Side by side on a laptop, stacked on a phone: the two teams are
+            what somebody is comparing while they hand out notas. */}
+        <div className="grid gap-4 md:grid-cols-2 md:items-start">
+          <Side
+            side={recap.a}
+            faces={faces}
+            draft={draft}
+            open={open}
+            onOpen={setOpen}
+            onVerdict={setVerdict}
+            onMvp={(id) => draft !== null && edit({ ...draft, mvp: draft.mvp === id ? undefined : id })}
+            writable={author !== null && !recap.closed}
+            closed={recap.closed}
+          />
+          <Side
+            side={recap.b}
+            faces={faces}
+            draft={draft}
+            open={open}
+            onOpen={setOpen}
+            onVerdict={setVerdict}
+            onMvp={(id) => draft !== null && edit({ ...draft, mvp: draft.mvp === id ? undefined : id })}
+            writable={author !== null && !recap.closed}
+            closed={recap.closed}
+          />
+        </div>
 
         {!recap.closed && author === null && (
           <SignIn onEnter={() => void enter()} />
@@ -603,8 +612,8 @@ function Side({
 }) {
   const kit = KITS[side.kit];
   return (
-    <div className="mb-3">
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide" style={{ color: kit.ring }}>
+    <div>
+      <p className="mb-1.5 text-sm font-medium uppercase tracking-wide" style={{ color: kit.ring }}>
         {side.name}
       </p>
       <ul className="space-y-1.5">
@@ -652,11 +661,16 @@ function PlayerRow({
   /** Why it is not writable, when it is not. See the note in the body. */
   closed: boolean;
 }) {
+  // How much this person has said about him, for the line under the name:
+  // a nota, a thumb, a line of text. Nothing else on the row counts anything.
+  const said = [verdict?.score, verdict?.thumb, verdict?.text].filter(
+    (part) => part !== undefined,
+  ).length;
   return (
     <li className="rounded-xl border border-border bg-card">
       <button
         type="button"
-        className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
         onClick={onToggle}
         aria-expanded={expanded}
       >
@@ -664,21 +678,47 @@ function PlayerRow({
           avatar={player.avatar}
           name={player.name}
           seed={player.id}
-          size={36}
+          size={44}
           ring={kitRing}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{player.name}</span>
+          <span className="block truncate text-base font-medium">{player.name}</span>
+          <span className="block text-xs text-muted-foreground">
+            {said === 0
+              ? writable
+                ? "Tocá para puntuarlo"
+                : "Sin nota tuya"
+              : `${said} ${said === 1 ? "cosa dicha" : "cosas dichas"}`}
+          </span>
         </span>
-        {/* Your own number, and there is no other on this row: how many notas
-            he got, what the middle of them is and who else voted him figura
-            are the owner's to read, on their own app. */}
-        {verdict?.score !== undefined && (
-          <span className="shrink-0 text-lg font-semibold tabular-nums">{verdict.score}</span>
-        )}
-        {verdict !== null && (
-          <span className="shrink-0 text-xs font-medium text-primary">lo tuyo</span>
-        )}
+
+        {/* Your own number, always in the same place whether you put one or
+            not — a row that showed nothing until you had already scored gave
+            nobody a reason to tap it, and the number is the thing everybody
+            came to give. There is no other number on this row: the medians,
+            the count and who else voted figura are the owner's to read, on
+            their own app. */}
+        <span
+          className={cn(
+            "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border text-lg font-semibold tabular-nums",
+            verdict?.score === undefined
+              ? "border-dashed border-border text-muted-foreground"
+              : "border-primary/40 bg-primary/10 text-foreground",
+          )}
+        >
+          {verdict?.score ?? "—"}
+          <span className="text-[9px] font-normal uppercase tracking-wide text-muted-foreground">
+            tu nota
+          </span>
+        </span>
+        {isMvp && <Star className="h-4 w-4 shrink-0 fill-current text-amber-400" aria-hidden />}
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+            expanded && "rotate-180",
+          )}
+          aria-hidden
+        />
       </button>
 
       {expanded && (
@@ -783,10 +823,17 @@ function PlayerRow({
   );
 }
 
+/**
+ * Wider than the other pages outside the wall, and on purpose: la lista and la
+ * votación are answered standing up with one thumb, and this one is read after
+ * the game, often on a laptop, with fourteen rows to go through. `max-w-md` on
+ * a monitor was a column of text down the middle with the whole page empty
+ * either side.
+ */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-background">
-      <div className="mx-auto w-full max-w-md px-4 py-6">
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
         <p className="mb-4 flex items-center gap-1.5 text-sm font-semibold tracking-tight">
           <span aria-hidden>⚽</span> Fulbito
         </p>
