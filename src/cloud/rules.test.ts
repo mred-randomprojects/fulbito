@@ -9,12 +9,14 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   type Firestore,
 } from "firebase/firestore";
-import type { PlayerId } from "@/types";
+import type { MatchId, PlayerId } from "@/types";
 import {
   createList,
   deleteList,
@@ -36,6 +38,16 @@ import {
   setIgnoredBallots,
   submitBallot,
 } from "./polls";
+import {
+  deleteComment,
+  deleteRecap,
+  postComment,
+  publishRecap,
+  setIgnoredReviews,
+  setMyReview,
+  setRecapClosed,
+  writeIdentity,
+} from "./recaps";
 import { listAccounts, writeProfile } from "./accounts";
 
 /**
@@ -491,5 +503,361 @@ describe("polls", () => {
         at: "now",
       }),
     );
+  });
+});
+
+/**
+ * El tercer tiempo. The collection where people write to each other, so the
+ * sentences worth pinning are about attribution and about the wall: a
+ * signature that cannot be forged, a thread the owner can shut, and a match
+ * page that gives away nothing anybody wrote for themselves.
+ */
+describe("recaps", () => {
+  /** Somebody who played and is writing about it. Not the owner of the app. */
+  const VOTER: Who = { uid: "voter-1", email: "voter@example.com" };
+  const MAXI = "maxi" as PlayerId;
+  const JUAN = "juan" as PlayerId;
+
+  const match = {
+    id: "match-1" as MatchId,
+    name: "Martes",
+    date: "2026-03-10",
+    teamA: { name: "Claros", kit: "light" as const, formationId: "f" },
+    teamB: { name: "Oscuros", kit: "dark" as const, formationId: "f" },
+    result: { goalsA: 3, goalsB: 2 },
+    squad: [MAXI, JUAN],
+    lineupA: [MAXI],
+    lineupB: [JUAN],
+    videos: [],
+  };
+
+  const players = [
+    {
+      id: MAXI,
+      firstName: "Maxi",
+      lastName: "",
+      nickname: "",
+      avatar: "",
+      ratingScale: 100 as const,
+      rating: 60,
+      roleRatings: {},
+      attributes: {},
+      avoid: [],
+      together: [],
+      tags: [],
+      notes: "una nota privada",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      id: JUAN,
+      firstName: "Juan",
+      lastName: "",
+      nickname: "",
+      avatar: "",
+      ratingScale: 100 as const,
+      rating: 70,
+      roleRatings: {},
+      attributes: {},
+      avoid: [],
+      together: [],
+      tags: [],
+      notes: "",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
+
+  /** The recap up, as the owner, ready for somebody else to write on. */
+  async function publish(): Promise<string> {
+    const ok = await publishRecap(as(OWNER), "owner-1", match, players);
+    assert.equal(ok, true);
+    return match.id;
+  }
+
+  it("lets whoever holds the link read it, even a device with no account", async () => {
+    const id = await publish();
+    const snap = await getDoc(doc(as(DEVICE_A), "recaps", id));
+    assert.equal(snap.exists(), true);
+    assert.equal(snap.data()?.title, "Martes");
+  });
+
+  it("gives nothing to somebody with no session at all", async () => {
+    const id = await publish();
+    await denied(getDoc(doc(as(null), "recaps", id)));
+  });
+
+  it("is never enumerable by anybody but the owner", async () => {
+    await publish();
+    const mine = query(collection(as(OWNER), "recaps"), where("ownerUid", "==", "owner-1"));
+    assert.equal((await getDocs(mine)).size, 1);
+    await denied(
+      getDocs(query(collection(as(STRANGER), "recaps"), where("ownerUid", "==", "owner-1"))),
+    );
+    await denied(getDocs(collection(as(DEVICE_A), "recaps")));
+    // Not even the owner may sweep the whole collection: a query the rules
+    // cannot prove is restricted to one uid is refused, filter or no filter.
+    await denied(getDocs(collection(as(OWNER), "recaps")));
+  });
+
+  it("refuses a recap somebody tries to publish under another uid", async () => {
+    await denied(
+      setDoc(doc(as(STRANGER), "recaps", "match-2"), {
+        ownerUid: "owner-1",
+        title: "Robado",
+        date: "2026-03-10",
+        goalsA: 1,
+        goalsB: 0,
+        a: { name: "A", kit: "light", players: [] },
+        b: { name: "B", kit: "dark", players: [] },
+        videos: [],
+        createdAt: "now",
+      }),
+    );
+  });
+
+  it("refuses a field nobody agreed to publish", async () => {
+    // The redaction lives in `lib/recap.ts`; this is the second lock on it.
+    await denied(
+      setDoc(doc(as(OWNER), "recaps", "match-3"), {
+        ownerUid: "owner-1",
+        title: "Martes",
+        date: "2026-03-10",
+        goalsA: 1,
+        goalsB: 0,
+        a: { name: "A", kit: "light", players: [] },
+        b: { name: "B", kit: "dark", players: [] },
+        videos: [],
+        createdAt: "now",
+        reviews: { maxi: "no cruzó la mitad" },
+      }),
+    );
+  });
+
+  it("takes a comment from a Google account and shows it to everybody", async () => {
+    const id = await publish();
+    await postComment(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "El Gordo" }, "buenísimo el segundo gol");
+    const seen = await getDocs(collection(as(DEVICE_A), "recaps", id, "comments"));
+    assert.equal(seen.size, 1);
+    assert.equal(seen.docs[0].data().name, "El Gordo");
+  });
+
+  it("refuses a comment from a device with no Google account", async () => {
+    const id = await publish();
+    await denied(postComment(as(DEVICE_A), id, "anon-a", { email: null, name: "Nadie" }, "hola"));
+  });
+
+  /**
+   * The promise on the page is that a mail is kept and not shown. Everything
+   * else under a recap is readable by whoever holds the link, so an address on
+   * a comment would be an address published to the whole grupo — which is why
+   * the rules refuse the field outright rather than trusting the client not to
+   * send it.
+   */
+  it("refuses a comment carrying an address at all", async () => {
+    const id = await publish();
+    await denied(
+      addDoc(collection(as(STRANGER), "recaps", id, "comments"), {
+        uid: "stranger",
+        email: "stranger@example.com",
+        name: "S",
+        text: "con mail",
+        at: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("refuses a comment attributed to another uid", async () => {
+    const id = await publish();
+    await denied(
+      addDoc(collection(as(STRANGER), "recaps", id, "comments"), {
+        uid: "owner-1",
+        email: "stranger@example.com",
+        name: "S",
+        text: "puesto en boca de otro",
+        at: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("refuses an empty comment and one past the cap", async () => {
+    const id = await publish();
+    const db = as(STRANGER);
+    const base = { uid: "stranger", name: "S", at: serverTimestamp() };
+    await denied(addDoc(collection(db, "recaps", id, "comments"), { ...base, text: "" }));
+    await denied(
+      addDoc(collection(db, "recaps", id, "comments"), { ...base, text: "x".repeat(601) }),
+    );
+  });
+
+  it("never lets a comment be edited, only deleted and written again", async () => {
+    const id = await publish();
+    const db = as(STRANGER);
+    const commentId = await postComment(db, id, "stranger", { email: "stranger@example.com", name: "S" }, "lo dije");
+    await denied(updateDoc(doc(db, "recaps", id, "comments", commentId), { text: "no lo dije" }));
+  });
+
+  it("lets somebody take their own comment back, and nobody else's", async () => {
+    const id = await publish();
+    const mine = await postComment(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, "mío");
+    const theirs = await postComment(as(VOTER), id, "voter-1", { email: "voter@example.com", name: "V" }, "suyo");
+    await denied(deleteComment(as(STRANGER), id, theirs));
+    await deleteComment(as(STRANGER), id, mine);
+    // And the owner can take down anybody's.
+    await deleteComment(as(OWNER), id, theirs);
+  });
+
+  it("takes one ballot per person, filed under their own uid", async () => {
+    const id = await publish();
+    await setMyReview(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, {
+      mvp: MAXI,
+      players: { [MAXI]: { score: 80, thumb: "up", text: "jugó bien" } },
+    });
+    const snap = await getDoc(doc(as(DEVICE_A), "recaps", id, "reviews", "stranger"));
+    assert.equal(snap.data()?.mvp, MAXI);
+  });
+
+  it("refuses a ballot filed under somebody else's uid", async () => {
+    const id = await publish();
+    await denied(
+      setDoc(doc(as(STRANGER), "recaps", id, "reviews", "voter-1"), {
+        uid: "stranger",
+        name: "S",
+        players: {},
+        at: serverTimestamp(),
+      }),
+    );
+  });
+
+  /* -------------------------------------------------------------- */
+  /* The addresses: the one thing the link does not carry            */
+  /* -------------------------------------------------------------- */
+
+  it("keeps the address off every document everybody can read", async () => {
+    const id = await publish();
+    await postComment(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, "hola");
+    await setMyReview(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, {
+      players: { [MAXI]: { score: 80 } },
+    });
+    await writeIdentity(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" });
+    const db = as(DEVICE_A);
+    const comments = await getDocs(collection(db, "recaps", id, "comments"));
+    const reviews = await getDocs(collection(db, "recaps", id, "reviews"));
+    const seen = JSON.stringify([
+      ...comments.docs.map((d) => d.data()),
+      ...reviews.docs.map((d) => d.data()),
+    ]);
+    assert.equal(seen.includes("stranger@example.com"), false);
+    // And the place it *is* kept is unreadable to everybody else.
+    await denied(getDocs(collection(as(DEVICE_A), "recaps", id, "identities")));
+    await denied(getDocs(collection(as(VOTER), "recaps", id, "identities")));
+  });
+
+  it("lets the owner and the super admins read who a name is, and only them", async () => {
+    const id = await publish();
+    // Awaited rather than riding on `postComment`, which fires this off and
+    // does not wait — see `writeIdentity`.
+    await writeIdentity(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" });
+    const asOwner = await getDocs(collection(as(OWNER), "recaps", id, "identities"));
+    assert.equal(asOwner.docs[0].data().email, "stranger@example.com");
+    const asAdmin = await getDocs(collection(as(OTHER_ADMIN), "recaps", id, "identities"));
+    assert.equal(asAdmin.size, 1);
+  });
+
+  it("refuses an identity whose address is not the token's", async () => {
+    const id = await publish();
+    await denied(
+      setDoc(doc(as(STRANGER), "recaps", id, "identities", "stranger"), {
+        email: "owner@example.com",
+        name: "El dueño",
+        at: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("refuses an identity filed under somebody else's uid", async () => {
+    const id = await publish();
+    await denied(
+      setDoc(doc(as(STRANGER), "recaps", id, "identities", "voter-1"), {
+        email: "stranger@example.com",
+        name: "S",
+        at: serverTimestamp(),
+      }),
+    );
+  });
+
+  /**
+   * "Se cae todo con ella" has to be true of the addresses, and unlike an
+   * encuesta's it can be said plainly: the owner may list these, so
+   * `deleteRecap` names them without any of `deletePoll`'s gymnastics.
+   *
+   * Afterwards nobody can list them at all — the rule asks the parent who owns
+   * it and the parent is gone — so what is asserted is that the owner could see
+   * one, that taking the recap down succeeded, and that the document itself is
+   * no longer there.
+   */
+  it("takes the addresses down with the recap", async () => {
+    const id = await publish();
+    await writeIdentity(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" });
+    assert.equal((await getDocs(collection(as(OWNER), "recaps", id, "identities"))).size, 1);
+    await deleteRecap(as(OWNER), id);
+    assert.equal((await getDoc(doc(as(OWNER), "recaps", id))).exists(), false);
+    assert.equal(
+      (await getDoc(doc(as(ADMIN), "recaps", id, "identities", "stranger"))).exists(),
+      false,
+    );
+  });
+
+  it("lets somebody revise their own ballot", async () => {
+    const id = await publish();
+    const author = { email: "stranger@example.com", name: "S" };
+    await setMyReview(as(STRANGER), id, "stranger", author, { players: { [MAXI]: { score: 40 } } });
+    await setMyReview(as(STRANGER), id, "stranger", author, { players: { [MAXI]: { score: 90 } } });
+    const snap = await getDoc(doc(as(OWNER), "recaps", id, "reviews", "stranger"));
+    assert.equal(snap.data()?.players.maxi.score, 90);
+  });
+
+  it("stops new comments and new ballots once the thread is shut", async () => {
+    const id = await publish();
+    await setRecapClosed(as(OWNER), id, true);
+    await denied(postComment(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, "tarde"));
+    await denied(
+      setMyReview(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, {
+        players: { [MAXI]: { score: 80 } },
+      }),
+    );
+    // Everything already there is still readable, which is the point.
+    assert.equal((await getDoc(doc(as(DEVICE_A), "recaps", id))).exists(), true);
+  });
+
+  it("lets only the owner shut the thread or set a ballot aside", async () => {
+    const id = await publish();
+    await denied(setRecapClosed(as(STRANGER), id, true));
+    await denied(setIgnoredReviews(as(STRANGER), id, ["stranger"]));
+    await setIgnoredReviews(as(OWNER), id, ["stranger"]);
+    assert.deepEqual((await getDoc(doc(as(OWNER), "recaps", id))).data()?.ignored, ["stranger"]);
+  });
+
+  it("lets only the owner take the recap down", async () => {
+    const id = await publish();
+    await denied(deleteRecap(as(STRANGER), id));
+    await deleteRecap(as(OWNER), id);
+    assert.equal((await getDoc(doc(as(OWNER), "recaps", id))).exists(), false);
+  });
+
+  it("publishes no rating and nothing written for the owner", async () => {
+    const id = await publish();
+    const snap = await getDoc(doc(as(DEVICE_A), "recaps", id));
+    const json = JSON.stringify(snap.data());
+    assert.equal(json.includes("rating"), false);
+    assert.equal(json.includes("una nota privada"), false);
+    const faces = await getDocs(collection(as(DEVICE_A), "recaps", id, "players"));
+    const facesJson = JSON.stringify(faces.docs.map((d) => d.data()));
+    assert.equal(facesJson.includes("una nota privada"), false);
+    assert.equal(facesJson.includes("rating"), false);
+  });
+
+  it("still keeps the roster behind the wall for whoever holds the link", async () => {
+    const id = await publish();
+    await denied(getDoc(doc(as(DEVICE_A), "users", "owner-1", "players", MAXI)));
+    await denied(getDoc(doc(as(STRANGER), "users", "owner-1", "matches", id)));
   });
 });

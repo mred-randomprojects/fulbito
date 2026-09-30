@@ -54,6 +54,11 @@ export type TrackEvent =
   | { name: "list_joined"; own: boolean }
   | { name: "list_left" }
   | { name: "list_applied"; players: number }
+  | { name: "recap_published" }
+  | { name: "recap_shared"; via: "text" | "link" }
+  | { name: "recap_commented" }
+  | { name: "recap_reviewed"; players: number }
+  | { name: "recap_adopted" }
   /** A render error the boundary caught. The vendor's own capture never sees these. */
   | { name: "app_crashed"; message: string };
 

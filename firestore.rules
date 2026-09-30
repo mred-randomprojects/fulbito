@@ -19,6 +19,10 @@ rules_version = '2';
 //      `isSuperAdmin()` and the `identities` block near the bottom.
 //   4. One address — the owner of the site — may *read* under anybody's uid,
 //      for "ver como". Never write. See `isSiteOwner()`.
+//   5. Three collections live outside `users/{uid}`, because somebody who is
+//      not you has to read them: `polls` (an encuesta), `lists` (la lista)
+//      and `recaps` (el tercer tiempo). Each block says what it pays for
+//      that with.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -82,7 +86,7 @@ service cloud.firestore {
     }
 
     // Somebody who signed in as themselves, as against a device that was
-    // handed an anonymous session for la lista. An anonymous session is
+    // handed an anonymous session for la lista or el tercer tiempo. An anonymous session is
     // mintable by anybody with the public API key, so "any session" only
     // keeps out crawlers; the encuesta's names and faces, and the one vote
     // per person, are gated on a Google account like they always were.
@@ -127,8 +131,8 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     // Encuestas — asking other people what your players are worth.
     //
-    // The first thing in this app to live outside `users/{uid}` (la lista,
-    // below, is the second), and every rule here is about paying for that
+    // The first thing in this app to live outside `users/{uid}` (la lista is
+    // the second, el tercer tiempo the third), and every rule here is about paying for that
     // honestly.
     //
     // A poll is a snapshot the owner sends out: names and faces, no ratings.
@@ -344,6 +348,181 @@ service cloud.firestore {
           );
         allow delete: if request.auth != null
           && (resource.data.uid == request.auth.uid || isListOwner());
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // El tercer tiempo — the game, after the game, for the people who
+    // played it.
+    //
+    // The third thing outside `users/{uid}` and the first one that carries
+    // what one person *wrote* to another who can read it. The encuesta sends
+    // a snapshot out and gets anonymous numbers back; la lista sends a title
+    // out and gets names back. This is a comment thread, and the rules here
+    // are about the three ways that is different.
+    //
+    //   - **Reading costs nothing.** Any session, including the anonymous one
+    //     the page mints on open, so the link works for whoever it reached
+    //     and a crawler that guessed an id still gets nothing. What is behind
+    //     it is a snapshot the owner chose to publish — `lib/recap.ts` decides
+    //     what that is, and its test pins the field list, because a leak here
+    //     is a private note in a group chat and there is no taking it back.
+    //
+    //   - **Writing is signed, and the signature is pinned.** `isPerson()`,
+    //     so a Google account, and `email` must equal the token's. Nothing
+    //     here is anonymous and nothing here pretends to be: the page shows
+    //     every name to everybody. That is the trade an attributed thread
+    //     makes — a median absorbs one bad-faith 2 and absorbs nothing at all
+    //     about a sentence, so what keeps this civil is that the grupo can see
+    //     who typed it. `name` is whatever the browser sent: a label, never
+    //     proof. The address is the proof, and only the owner and the super
+    //     admins ever have cause to look at it.
+    //
+    //   - **One person, one ballot, by shape.** A review lives at
+    //     `reviews/{uid}`, so the encuesta's marker-before-ballot dance is
+    //     simply absent — that dance exists to keep a uid *off* a ballot, and
+    //     these are signed on purpose. A comment is one document each, because
+    //     people say more than one thing about a game.
+    //
+    // A comment cannot be edited, only deleted and written again. An edit
+    // leaves no mark, and a thread where somebody can quietly rewrite what a
+    // reply was replying to is worse than one where a deletion is visible by
+    // its absence.
+    //
+    // `closed` is the owner saying "that's enough": no new comments, no new
+    // ballots, everything already said stays readable. Checked with a `get`
+    // of the parent, which costs one rule read per request and is served from
+    // cache for every later check in the same one.
+    //
+    // Not defended: the owner can delete anybody's comment, and nothing says
+    // one was there. That is the same power the organiser has over la lista
+    // and the same one they have over a WhatsApp group they admin — and the
+    // alternative, a tombstone nobody can remove, is a worse feature. The
+    // nested contents of a ballot are not validated field by field either:
+    // `normalizeReview` is what every reader goes through, and a ballot can
+    // only ever speak about somebody the recap itself lists.
+    // ------------------------------------------------------------------
+    match /recaps/{recapId} {
+      function recap() {
+        return get(/databases/$(database)/documents/recaps/$(recapId)).data;
+      }
+      function isRecapOwner() {
+        return request.auth != null && recap().ownerUid == request.auth.uid;
+      }
+      // `closed` is absent until somebody shuts the thread, and reading a
+      // field that is not there is an evaluation error rather than a false —
+      // which, before `get` with a default, meant a freshly published recap
+      // accepted no comments at all. `rules.test.ts` is what caught that.
+      function isOpen() {
+        return recap().get('closed', false) != true;
+      }
+      // Signed by the account writing it. The *address* is deliberately not
+      // here — see the `identities` block at the bottom: everything else under
+      // a recap is readable by whoever holds the link, so a mail on a comment
+      // would be a mail published to the whole grupo.
+      function signsOwnName() {
+        return isPerson()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 40;
+      }
+
+      // Whoever holds the link, once they have any session at all.
+      allow get: if request.auth != null;
+      // Never enumerable by anybody but the owner. The site owner too, so
+      // "Ver como" can see somebody's own matches as they see them.
+      allow list: if (request.auth != null && resource.data.ownerUid == request.auth.uid)
+        || isSiteOwner();
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(
+             ['ownerUid', 'title', 'date', 'goalsA', 'goalsB', 'a', 'b',
+              'videos', 'createdAt', 'closed', 'ignored'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.goalsA is int
+        && request.resource.data.goalsB is int;
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.keys().hasOnly(
+             ['ownerUid', 'title', 'date', 'goalsA', 'goalsB', 'a', 'b',
+              'videos', 'createdAt', 'closed', 'ignored']);
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      // The faces, one document each: an avatar is an inline data URL of up
+      // to 60 KB and twenty on one document cross Firestore's 1 MiB cap.
+      match /players/{playerId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      }
+
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if signsOwnName()
+          && isOpen()
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'at'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 600
+          && request.resource.data.at == request.time;
+        // See the note above: deleted and written again, never edited.
+        allow update: if false;
+        allow delete: if request.auth != null
+          && (resource.data.uid == request.auth.uid || isRecapOwner());
+      }
+
+      // One per person, and the document id is who. A ballot is rewritable
+      // by its own author on purpose: a puntaje typed before the video went
+      // up is one somebody is entitled to revise.
+      match /reviews/{voterId} {
+        allow read: if request.auth != null;
+        allow create, update: if signsOwnName()
+          && request.auth.uid == voterId
+          && isOpen()
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'mvp', 'players', 'at'])
+          && (!('mvp' in request.resource.data) || request.resource.data.mvp is string)
+          && request.resource.data.players is map
+          && request.resource.data.at == request.time;
+        allow delete: if request.auth != null
+          && (request.auth.uid == voterId || isRecapOwner());
+      }
+
+      // ----------------------------------------------------------------
+      // Who these names actually are. The only thing under a recap that
+      // whoever holds the link cannot read.
+      //
+      // Everything else here is published on purpose — the scoreline, the
+      // faces, the puntajes, every comment with a name on it. A mail is not,
+      // and the page says so in as many words, so it is a sibling document
+      // rather than a field: a field on a comment is readable by everybody who
+      // can read the comment, and that is the entire grupo plus whoever they
+      // forwarded the link to.
+      //
+      // Read by the recap's owner — who is moderating a thread and is entitled
+      // to know which account is behind a name — and by the super admins, who
+      // maintain the app. By nobody else, including the other people who
+      // played. Written only by its own account, with the address pinned to
+      // the token, so it is evidence rather than a claim; `name` is not pinned
+      // and cannot be, because a display name is whatever the browser sent.
+      //
+      // Keyed by uid rather than per comment: an account is one person however
+      // many times they post, and the owner can take these down with the recap
+      // because they are allowed to list them — unlike an encuesta's, where
+      // the whole point is that the owner may delete what they may not read.
+      // ----------------------------------------------------------------
+      match /identities/{voterId} {
+        allow get, list: if isRecapOwner() || isSuperAdmin();
+        allow create, update: if isPerson()
+          && request.auth.uid == voterId
+          && request.resource.data.keys().hasOnly(['email', 'name', 'at'])
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.name is string
+          && request.resource.data.at == request.time;
+        allow delete: if request.auth != null
+          && (request.auth.uid == voterId || isRecapOwner() || isSuperAdmin());
       }
     }
 

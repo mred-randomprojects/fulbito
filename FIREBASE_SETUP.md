@@ -149,6 +149,18 @@ match /users/{userId}/{document=**} {
 `request.auth.uid == userId` is what makes open sign-up safe: every account is
 an island, and no signed-in user can read another's roster.
 
+Three collections sit deliberately *outside* that island, because somebody who
+is not you has to read them: `polls` (an encuesta), `lists` (la lista) and
+`recaps` (el tercer tiempo — a finished match, shared back to the grupo). Each
+has its own block in the rules explaining what it pays for that with.
+`recaps/{id}/identities` is the one place a Google address is stored outside
+`users/{uid}`: readable by the match's owner and the super admins only, never by
+the other people who played, and written only by its own account with the
+address pinned to the token. **Until the rules are published nobody can comment
+on or puntuar a match** — the reads still work, so the page shows the scoreline
+and refuses the writes, which is the right way round for a rule that has not
+gone up yet.
+
 ## 7. GitHub Actions secrets
 
 The site is built in CI, so the Vite variables have to exist there too.

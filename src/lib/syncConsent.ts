@@ -94,6 +94,17 @@ export function mirrorIsStale(gate: SyncGate, mirrored: boolean): boolean {
 export const POLL_ROUTE = "/encuesta/";
 /** Where a lista is signed. Same deal: the SDK is needed before anything else. */
 export const LIST_ROUTE = "/lista/";
+/**
+ * Where el tercer tiempo is read and argued about. Needs Firebase to show
+ * anything at all — even to read, which is an anonymous session.
+ *
+ * Deliberately *not* in `hashNeedsGoogle`: most of the people this link
+ * reaches only read it, and the sign-in script is a download for nothing
+ * until somebody decides to write. `RecapPage` calls `prepare()` once the
+ * page is up and the button is on screen, which is well before any tap —
+ * the same thing Encuestas does.
+ */
+export const RECAP_ROUTE = "/partido/";
 
 /**
  * Does this URL need Firebase whether or not sync was ever turned on?
@@ -104,7 +115,7 @@ export const LIST_ROUTE = "/lista/";
  */
 export function hashNeedsAuth(hash: string): boolean {
   const path = hash.startsWith("#") ? hash.slice(1) : hash;
-  return path.startsWith(POLL_ROUTE) || path.startsWith(LIST_ROUTE);
+  return path.startsWith(POLL_ROUTE) || path.startsWith(LIST_ROUTE) || path.startsWith(RECAP_ROUTE);
 }
 
 /**

@@ -150,6 +150,20 @@ any other app, full screen and with no signal needed.
   one dot sitting on the number that person put, so where the room agreed there
   is a little mountain, and a dot says who put it and in which encuesta. Your own rating is never shown to whoever is answering —
   seeing it would anchor them and ruin the answer.
+- **El tercer tiempo, when it is over.** A finished partido can go back to the
+  grupo as its own page: the scoreline, the two formations with the faces, and
+  the video. Anybody with the link reads it without an account; anybody who
+  signs in with Google puts a nota de 0 a 100 on each player, un pulgar para
+  arriba o para abajo, vota la figura, escribe cómo jugó cada uno y comenta el
+  partido — con su nombre al lado, que es lo que mantiene la cosa civilizada.
+  Lo que escriben vuelve a tu app debajo de tu propio uno x uno, y se suma con
+  un toque si te gusta: nunca le mueve el puntaje a nadie. Vos cerrás el hilo
+  cuando ya está, o lo das de baja del todo, y si alguien vota de mala fe le
+  saltás la planilla entera sin borrarla. Lo que escribiste para vos — las
+  notas, los puntajes, la plata, el uno x uno — no sale nunca: lo garantizan un
+  test que fija los campos que se publican y las reglas del servidor, las dos
+  cosas. El único dato que el link no lleva es el mail de nadie: queda guardado
+  donde sólo lo ves vos y los que mantienen la app.
 - **Share without leaking ratings.** A PNG of the pitch, a PNG of the torneito,
   or a plain-text list for the group chat. Ratings are excluded from all of
   them unless you opt in.
@@ -369,10 +383,6 @@ no secrets.
 - **Head-to-head history.** Each player has a record; pairs do not. "Wins 80% of
   the time he is on your side" is the obvious next thing to read off the same
   matches.
-- **Asking the group how the game went.** An encuesta asks what a player is
-  worth, in numbers, once. There is nothing that asks what people thought of a
-  particular night, and nowhere for anonymous comments about a match to be read
-  by the people who played it.
 - **Anything that moves money.** No alias, no QR, no payment link. The app says
   who owes what; the transfer happens where it always happened.
 - **Ratings that learn from results.** The 0-100 numbers stay hand-entered, or

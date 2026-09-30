@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App";
 import { PollPage } from "./components/PollPage";
 import { ListPage } from "./components/ListPage";
+import { RecapPage } from "./components/RecapPage";
 import { CloudAuthProvider } from "./cloud/auth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { registerServiceWorker } from "./registerServiceWorker";
@@ -20,6 +21,9 @@ const router = createHashRouter([
   { path: "/encuesta/:pollId", element: <PollPage /> },
   // Same shape, same reason. See `ListPage` for how it differs in temperament.
   { path: "/lista/:listId", element: <ListPage /> },
+  // And the third: the game after the game. Same reason again — the person
+  // arguing about the second goal has no roster of ours to load.
+  { path: "/partido/:matchId", element: <RecapPage /> },
   { path: "*", element: <App /> },
 ]);
 

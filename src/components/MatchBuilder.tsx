@@ -27,6 +27,8 @@ import { ResultPanel } from "./ResultPanel";
 import { MatchNotes } from "./MatchNotes";
 import { VideoPanel } from "./VideoPanel";
 import { PitchPlayerCard, type PitchPlace, type PitchPlayerTarget } from "./PitchPlayerCard";
+import { RecapPanel } from "./RecapPanel";
+import { useMatchRecap } from "@/useMatchRecap";
 import { SquadPicker, type LockTarget } from "./SquadPicker";
 import { SavedTeamsPanel } from "./SavedTeamsPanel";
 import { ListPanel } from "./ListPanel";
@@ -115,6 +117,12 @@ export function MatchBuilder({
   onDeletePlayer,
   onBack,
 }: Props) {
+  /**
+   * What the grupo said about this game, when there is a tercer tiempo up.
+   * Watched once here and handed to the two places that read it: the panel
+   * below the result, and the card a tap on a player opens.
+   */
+  const recap = useMatchRecap(match.id);
   const [selection, setSelection] = useState<Selection | null>(null);
   /**
    * The player whose card is open, if any. See `PitchPlayerCard`: a tap on a
@@ -740,6 +748,12 @@ export function MatchBuilder({
         <VideoPanel videos={match.videos} onChange={(videos) => patch({ videos })} />
       )}
 
+      {/* El tercer tiempo: the game *after* the game, so it comes after the
+          result, the note and the videos. It shows itself only once there is
+          a result and two sides — `canPublish` — so it is absent on a match
+          still being arranged. */}
+      <RecapPanel match={match} players={players} recap={recap} />
+
       {!squadReady ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-dashed border-border bg-card/40 p-6">
@@ -1073,6 +1087,8 @@ export function MatchBuilder({
         target={card?.target ?? null}
         reviews={match.reviews}
         onReviewChange={writeReview}
+        guest={card == null ? null : recap.byPlayer.get(card.target.player.id) ?? null}
+        onAdopt={(id, review) => writeReview(id, review)}
         onMove={() => {
           if (card == null) return;
           setSelection(card.at);

@@ -126,3 +126,17 @@ describe("hashNeedsGoogle", () => {
     }
   });
 });
+
+describe("el tercer tiempo needs Firebase too", () => {
+  it("needs auth, because even reading it is an anonymous session", () => {
+    assert.equal(hashNeedsAuth("#/partido/abc"), true);
+  });
+
+  it("does not pull Google's script for somebody who only reads", () => {
+    assert.equal(hashNeedsGoogle("#/partido/abc"), false);
+  });
+
+  it("does not match a route that merely starts the same way", () => {
+    assert.equal(hashNeedsAuth("#/partidos"), false);
+  });
+});

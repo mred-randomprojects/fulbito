@@ -25,6 +25,11 @@ liga in one tap: every match is created with both lineups ready and stays
 tied to its teams, the table fills itself as goals are tapped in, and
 renaming a team renames it on every game it plays. The same saved teams
 can still stand on half a pitch to look at or come into one match in a tap.
+And when it is over, the match can go back to the grupo as its own
+page: the scoreline, the two formations and the video, where anybody with the
+link reads it and anybody who signs in with Google puts a nota on each player,
+votes la figura, says how each of them went and argues about the second goal —
+and what they write comes back next to your own uno x uno, to take or leave.
 Once the sides are up, six models guess how
 it goes — who wins, with how many goals, as a
 probability for every scoreline — and once the result is in, the same screen
@@ -301,6 +306,9 @@ New rating displays must use the gate, including tooltips and charts.
 | `lib/pitchTap.ts` | What a tap on the cancha means: open the player's card, arm a move, or make one |
 | `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
 | `lib/reviews.ts` | What counts as a line of the uno x uno, and one player's history of them |
+| `lib/recap.ts` | El tercer tiempo: what a finished match publishes and what it never does, plus the comments and ballots that come back |
+| `lib/recapFeedback.ts` | What the grupo's puntajes add up to: a median per player, the thumbs, la figura, and taking a line into the uno x uno |
+| `useMatchRecap.ts` | The recap of the match that is open, watched once and handed to the panel and the player's card |
 | `lib/video.ts` | What an address pasted onto a match is — YouTube, Vimeo, Drive, a file, a link, or nothing — what a player needs to show it, the same link twice, and the lines the chat gets |
 | `lib/forecast.ts` | The ground every forecast stands on: how many goals a game has, what a gap is worth, what an extra player is worth, and the scoreline grid |
 | `lib/forecastModels.ts` | The six arguments about what decides a picado, each as a grid, and the consensus that averages them |
@@ -837,7 +845,7 @@ whose app it is and is the way back.
   puede leer"; it now says the owner can read it, and only read it. A promise
   the code has quietly stopped keeping is worse than no promise.
 
-### Encuestas, and the one thing outside the wall
+### Encuestas, the first thing outside the wall
 
 Everything above lives under `users/{uid}`, which is a wall. Asking other
 people what your players are worth cannot: a poll is read, and answered, by
@@ -976,7 +984,7 @@ comes back.
 Setting the whole thing up in Firebase is [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md);
 [`firestore.rules`](./firestore.rules) is the gate that actually enforces it.
 
-### La lista, and the second thing outside the wall
+### La lista, the second thing outside the wall
 
 An encuesta asks for a private opinion; la lista asks for a public "voy". The
 same shape — a root collection, `lists/{matchId}` with `entries/{entryId}`
@@ -1021,6 +1029,110 @@ tapped" is the question the feature exists to answer, and a "voy" was never
 private. The events are `list_created`, `list_shared`, `list_joined`,
 `list_left` and `list_applied`, plus the `page_viewed` the page sends like
 any other.
+
+### El tercer tiempo, the third thing outside the wall
+
+An encuesta asks for a private opinion; la lista asks for a public "voy". This
+asks the people who played what they made of the night, out loud, and it is the
+first thing in this app that carries **what one person wrote to another person
+who can read it**. `PROJECT.md` listed it under "deliberately not built" for
+exactly that reason, so the section is mostly about what changed and what did
+not.
+
+Same shape as the other two — a root collection, a page mounted beside `App`
+— and a third temperament:
+
+```
+recaps/{matchId}                      { ownerUid, title, date, goalsA, goalsB,
+                                        a, b, videos, createdAt, closed?, ignored? }
+recaps/{matchId}/players/{playerId}   { ownerUid, name, avatar }
+recaps/{matchId}/comments/{commentId} { uid, name, text, at }
+recaps/{matchId}/reviews/{uid}        { uid, name, mvp?, players, at }
+recaps/{matchId}/identities/{uid}     { email, name, at }
+```
+
+- **It only exists after the game, and the recap is a redaction.** `canPublish`
+  wants a result and somebody on each side; a link to a game nobody has played
+  is la lista's job. What goes out is the scoreline, the two sides with their
+  names, kits and faces, and the video links — and `recapFromMatch` in
+  `lib/recap.ts` is the only door, written out one field at a time rather than
+  spread from the match. `recap.test.ts` pins the exact key set and asserts that
+  the notes, the uno x uno, the `forecastNotes`, the payments and every rating
+  are absent; `firestore.rules` pins the same set again with a `hasOnly`. Two
+  locks, because the failure mode is "no cruzó la mitad" in a group chat under
+  somebody's name and there is no taking that back. `RecapDocument` is its own
+  type rather than a slice of `Recap` for the same reason: `id` is the
+  document's path, and `closed`/`ignored` are the owner's words about the
+  *thread* rather than facts about the game, so a republish to fix a scoreline
+  cannot reopen a thread somebody shut.
+- **Reading is free; writing is signed.** The page mints an anonymous session
+  on open like la lista, so the link works for whoever it reached. Commenting or
+  puntuando wants a Google account (`isPerson()`), and the name is shown to
+  everybody. That is the opposite trade from the encuesta, on purpose: a median
+  absorbs one bad-faith 2 and absorbs *nothing* about a sentence, so what keeps
+  a free-text box civil is that the grupo can see who typed it. `name` is
+  whatever the browser sent — a label, never proof.
+- **The address is the one thing the link does not carry.** Everything else
+  under a recap is readable by whoever holds it, so a mail on a comment would be
+  a mail published to the whole grupo. It lives in `identities/{uid}`, readable
+  by the recap's owner and the super admins and nobody else — including the
+  other people who played — and pinned to the Google token, so it is evidence
+  rather than a claim. The owner is *shown* it in the panel: an address stored
+  for a reader who does not exist is a liability rather than a feature, and the
+  cartel on the page promises exactly this. Keyed by uid rather than per
+  comment, because an account is one person however many times they post — and
+  because the owner may list these, unlike an encuesta's, "se cae todo con ella"
+  is true of the addresses without any of `deletePoll`'s gymnastics.
+- **One person, one ballot, by shape.** A review is filed at `reviews/{uid}`, so
+  none of the encuesta's marker-before-ballot dance appears here: that dance
+  exists to keep a uid *off* a ballot, and these are signed on purpose.
+  Rewritable by its own author, because a puntaje typed before the video went up
+  is one somebody is entitled to revise. A comment is one document each, and
+  **cannot be edited** — an edit leaves no mark, and a thread where somebody can
+  quietly rewrite what a reply was replying to is worse than one where a
+  deletion is visible by its absence.
+- **Four ways to say how somebody played**, because they answer different
+  moods: a thumb (the quick pass down the team), a 0–100 puntaje, a line of
+  text, and one vote for la figura per person. All optional, all on the same
+  row, and an empty verdict is no verdict — the key goes, the same call
+  `setReview` makes.
+- **Median, like the crowd, but no floor — and that is the difference.**
+  `lib/recapFeedback.ts` imports `median` from `lib/crowd.ts` so the two
+  screens cannot disagree about what the middle of a pile is. It deliberately
+  does *not* import `MIN_VOTERS`: that floor exists so a median cannot be read
+  back as one person's private opinion of a player, and here every line already
+  carries its author's name out loud. What is shown instead is the count,
+  always, so "7,5 de uno solo" never reads as a consensus.
+- **What comes back is read beside your own line, and adopted by a tap.** On
+  the cancha, the card a tap on a player opens now carries "lo que dijo el
+  grupo" *under* your own box — under, so a wall of other people's opinions does
+  not anchor what you were about to write, the same reason an encuesta shows the
+  voter no ratings. A tap appends one line to the uno x uno with the name
+  attached, because a line you adopted from El Gordo is not a line you wrote,
+  and `adoptInto` is idempotent so a double tap on a phone costs nothing. It
+  never touches a rating — see "Rating people from their results".
+- **Two words for the owner, and they are different words.** *Cerrar* stops new
+  comments and new ballots and leaves everything readable, which is "that's
+  enough for tonight". *Dar de baja* takes the whole thing down and breaks the
+  link, which is a different wish; the confirmation says so and points at the
+  first one. Setting a ballot aside (`ignored`) takes the **whole** review out
+  rather than the one puntaje that looks wrong: somebody voting in bad faith did
+  it across the board, and picking out the numbers you disagree with is how a
+  page like this stops being worth reading. Unlike an encuesta's ballots this is
+  not gated on being a super admin — nothing here was ever anonymous.
+- **A published recap stays manageable whatever happens to the match.** The
+  panel shows itself once there is a result *or* there is already a recap up:
+  clearing the result must not leave a live link with no way to close it. And
+  `recapDiffers` nags when the published page has fallen behind — the scoreline,
+  the names, the date, the video that turned up the next morning, but *not* the
+  lineups, because a shirt moved after the game is a tidy-up and a banner that
+  cries about those is a banner nobody reads. It is derived from
+  `recapFromMatch` rather than comparing the match's own fields, or a blank name
+  would nag forever about a difference no republish could remove.
+
+It is tracked: `recap_published`, `recap_shared`, `recap_commented`,
+`recap_reviewed` and `recap_adopted`, plus the `page_viewed` the page sends
+like any other. Nothing anybody wrote is in an event.
 
 ### Analytics, and what it is allowed to see
 
@@ -1388,6 +1500,14 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   adds either to a share is a change that has to take that sentence down first.
   Neither ever touches a rating: an opinion of one night is not a downgrade,
   the same line "Rating people from their results" draws below.
+  **El tercer tiempo does not change this, and the direction is the whole
+  point.** What the grupo writes on a published match comes *in* — it is shown
+  under your own box on the player's card and taken into it by a tap, with the
+  name of whoever said it attached — and nothing of yours goes *out*:
+  `recapFromMatch` is the only door, its key set is pinned by a test, and
+  `firestore.rules` refuses any field that is not on the list a second time.
+  So `Match.reviews`, `Match.notes`, `forecastNotes`, the payments and every
+  rating stay where they are.
   **`Match.videos` is the one deliberate exception.** The recording is the
   one thing on a match that was made *for* the grupo — the link is the
   message everybody was going to ask for anyway — so `ShareDialog` puts one
@@ -1552,21 +1672,18 @@ touched anything and the two of them must go quiet.
 
 - **Sharing a roster with somebody else.** Sync copies your data between *your*
   devices. Two people cannot edit one plantel: there is no invite, no shared
-  team, and `users/{uid}` is a wall, not a default. Two things cross it,
+  team, and `users/{uid}` is a wall, not a default. Three things cross it,
   each in one direction only: an encuesta sends a read-only snapshot out and
   gets anonymous numbers back; la lista sends a title out and gets names
-  back. Neither lets anybody touch the plantel.
+  back; el tercer tiempo sends a finished game out and gets puntajes and
+  comments back. None of them lets anybody touch the plantel — what comes
+  back from the third is read beside your own uno x uno and adopted by a
+  deliberate tap, never merged into it.
 - **Free placement on the pitch.** Positions come from a formation; dragging a
   player anywhere on the grass is the obvious next step.
 - **Head-to-head history.** A player's own record exists, but "wins 80% of the
   time he is on your side" — and the pair-level stats behind it — does not. It
   is the obvious next thing to read off the same matches.
-- **Asking the group how the game went.** An encuesta asks what a player is
-  *worth*, once, in numbers. It does not ask what people thought of a
-  particular night, and there is nowhere for anonymous comments about a match
-  to be read by the people who played it — which would be the first thing in
-  this app that sends what one player wrote to another, rather than a
-  read-only snapshot out and anonymous numbers back.
 - **Hosting the video.** The app keeps addresses; it does not keep, upload
   or transcode recordings. A ninety-minute file off the cancha's cameras is
   a gigabyte, and the day it lives in Firebase Storage is the day the app
