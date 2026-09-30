@@ -218,17 +218,33 @@ export interface RecapSnapshot {
   /** `null` when the link points at nothing, or the recap was taken down. */
   recap: Recap | null;
   comments: RecapComment[];
+  /**
+   * The ballots this viewer is allowed to see: **every one of them for the
+   * owner, and their own alone for everybody else.** Not a filter applied
+   * after the fact — the rules refuse the rest, so what is not here was never
+   * fetched. See the `reviews` block in `firestore.rules`.
+   */
   reviews: RecapReview[];
 }
 
 /**
- * The recap, live: the document, its faces, the thread and the ballots.
+ * The recap, live: the document, its faces, the thread and whichever ballots
+ * this viewer may read.
  *
- * Four listeners folded into one callback, because the screen has one
- * question — what does the page say right now. Live rather than fetched
- * because the whole point is watching the grupo argue: a comment thread that
- * needed a reload would send everybody back to WhatsApp, which is the thing
- * this replaces.
+ * Listeners folded into one callback, because the screen has one question —
+ * what does the page say right now. Live rather than fetched because the whole
+ * point is watching the grupo argue: a comment thread that needed a reload
+ * would send everybody back to WhatsApp, which is the thing this replaces.
+ *
+ * **The ballots are the exception, and the shape of this function is that
+ * exception.** A puntaje is an opinion about somebody in the same grupo, so
+ * only the person who asked for it reads the pile: the collection is watched
+ * for the owner, and for anybody else there is one listener on their own
+ * document, which is how somebody comes back to a ballot they half filled in.
+ * Whether this viewer is the owner is not known until the recap document
+ * arrives, so that listener is attached when it does — asking for the
+ * collection first and letting the rules refuse would put a permission error
+ * on the screen of every person who opened the link.
  *
  * A recap that stops existing is reported as `null` once, so somebody still
  * looking at it is told rather than left with a page that quietly stops
@@ -237,6 +253,8 @@ export interface RecapSnapshot {
 export async function watchRecap(
   db: Firestore,
   id: string,
+  /** Who is looking. `null` before a session exists; nothing is then read. */
+  viewerUid: string | null,
   onChange: (snapshot: RecapSnapshot) => void,
   onError: (error: unknown) => void,
 ): Promise<() => void> {
@@ -251,23 +269,67 @@ export async function watchRecap(
     return typeof at === "string" ? at : new Date(0).toISOString();
   };
 
+  /** One ballot as it came off the wire, before `normalizeReview` sees it. */
+  interface RawBallot {
+    uid: string;
+    data: unknown;
+    at: string;
+  }
+
   let meta: unknown | null | undefined;
   let faces: unknown[] | undefined;
   let comments: RecapComment[] | undefined;
-  let rawReviews: { uid: string; data: unknown; at: string }[] | undefined;
+  /**
+   * This viewer's own ballot, `null` when they have not filed one — and `null`
+   * from the start when there is nobody to have filed one, so a page with no
+   * session at all still renders rather than waiting for a listener that was
+   * never attached.
+   */
+  let mine: RawBallot | null | undefined = viewerUid === null ? null : undefined;
+  /** Every ballot. Only ever set for the owner, and only once it arrives. */
+  let all: RawBallot[] | undefined;
+
+  /**
+   * The pile, for the owner alone, attached the moment their own recap
+   * document says they are the owner.
+   *
+   * Declared before the listeners on purpose: it is called from `emit`, and a
+   * `const` referenced before its line has run is a crash rather than a
+   * fallback.
+   */
+  let stopAll: (() => void) | null = null;
+  const watchAllIfOwner = (recap: Recap) => {
+    if (stopAll !== null || viewerUid === null || recap.ownerUid !== viewerUid) return;
+    stopAll = onSnapshot(
+      collection(recapRef, REVIEWS),
+      (snap) => {
+        all = snap.docs.map((entry) => {
+          const data: unknown = entry.data({ serverTimestamps: "estimate" });
+          return { uid: entry.id, data, at: timestampOf(data, "at") };
+        });
+        emit();
+      },
+      onError,
+    );
+  };
 
   const emit = () => {
     if (meta === undefined || faces === undefined) return;
-    if (comments === undefined || rawReviews === undefined) return;
+    if (comments === undefined || mine === undefined) return;
     const recap = meta === null ? null : normalizeRecap(meta, faces, id);
     if (recap === null) {
       onChange({ recap: null, comments: [], reviews: [] });
       return;
     }
+    watchAllIfOwner(recap);
+    // The owner's pile once it is here; until then — and for everybody else,
+    // forever — whatever this viewer filed themselves. Nothing is filtered
+    // out here: what is missing was refused by the rules and never fetched.
+    const raw: RawBallot[] = all ?? (mine === null ? [] : [mine]);
     // The recap's own list is the authority over what a ballot may say —
     // see `normalizeReview`, and the same decision in `lib/poll.ts`.
     const known = new Set<PlayerId>([...recap.a.players, ...recap.b.players]);
-    const reviews = rawReviews.flatMap((entry) => {
+    const reviews = raw.flatMap((entry) => {
       const parsed = normalizeReview(entry.uid, entry.data, entry.at, known);
       return parsed === null ? [] : [parsed];
     });
@@ -308,23 +370,35 @@ export async function watchRecap(
     },
     onError,
   );
-  const stopReviews = onSnapshot(
-    collection(recapRef, REVIEWS),
-    (snap) => {
-      rawReviews = snap.docs.map((entry) => {
-        const data: unknown = entry.data({ serverTimestamps: "estimate" });
-        return { uid: entry.id, data, at: timestampOf(data, "at") };
-      });
-      emit();
-    },
-    onError,
-  );
+  /**
+   * One ballot: this viewer's own. Everybody gets this listener, the owner
+   * included — theirs is in the collection listener as well, and two readings
+   * of one document are the same document.
+   */
+  const stopMine =
+    viewerUid === null
+      ? null
+      : onSnapshot(
+          doc(recapRef, REVIEWS, viewerUid),
+          (snap) => {
+            const data: unknown = snap.exists()
+              ? snap.data({ serverTimestamps: "estimate" })
+              : null;
+            mine =
+              data === null
+                ? null
+                : { uid: snap.id, data, at: timestampOf(data, "at") };
+            emit();
+          },
+          onError,
+        );
 
   return () => {
     stopMeta();
     stopFaces();
     stopComments();
-    stopReviews();
+    if (stopMine !== null) stopMine();
+    if (stopAll !== null) stopAll();
   };
 }
 

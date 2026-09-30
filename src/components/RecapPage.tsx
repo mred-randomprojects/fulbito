@@ -41,13 +41,10 @@ import {
   type Recap,
   type RecapPlayer,
 } from "@/lib/recap";
-import {
-  countedReviews,
-  figura,
-  myReview,
-  summariseFeedback,
-  type PlayerFeedback,
-} from "@/lib/recapFeedback";
+// `myReview` and nothing else out of `recapFeedback`: the medians, the figura
+// and the lines are read on the owner's own app, off ballots this page is not
+// given. See the section header below.
+import { myReview } from "@/lib/recapFeedback";
 import { KITS, type PlayerId } from "@/types";
 import { track } from "@/lib/track";
 import { useTracking } from "@/useTracking";
@@ -124,6 +121,9 @@ export function RecapPage() {
         stop = await watchRecap(
           db,
           matchId,
+          // Whoever this device is, which is exactly one ballot's worth of
+          // read access: their own. The pile belongs to the person who asked.
+          who,
           (next) => {
             if (!live) return;
             setSnapshot(next);
@@ -151,7 +151,13 @@ export function RecapPage() {
       live = false;
       if (stop !== null) stop();
     };
-  }, [available, loading, matchId]);
+    // `user` is in here because signing in replaces the session, and the
+    // listener on this viewer's own ballot is pinned to a uid: left alone it
+    // would keep watching a document the new session may not read, which the
+    // rules answer with a refusal and this page answers with "se rompió".
+    // Resubscribing is one snapshot and keeps the typed draft, which is
+    // seeded once.
+  }, [available, loading, matchId, user]);
 
   /**
    * Signing in replaces an anonymous session with a real one, so the uid
@@ -178,21 +184,15 @@ export function RecapPage() {
     () => commentOrder(snapshot?.comments ?? []),
     [snapshot?.comments],
   );
-  /** The owner's word on which ballots count is respected here too. */
-  const counted = useMemo(
-    () => countedReviews(snapshot?.reviews ?? [], recap?.ignored ?? []),
-    [snapshot?.reviews, recap?.ignored],
-  );
-  const ids = useMemo<PlayerId[]>(
-    () => (recap === null ? [] : [...recap.a.players, ...recap.b.players]),
-    [recap],
-  );
-  const feedback = useMemo(() => summariseFeedback(ids, counted), [ids, counted]);
-  const byPlayer = useMemo(
-    () => new Map(feedback.map((entry) => [entry.playerId, entry])),
-    [feedback],
-  );
-  const best = useMemo(() => figura(feedback), [feedback]);
+  /**
+   * This account's own ballot, and the only one this page ever has.
+   *
+   * There is no median here, no figura and nobody else's line about anybody —
+   * not hidden, *absent*: `watchRecap` never fetches them and the rules would
+   * refuse if it tried. A puntaje is an opinion about somebody who is in the
+   * same grupo, so the person who asked for it is the one who reads it. The
+   * debate about the game stays out loud, below.
+   */
   const stored = useMemo(() => myReview(snapshot?.reviews ?? [], uid), [snapshot?.reviews, uid]);
   const faces = useMemo(
     () => new Map((recap?.players ?? []).map((player) => [player.id, player])),
@@ -351,28 +351,10 @@ export function RecapPage() {
 
   const when = formatMatchDate(recap.date);
   const mine = uid === null ? null : uid;
-  const answered = counted.length;
 
   return (
     <Shell>
       <Scoreboard recap={recap} when={when} />
-
-      {best !== null && (
-        <p className="mb-4 flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
-          <Star className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
-          <span>
-            <span className="font-medium">
-              {best.tied ? "Empatada la figura" : "La figura"}
-            </span>
-            {": "}
-            {faces.get(best.playerId)?.name ?? "alguien"}
-            <span className="text-muted-foreground">
-              {" "}
-              · {best.votes} {best.votes === 1 ? "voto" : "votos"}
-            </span>
-          </span>
-        </p>
-      )}
 
       {recap.videos.length > 0 && (
         <div className="mb-5 space-y-1.5">
@@ -400,11 +382,14 @@ export function RecapPage() {
       <section className="mb-6">
         <h2 className="mb-1 text-lg font-semibold tracking-tight">El uno x uno</h2>
         <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-          {answered === 0
-            ? "Todavía no puntuó nadie. Rompé el hielo."
-            : `Puntuaron ${answered} ${answered === 1 ? "persona" : "personas"}.`}{" "}
           Tocá a cualquiera para ponerle nota, decir cómo jugó, o darle la
-          estrella de figura.
+          estrella de figura.{" "}
+          <span className="text-foreground">
+            Esto lo ve nada más que el que armó el partido
+          </span>{" "}
+          — ni las notas de los demás ni las tuyas se muestran acá, así nadie
+          puntúa mirando lo que puso el resto. Si querés decir algo para todos,
+          es abajo.
         </p>
 
         {recap.closed && (
@@ -418,7 +403,6 @@ export function RecapPage() {
         <Side
           side={recap.a}
           faces={faces}
-          byPlayer={byPlayer}
           draft={draft}
           open={open}
           onOpen={setOpen}
@@ -430,7 +414,6 @@ export function RecapPage() {
         <Side
           side={recap.b}
           faces={faces}
-          byPlayer={byPlayer}
           draft={draft}
           open={open}
           onOpen={setOpen}
@@ -540,10 +523,13 @@ export function RecapPage() {
       {error !== null && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
       <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-        Los puntajes y los comentarios van con tu nombre y los ve cualquiera
-        con el link. Tu mail queda guardado y no se muestra: lo ven el que armó
-        el partido y los que mantienen la app. Podés borrar lo tuyo cuando
-        quieras, y cambiar tus puntajes las veces que quieras.
+        Las notas, la figura y lo que escribís de cada uno van con tu nombre y
+        las ve <strong className="font-medium text-foreground">solamente</strong>{" "}
+        el que armó el partido: no se muestran acá ni las tuyas ni las de nadie.
+        Los comentarios de abajo son otra cosa — ésos los lee cualquiera con el
+        link, también con tu nombre. Tu mail queda guardado y no se muestra: lo
+        ven el que armó el partido y los que mantienen la app. Podés borrar lo
+        tuyo cuando quieras, y cambiar tus puntajes las veces que quieras.
       </p>
     </Shell>
   );
@@ -583,8 +569,9 @@ function SignIn({ onEnter }: { onEnter: () => void }) {
   return (
     <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
       <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
-        Para puntuar o comentar hace falta entrar con Google, así se sabe quién
-        dijo qué. Leer no hace falta nada.
+        Para puntuar o comentar hace falta entrar con Google, así el que armó el
+        partido sabe de quién es cada planilla y nadie puntúa dos veces. Leer no
+        hace falta nada.
       </p>
       <Button className="w-full" onClick={onEnter}>
         Entrar con Google
@@ -596,7 +583,6 @@ function SignIn({ onEnter }: { onEnter: () => void }) {
 function Side({
   side,
   faces,
-  byPlayer,
   draft,
   open,
   onOpen,
@@ -607,7 +593,6 @@ function Side({
 }: {
   side: Recap["a"];
   faces: ReadonlyMap<PlayerId, RecapPlayer>;
-  byPlayer: ReadonlyMap<PlayerId, PlayerFeedback>;
   draft: Draft | null;
   open: PlayerId | null;
   onOpen: (id: PlayerId | null) => void;
@@ -628,7 +613,6 @@ function Side({
             key={id}
             player={faces.get(id) ?? { id, name: "Alguien", avatar: "" }}
             kitRing={kit.ring}
-            feedback={byPlayer.get(id) ?? null}
             verdict={draft?.players[id] ?? null}
             isMvp={draft?.mvp === id}
             expanded={open === id}
@@ -647,7 +631,6 @@ function Side({
 function PlayerRow({
   player,
   kitRing,
-  feedback,
   verdict,
   isMvp,
   expanded,
@@ -659,7 +642,6 @@ function PlayerRow({
 }: {
   player: RecapPlayer;
   kitRing: string;
-  feedback: PlayerFeedback | null;
   verdict: PlayerVerdict | null;
   isMvp: boolean;
   expanded: boolean;
@@ -670,7 +652,6 @@ function PlayerRow({
   /** Why it is not writable, when it is not. See the note in the body. */
   closed: boolean;
 }) {
-  const score = feedback?.median ?? null;
   return (
     <li className="rounded-xl border border-border bg-card">
       <button
@@ -688,28 +669,12 @@ function PlayerRow({
         />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{player.name}</span>
-          {feedback !== null && (feedback.scores > 0 || feedback.mvp > 0) && (
-            <span className="block text-xs text-muted-foreground">
-              {feedback.scores > 0 && (
-                <>
-                  {feedback.scores} {feedback.scores === 1 ? "nota" : "notas"}
-                  {feedback.low !== feedback.high && ` · de ${feedback.low} a ${feedback.high}`}
-                </>
-              )}
-              {feedback.mvp > 0 && (
-                <>
-                  {feedback.scores > 0 && " · "}
-                  {feedback.mvp} {feedback.mvp === 1 ? "voto a figura" : "votos a figura"}
-                </>
-              )}
-            </span>
-          )}
         </span>
-        {/* What everybody gave him, which is the number the row exists for. */}
-        {score !== null && (
-          <span className="shrink-0 text-lg font-semibold tabular-nums">
-            {Number.isInteger(score) ? score : score.toFixed(1)}
-          </span>
+        {/* Your own number, and there is no other on this row: how many notas
+            he got, what the middle of them is and who else voted him figura
+            are the owner's to read, on their own app. */}
+        {verdict?.score !== undefined && (
+          <span className="shrink-0 text-lg font-semibold tabular-nums">{verdict.score}</span>
         )}
         {verdict !== null && (
           <span className="shrink-0 text-xs font-medium text-primary">lo tuyo</span>
@@ -812,17 +777,6 @@ function PlayerRow({
             </>
           )}
 
-          {/* What everybody else wrote about him, which is half the fun. */}
-          {feedback !== null && feedback.lines.length > 0 && (
-            <ul className="space-y-1.5 border-t border-border pt-2.5">
-              {feedback.lines.map((line) => (
-                <li key={`${line.uid}-${line.at}`} className="text-xs leading-relaxed">
-                  <span className="font-medium">{line.name}: </span>
-                  <span className="text-muted-foreground">{line.text}</span>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       )}
     </li>

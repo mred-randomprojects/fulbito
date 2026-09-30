@@ -1076,11 +1076,24 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   cannot reopen a thread somebody shut.
 - **Reading is free; writing is signed.** The page mints an anonymous session
   on open like la lista, so the link works for whoever it reached. Commenting or
-  puntuando wants a Google account (`isPerson()`), and the name is shown to
-  everybody. That is the opposite trade from the encuesta, on purpose: a median
-  absorbs one bad-faith 2 and absorbs *nothing* about a sentence, so what keeps
-  a free-text box civil is that the grupo can see who typed it. `name` is
-  whatever the browser sent — a label, never proof.
+  puntuando wants a Google account (`isPerson()`), and on a comment the name is
+  shown to everybody: a median absorbs one bad-faith 2 and absorbs *nothing*
+  about a sentence, so what keeps a free-text box civil is that the grupo can
+  see who typed it. `name` is whatever the browser sent — a label, never proof.
+- **What people write about a *person* is the owner's, and only the owner's.**
+  A comment is about the game and is published. A ballot is not: the notas, the
+  thumbs, the figura and the line about how each one played are readable by the
+  recap's owner — the person who asked — and by whoever wrote them, and by
+  nobody else. `reviews` used to be `allow read: if request.auth != null` and
+  the page showed everybody the medians and every line; it is now `list` for the
+  owner and `get` for the owner or the author. Hiding them on screen alone would
+  have been the same non-fix as putting a mail on a comment and not rendering
+  it, so `watchRecap` takes the viewer's uid and *asks for less*: the collection
+  for the owner, one document — your own — for everybody else, attached only
+  once the recap says which of the two you are. It is the app's own line, from
+  the other side: what somebody wrote about a person does not leave the app, and
+  now it does not travel between the people who played either. The page says so
+  in as many words, above the rows and at the foot.
 - **The address is the one thing the link does not carry.** Everything else
   under a recap is readable by whoever holds it, so a mail on a comment would be
   a mail published to the whole grupo. It lives in `identities/{uid}`, readable
@@ -1105,13 +1118,16 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   text, and one vote for la figura per person. All optional, all on the same
   row, and an empty verdict is no verdict — the key goes, the same call
   `setReview` makes.
-- **Median, like the crowd, but no floor — and that is the difference.**
+- **Median, like the crowd, but no floor — and it is read on one screen only.**
   `lib/recapFeedback.ts` imports `median` from `lib/crowd.ts` so the two
   screens cannot disagree about what the middle of a pile is. It deliberately
   does *not* import `MIN_VOTERS`: that floor exists so a median cannot be read
-  back as one person's private opinion of a player, and here every line already
-  carries its author's name out loud. What is shown instead is the count,
-  always, so "7,5 de uno solo" never reads as a consensus.
+  back as one person's private opinion of a player, and the person reading this
+  one is the owner, who is *entitled* to exactly that — they asked, and every
+  line comes with its author's name for them. The count is shown beside it,
+  always, so "7,5 de uno solo" never reads as a consensus. None of this is on
+  the page: `RecapPage` imports `myReview` out of that module and nothing else,
+  because the ballots it would average are ballots it is not given.
 - **What comes back is read beside your own line, and adopted by a tap.** On
   the cancha, the card a tap on a player opens now carries "lo que dijo el
   grupo" *under* your own box — under, so a wall of other people's opinions does
@@ -1603,7 +1619,13 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
   `recapFromMatch` is the only door, its key set is pinned by a test, and
   `firestore.rules` refuses any field that is not on the list a second time.
   So `Match.reviews`, `Match.notes`, `forecastNotes`, the payments and every
-  rating stay where they are.
+  rating stay where they are. **And what comes in does not go back out to the
+  rest of them.** A puntaje and a "no cruzó la mitad" written on the page are
+  readable by the owner and by their own author, by the rules — not by the other
+  people who played, and not by the page, which never asks for them. The only
+  thing everybody reads is the comment thread, which is about the game. So the
+  same sentence holds on both sides of the wall: what somebody wrote about a
+  *person* is read by the person who asked for it, and nobody else.
   **`Match.videos` is the one deliberate exception.** The recording is the
   one thing on a match that was made *for* the grupo — the link is the
   message everybody was going to ask for anyway — so `ShareDialog` puts one

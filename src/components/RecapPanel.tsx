@@ -253,8 +253,10 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
         <p className="mb-2 text-sm leading-relaxed text-muted-foreground">
           Se manda un link al grupo con el resultado y las dos formaciones. El
           que lo abre ve cómo salió; si entra con Google puede ponerle nota a
-          cada uno, votar la figura y comentar. Tus notas, la plata y todo lo
-          que escribiste para vos no salen.
+          cada uno, votar la figura y comentar. Las notas y lo que escriben de
+          cada jugador las ves sólo vos, acá — en la página no se muestran, ni
+          las de uno ni el promedio; los comentarios sí los lee todo el grupo.
+          Tus notas, la plata y todo lo que escribiste para vos no salen.
         </p>
         <Button className="w-full" disabled={busy} onClick={() => void publish()}>
           {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}

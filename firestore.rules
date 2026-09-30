@@ -474,11 +474,38 @@ service cloud.firestore {
           && (resource.data.uid == request.auth.uid || isRecapOwner());
       }
 
-      // One per person, and the document id is who. A ballot is rewritable
-      // by its own author on purpose: a puntaje typed before the video went
-      // up is one somebody is entitled to revise.
+      // ----------------------------------------------------------------
+      // The puntajes. One per person, and the document id is who.
+      //
+      // **Read by the owner and by whoever wrote it, and by nobody else.**
+      // That is the line this feature draws, and it is the app's own line
+      // from everywhere else: what somebody wrote about a *person* does not
+      // go out, and what they wrote about the *game* does. A comment is the
+      // argument about the second goal and is published with a name on it; a
+      // 40 and "no cruzó la mitad" is an opinion about somebody who is in
+      // the same grupo, and the person who asked for it is the only one who
+      // reads it.
+      //
+      // It used to be `request.auth != null`, and the page showed everybody
+      // the medians and every line. Hiding them in the UI alone would have
+      // been the same non-fix as putting the mail on a comment and not
+      // rendering it: whoever holds the link holds a console too. So `list`
+      // is the owner's (and `useMatchRecap` is the only thing that uses it),
+      // and `get` is that plus your own — which is how somebody comes back to
+      // a ballot they half filled in.
+      //
+      // The floor the encuesta has (`MIN_VOTERS`) is deliberately still
+      // absent: it exists so a median cannot be read back as one person's
+      // private opinion, and here the owner is *entitled* to read exactly
+      // that, because they are the one who asked. See "El tercer tiempo".
+      //
+      // A ballot is rewritable by its own author on purpose: a puntaje typed
+      // before the video went up is one somebody is entitled to revise.
+      // ----------------------------------------------------------------
       match /reviews/{voterId} {
-        allow read: if request.auth != null;
+        allow get: if request.auth != null
+          && (request.auth.uid == voterId || isRecapOwner());
+        allow list: if isRecapOwner();
         allow create, update: if signsOwnName()
           && request.auth.uid == voterId
           && isOpen()

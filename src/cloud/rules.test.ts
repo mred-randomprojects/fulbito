@@ -720,8 +720,43 @@ describe("recaps", () => {
       mvp: MAXI,
       players: { [MAXI]: { score: 80, thumb: "up", text: "jugó bien" } },
     });
-    const snap = await getDoc(doc(as(DEVICE_A), "recaps", id, "reviews", "stranger"));
+    // Read by the person who asked for it. Who else can is the next test.
+    const snap = await getDoc(doc(as(OWNER), "recaps", id, "reviews", "stranger"));
     assert.equal(snap.data()?.mvp, MAXI);
+  });
+
+  /**
+   * The promise the page prints: a nota and a "no cruzó la mitad" are an
+   * opinion about somebody in the same grupo, so the owner reads them and
+   * nobody else does. Hiding them on screen alone would be worth nothing —
+   * whoever holds the link holds a console — so this is the half that counts.
+   */
+  it("keeps the puntajes to the owner and to whoever wrote them", async () => {
+    const id = await publish();
+    const author = { email: "stranger@example.com", name: "S" };
+    await setMyReview(as(STRANGER), id, "stranger", author, {
+      players: { [MAXI]: { score: 40, text: "no cruzó la mitad" } },
+    });
+
+    // Its author, coming back to a ballot they half filled in.
+    assert.equal(
+      (await getDoc(doc(as(STRANGER), "recaps", id, "reviews", "stranger"))).exists(),
+      true,
+    );
+    // The owner, who is the one who asked.
+    assert.equal((await getDocs(collection(as(OWNER), "recaps", id, "reviews"))).size, 1);
+
+    // Everybody else with the link: not one document, and not the pile.
+    await denied(getDoc(doc(as(DEVICE_A), "recaps", id, "reviews", "stranger")));
+    await denied(getDoc(doc(as(VOTER), "recaps", id, "reviews", "stranger")));
+    await denied(getDocs(collection(as(DEVICE_A), "recaps", id, "reviews")));
+    await denied(getDocs(collection(as(VOTER), "recaps", id, "reviews")));
+    // Not even somebody who filed one of their own.
+    await setMyReview(as(VOTER), id, "voter-1", { email: "voter@example.com", name: "V" }, {
+      players: { [JUAN]: { score: 90 } },
+    });
+    await denied(getDocs(collection(as(VOTER), "recaps", id, "reviews")));
+    await denied(getDoc(doc(as(VOTER), "recaps", id, "reviews", "stranger")));
   });
 
   it("refuses a ballot filed under somebody else's uid", async () => {
@@ -747,9 +782,11 @@ describe("recaps", () => {
       players: { [MAXI]: { score: 80 } },
     });
     await writeIdentity(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" });
-    const db = as(DEVICE_A);
-    const comments = await getDocs(collection(db, "recaps", id, "comments"));
-    const reviews = await getDocs(collection(db, "recaps", id, "reviews"));
+    const comments = await getDocs(collection(as(DEVICE_A), "recaps", id, "comments"));
+    // Read as the owner, because nobody else may: the ballots are not on the
+    // list of things the link carries any more. The address must not be on
+    // them either — the owner is shown it from `identities`, once.
+    const reviews = await getDocs(collection(as(OWNER), "recaps", id, "reviews"));
     const seen = JSON.stringify([
       ...comments.docs.map((d) => d.data()),
       ...reviews.docs.map((d) => d.data()),

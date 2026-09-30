@@ -172,7 +172,12 @@ any other app, full screen and with no signal needed.
   the video. Anybody with the link reads it without an account; anybody who
   signs in with Google puts a nota de 0 a 100 on each player, un pulgar para
   arriba o para abajo, vota la figura, escribe cómo jugó cada uno y comenta el
-  partido — con su nombre al lado, que es lo que mantiene la cosa civilizada.
+  partido. **Las notas las ves sólo vos**, y no es que estén escondidas en
+  pantalla: la página no las pide y las reglas del servidor no las dan — cada
+  uno lee la suya, vos leés todas, nadie más lee ninguna. Así nadie puntúa
+  mirando lo que puso el resto, y nadie se entera de que el Gordo le puso un 4.
+  Lo único que se lee entre todos son los comentarios, que son sobre el partido
+  y van con el nombre al lado, que es lo que mantiene la cosa civilizada.
   Lo que escriben vuelve a tu app debajo de tu propio uno x uno, y se suma con
   un toque si te gusta: nunca le mueve el puntaje a nadie. Vos cerrás el hilo
   cuando ya está, o lo das de baja del todo, y si alguien vota de mala fe le

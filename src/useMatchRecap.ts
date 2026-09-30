@@ -51,6 +51,10 @@ export function useMatchRecap(matchId: MatchId): MatchRecap {
         stop = await watchRecap(
           db,
           matchId,
+          // The owner, which is what entitles this hook to the whole pile of
+          // puntajes: a ballot is readable by the person who asked for it and
+          // by whoever wrote it, and nobody else. See `cloud/recaps.ts`.
+          user.uid,
           (next) => {
             if (live) setSnapshot(next);
           },
