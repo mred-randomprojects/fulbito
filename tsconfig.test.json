@@ -146,6 +146,7 @@
     "src/lib/recapFeedback.test.ts",
     "src/lib/video.ts",
     "src/lib/video.test.ts",
-    "src/syncRoundTrip.test.ts"
+    "src/syncRoundTrip.test.ts",
+    "src/secrecy.test.ts"
   ]
 }

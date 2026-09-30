@@ -2,6 +2,30 @@
 
 Conventions for anyone — human or agent — making changes here.
 
+## Stop and ask
+
+Almost everything here ships without asking: it is a small app, a bug costs a
+reload, and the loop below is three commands. These are the exceptions, and
+they are exceptions because the damage is to a person rather than to the code.
+
+- **Anything that widens who can read what one person thinks of another.** A
+  rating, an encuesta answer, a nota or a line out of el tercer tiempo, a
+  median, a figura count — any of it, reaching one more pair of eyes, even as a
+  side effect of a feature that is about something else. Say it in the chat,
+  plainly, name who would be able to see what, and wait. Do not weigh it up
+  yourself and do not mention it in passing at the end of a summary. Somebody
+  finding out that the grupo rated them a 40 is not a bug you can fix
+  afterwards. The full rule is "Un puntaje es secreto" in `PROJECT.md`, the
+  tripwire is `src/secrecy.test.ts`, and the near miss that produced both is
+  written down there.
+- **Anything that rewrites stored data.** A migration, a backfill, a script
+  over `localStorage` or Firestore. Ask, and get a backup first.
+- **Anything irreversible or outward-facing beyond the usual deploy.** Deleting
+  cloud data, publishing something under somebody's name.
+
+A red `secrecy.test.ts` is not a lint rule to bring up to date with the new
+code. It is one of these conversations, arriving early.
+
 ## Start from the map
 
 `PROJECT.md` is the project in one file: what the app is, how the code is laid

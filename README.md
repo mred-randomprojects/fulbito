@@ -11,7 +11,9 @@ afterwards the app tells you which of them was right. And if the grupo would
 rather choose the sides themselves, send them the six splits and play the one
 that wins the vote — sorteo included when the top ties.
 
-`PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it.
+`PROJECT.md` is the map of the codebase; `AGENTS.md` is how to work in it —
+starting with the short list of changes that stop and ask first, of which the
+first is anything that widens who can see what one person thinks of another.
 
 The interface is in Argentinian Spanish — that is a product decision, not a
 localisation layer, so strings live inline rather than in a message catalogue.

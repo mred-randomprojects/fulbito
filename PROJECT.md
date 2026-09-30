@@ -1332,6 +1332,50 @@ since iPadOS 13, and the only thing that gives it away is a touchscreen.
 
 ## Invariants worth not breaking
 
+**Un puntaje es secreto, and this one is first because it is the only one whose
+cost is somebody's evening rather than a reload.**
+
+What one person thinks another is worth is read by the person who asked for it
+and by nobody else. That covers every form it takes: a `rating` on a ficha, an
+encuesta ballot, a nota or a thumb or a line of "cómo jugó" out of el tercer
+tiempo, a median, a range, a figura count, a dot on a swarm. The owner of the
+data reads it; the super admins read who sent an encuesta ballot, and that is
+the one exception, written down in `lib/superAdmin.ts` and paid for in
+`firestore.rules`. Nobody else — *including the other people who played* — sees
+any of it.
+
+Three things follow, and they are not negotiable in a code review:
+
+1. **A screen that does not draw a number is not a fix.** Whoever holds the
+   link holds a browser console. Every one of these promises lives in
+   `firestore.rules` first: reads are refused there, and the client is written
+   so that it never asks for what it may not have (`watchRecap` takes the
+   viewer's uid and subscribes to less; a gate at the data hook, never in the
+   JSX). The rules are tested against the emulator in `src/cloud/rules.test.ts`
+   and grepped in `src/secrecy.test.ts`, which runs in `npm test` in
+   milliseconds and needs no Java.
+2. **Widening it is a product decision, and it goes to the operator first.** If
+   a change would let one more person see one of those numbers — even as a side
+   effect of a feature that is about something else — stop and say so in the
+   chat before writing the code, naming exactly who would see exactly what.
+   Not a line at the end of a summary. See "Stop and ask" in `AGENTS.md`.
+3. **`src/secrecy.test.ts` going red is that conversation arriving early.** It
+   is not a lint rule to be updated to match the new code.
+
+**This exists because we shipped the opposite and nearly kept it.** El tercer
+tiempo went out with `recaps/{id}/reviews` readable by any session holding the
+link and `RecapPage` drawing every median, the figura and everybody's line
+about everybody. It read as a feature — "lo que dijo el grupo" — and it passed
+a build, a full test run, a rules suite and a review, because not one of them
+asked the question: the redaction tests pin what a *published document
+contains*, and this was a leak in who may **read** it and in what a public page
+**renders**. It was caught by the person whose grupo it was, in a sentence that
+should never have needed saying. The two tests named above are what ask the
+question now, and `secrecy.test.ts` had a bug of exactly the same shape in its
+first draft — it parsed the wrong brace, checked nothing, and passed — which is
+written up in its own header as the reason its helpers assert that they found
+something.
+
 - **Nothing about usage is sent from the encuesta, and nothing is sent
   before the gate says so.** `useTracking` lives in `App` and in the pages
   outside the wall that are allowed it — `ListPage`, `RecapPage`, `VotePage` —
