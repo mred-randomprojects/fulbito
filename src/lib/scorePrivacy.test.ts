@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canShareScores, createScorePrivacy, SCORE_PRIVACY_KEY } from "./scorePrivacy.js";
+import { createScorePrivacy, SCORE_PRIVACY_KEY } from "./scorePrivacy.js";
 
 function storage(initial?: string) {
   const values = new Map<string, string>(initial === undefined ? [] : [[SCORE_PRIVACY_KEY, initial]]);
@@ -65,9 +65,6 @@ test("a quota failure still hides scores for current and newly mounted subscribe
   assert.deepEqual(seen, [true]);
 });
 
-test("screen privacy overrides a sharing checkbox that was already enabled", () => {
-  assert.equal(canShareScores(true, true), false);
-  assert.equal(canShareScores(true, false), false);
-  assert.equal(canShareScores(false, false), false);
-  assert.equal(canShareScores(false, true), true);
-});
+// The sharing checkbox this module used to arbitrate for is gone: nothing
+// shared carries a rating any more, so there is no "unless you opt in" left to
+// test. `src/secrecy.test.ts` is what keeps it that way.

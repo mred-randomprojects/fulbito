@@ -86,7 +86,6 @@ describe("Repartir draft storage", () => {
       respectAvoids: false,
       respectTogether: false,
       spreadKeepers: false,
-      requestedRatings: true,
       format: "winner-stays",
       rule: "a 2 goles",
       names: { 0: "Los Pibes", 3: "La Reserva" },

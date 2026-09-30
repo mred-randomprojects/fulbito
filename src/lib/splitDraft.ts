@@ -43,7 +43,6 @@ export interface SplitDraft {
   respectAvoids: boolean;
   respectTogether: boolean;
   spreadKeepers: boolean;
-  requestedRatings: boolean;
   format: TournamentFormat;
   rule: string;
   /** Names survive 4 -> 3 -> 4, just as they do while the screen is mounted. */
@@ -74,7 +73,6 @@ export function defaultSplitDraft(squad: readonly PlayerId[]): SplitDraft {
     respectAvoids: true,
     respectTogether: true,
     spreadKeepers: true,
-    requestedRatings: false,
     format: "round-robin",
     rule: "",
     names: {},
@@ -239,7 +237,6 @@ function normalizeSplitDraft(
     respectAvoids: booleanOr(value.respectAvoids, true),
     respectTogether: booleanOr(value.respectTogether, true),
     spreadKeepers: booleanOr(value.spreadKeepers, true),
-    requestedRatings: booleanOr(value.requestedRatings, false),
     format: value.format === "winner-stays" ? "winner-stays" : "round-robin",
     rule: typeof value.rule === "string" ? value.rule.slice(0, 40) : "",
     names,

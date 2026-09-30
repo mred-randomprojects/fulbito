@@ -8,3 +8,13 @@ dist
 .tmp
 *-debug.log
 .firebase
+
+# Service account keys. One of these is a credential to the whole Firebase
+# project — read/write on everybody's data, rules included — and it lands in
+# this directory by default when you download one. It belongs in the
+# FIREBASE_SERVICE_ACCOUNT GitHub secret and nowhere else; see
+# FIREBASE_SETUP.md. Ignored by pattern rather than by name so the next one
+# is covered too.
+*firebase-adminsdk*.json
+service-account*.json
+serviceAccount*.json

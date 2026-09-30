@@ -38,8 +38,6 @@ export interface TournamentImageTeam {
   /** Text colour that reads on `fill`. */
   text: string;
   players: readonly Player[];
-  /** Drawn only when the user opted into showing ratings. */
-  total: number | null;
 }
 
 export interface TournamentImageOptions {
@@ -208,7 +206,6 @@ function drawTeamCard(
   ctx.fillRect(r.x, r.y, r.width, CARD_HEADER);
   ctx.restore();
 
-  const badge = team.total == null ? "" : team.total.toFixed(0);
   ctx.fillStyle = team.text;
   ctx.textAlign = "left";
   ctx.font = "700 26px ui-sans-serif, system-ui, -apple-system, sans-serif";
@@ -217,11 +214,10 @@ function drawTeamCard(
   ctx.textAlign = "right";
   ctx.font = "600 22px ui-sans-serif, system-ui, -apple-system, sans-serif";
   ctx.globalAlpha = 0.75;
-  ctx.fillText(
-    badge === "" ? `${team.players.length}` : `${team.players.length} · ${badge}`,
-    r.x + r.width - 16,
-    r.y + CARD_HEADER / 2,
-  );
+  // The headcount, and nothing else: this picture goes to the grupo, and
+  // a team total is its players' ratings with one subtraction in between.
+  // See "Un puntaje es secreto" in `PROJECT.md`.
+  ctx.fillText(`${team.players.length}`, r.x + r.width - 16, r.y + CARD_HEADER / 2);
   ctx.globalAlpha = 1;
 
   team.players.forEach((player, index) => {

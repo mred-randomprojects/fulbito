@@ -188,9 +188,13 @@ any other app, full screen and with no signal needed.
   test que fija los campos que se publican y las reglas del servidor, las dos
   cosas. El único dato que el link no lleva es el mail de nadie: queda guardado
   donde sólo lo ves vos y los que mantienen la app.
-- **Share without leaking ratings.** A PNG of the pitch, a PNG of the torneito,
-  or a plain-text list for the group chat. Ratings are excluded from all of
-  them unless you opt in.
+- **Share without leaking ratings — and there is nothing to opt into.** A PNG
+  of the pitch, a PNG of the torneito, or a plain-text list for the group chat:
+  the teams, who is in goal, what the cancha cost, the video. **No número de
+  nadie, ni total de equipo, en ninguno de los cuatro.** There used to be a
+  "Mostrar los niveles" checkbox, off by default; it went, because a door that
+  is shut by default is still a door, and one distracted tap puts what you
+  think each of them is worth into a chat that gets forwarded.
 - **A list you recognise at a glance.** Every partido puts up the face of the
   best player on each side, so the list reads like the games you played rather
   than like a column of light-against-dark circles. Only people with a photo

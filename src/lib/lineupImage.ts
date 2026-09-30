@@ -37,13 +37,15 @@ export interface LineupImageOptions {
   formationB: Formation;
   lineupA: (Player | null)[];
   lineupB: (Player | null)[];
-  /** Per-slot effective ratings, drawn only when `showRatings` is on. */
-  ratingsA: number[];
-  ratingsB: number[];
-  showRatings: boolean;
-  totalA: number;
-  totalB: number;
 }
+
+/**
+ * There is deliberately no rating in here, and no switch to put one in.
+ * This PNG is made to be forwarded around a group chat — it is the least
+ * recallable thing the app produces — and a number under somebody's face is
+ * the one thing on it that cannot be unseen. See "Un puntaje es secreto" in
+ * `PROJECT.md`; `src/secrecy.test.ts` keeps it that way.
+ */
 
 export async function renderLineupImage(
   options: LineupImageOptions,
@@ -77,18 +79,14 @@ export async function renderLineupImage(
   drawTeam(ctx, pitch, photos, {
     lineup: options.lineupA,
     formation: options.formationA,
-    ratings: options.ratingsA,
     kit: KITS[options.match.teamA.kit],
     half: "A",
-    showRatings: options.showRatings,
   });
   drawTeam(ctx, pitch, photos, {
     lineup: options.lineupB,
     formation: options.formationB,
-    ratings: options.ratingsB,
     kit: KITS[options.match.teamB.kit],
     half: "B",
-    showRatings: options.showRatings,
   });
 
   drawFooter(ctx);
@@ -105,7 +103,7 @@ function drawBackground(ctx: CanvasRenderingContext2D): void {
 }
 
 function drawHeader(ctx: CanvasRenderingContext2D, options: LineupImageOptions): void {
-  const { match, showRatings, totalA, totalB } = options;
+  const { match } = options;
 
   ctx.fillStyle = "#f2f7f4";
   ctx.font = "700 44px ui-sans-serif, system-ui, -apple-system, sans-serif";
@@ -121,13 +119,11 @@ function drawHeader(ctx: CanvasRenderingContext2D, options: LineupImageOptions):
   drawBanner(ctx, WIDTH / 2, HEADER - 28, {
     name: match.teamB.name,
     count: sizeB,
-    total: showRatings ? totalB : null,
     kit: KITS[match.teamB.kit],
   });
   drawBanner(ctx, WIDTH / 2, HEIGHT - FOOTER + 34, {
     name: match.teamA.name,
     count: sizeA,
-    total: showRatings ? totalA : null,
     kit: KITS[match.teamA.kit],
   });
 }
@@ -139,14 +135,10 @@ function drawBanner(
   info: {
     name: string;
     count: number;
-    total: number | null;
     kit: { fill: string; text: string };
   },
 ): void {
-  const label =
-    info.total == null
-      ? `${info.name} · ${info.count}`
-      : `${info.name} · ${info.count} · ${info.total.toFixed(0)}`;
+  const label = `${info.name} · ${info.count}`;
   ctx.font = "600 28px ui-sans-serif, system-ui, -apple-system, sans-serif";
   const width = ctx.measureText(label).width + 44;
   roundRect(ctx, cx - width / 2, cy - 22, width, 44, 22);
@@ -242,10 +234,8 @@ function drawTeam(
   team: {
     lineup: (Player | null)[];
     formation: Formation;
-    ratings: number[];
     kit: { fill: string; ring: string; text: string };
     half: "A" | "B";
-    showRatings: boolean;
   },
 ): void {
   const radius = r.width * 0.05;
@@ -264,19 +254,6 @@ function drawTeam(
     const cy = r.y + r.height * yNorm;
 
     drawAvatar(ctx, cx, cy, radius, player, photos.get(player.id), team.kit.ring);
-
-    if (team.showRatings) {
-      const rating = team.ratings[index];
-      const bx = cx + radius * 0.72;
-      const by = cy + radius * 0.72;
-      ctx.beginPath();
-      ctx.arc(bx, by, radius * 0.34, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0,0,0,0.85)";
-      ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `700 ${Math.round(radius * 0.34)}px ui-sans-serif, system-ui, sans-serif`;
-      ctx.fillText(rating.toFixed(0), bx, by + 1);
-    }
 
     // Name chip.
     const name = playerShortName(player);

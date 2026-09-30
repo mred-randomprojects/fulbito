@@ -1,5 +1,4 @@
 import { useScoresHidden } from "@/useScorePrivacy";
-import { canShareScores } from "@/lib/scorePrivacy";
 import { ScoresVisible } from "./ScorePrivacy";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -167,9 +166,6 @@ export function SplitPage({
   // keep goal is the complaint this whole screen exists to prevent, and on a
   // squad where nobody is rated in goal the rule costs exactly nothing.
   const [spreadKeepers, setSpreadKeepers] = useState(initial.draft.spreadKeepers);
-  const hidden = useScoresHidden();
-  const [requestedRatings, setIncludeRatings] = useState(initial.draft.requestedRatings);
-  const includeRatings = canShareScores(hidden, requestedRatings);
 
   // The torneito. It hangs off the split rather than living on its own screen:
   // the fixture depends on nothing but how many teams there are, so flipping
@@ -222,7 +218,6 @@ export function SplitPage({
       respectAvoids,
       respectTogether,
       spreadKeepers,
-      requestedRatings,
       format,
       rule,
       names,
@@ -239,7 +234,6 @@ export function SplitPage({
     respectAvoids,
     respectTogether,
     spreadKeepers,
-    requestedRatings,
     format,
     rule,
     names,
@@ -643,8 +637,8 @@ export function SplitPage({
     () =>
       option == null
         ? ""
-        : buildText(option, teamLabels, formations, includeRatings, fixture, rule),
-    [option, teamLabels, formations, includeRatings, fixture, rule],
+        : buildText(option, teamLabels, formations, fixture, rule),
+    [option, teamLabels, formations, fixture, rule],
   );
 
   const downloadImage = useCallback(async () => {
@@ -664,7 +658,6 @@ export function SplitPage({
           // settled on is the order the card on screen shows, and the picture
           // has to agree with the screen it was taken from.
           players: team.evaluation.lineup.filter((p): p is Player => p != null),
-          total: includeRatings ? team.evaluation.total : null,
         })),
         fixture,
       });
@@ -676,7 +669,7 @@ export function SplitPage({
     } finally {
       setRendering(false);
     }
-  }, [option, teamLabels, includeRatings, fixture, rule]);
+  }, [option, teamLabels, fixture, rule]);
 
   const copy = useCallback(async () => {
     setError(null);
@@ -1074,21 +1067,6 @@ export function SplitPage({
               </div>
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-3">
-                <label className="flex cursor-pointer items-start gap-2.5">
-                  <input
-                    type="checkbox"
-                    checked={includeRatings}
-                    disabled={hidden}
-                    onChange={(e) => setIncludeRatings(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
-                  />
-                  <span className="text-sm">
-                    <span className="font-medium">Mandar los niveles también</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {hidden ? "Desactivado mientras tengas los puntajes ocultos." : "Va apagado porque a nadie le cae bien enterarse de que es un 4."}
-                    </span>
-                  </span>
-                </label>
                 <Button
                   className="w-full"
                   onClick={() => void downloadImage()}
@@ -1623,7 +1601,6 @@ function buildText(
   option: GroupSplitOption,
   tags: readonly TeamTag[],
   formations: readonly Formation[],
-  includeRatings: boolean,
   fixture: Fixture,
   rule: string,
 ): string {
@@ -1634,19 +1611,14 @@ function buildText(
 
   option.teams.forEach((team, index) => {
     lines.push(
-      `${tags[index].emoji} ${tags[index].name} (${team.players.length})${
-        includeRatings ? ` — ${team.evaluation.total.toFixed(1)}` : ""
-      }`,
+      `${tags[index].emoji} ${tags[index].name} (${team.players.length})`,
     );
     team.evaluation.lineup.forEach((player, slot) => {
       if (player == null) return;
       // Who is in goal is the one bit of shape worth spelling out; the rest
       // gets rearranged in the first two minutes anyway.
       const marker = formations[index].slots[slot]?.role === "GK" ? "🧤" : "•";
-      const rating = includeRatings
-        ? ` (${team.evaluation.slotRatings[slot].toFixed(0)})`
-        : "";
-      lines.push(`  ${marker} ${playerDisplayName(player)}${rating}`);
+      lines.push(`  ${marker} ${playerDisplayName(player)}`);
     });
     lines.push("");
   });

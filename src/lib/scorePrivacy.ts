@@ -42,7 +42,9 @@ export function createScorePrivacy(getStorage: () => PreferenceStorage) {
   };
 }
 
-/** A sharing checkbox can never override screen privacy. */
-export function canShareScores(hidden: boolean, requested: boolean): boolean {
-  return !hidden && requested;
-}
+// There is deliberately no `canShareScores` here any more. It answered "may
+// this sharing checkbox include the ratings?", and the checkbox is gone: a
+// PNG or a chat message never carries a number about anybody, with no switch
+// and nothing to opt into. What is left in this module is the screen-privacy
+// store, which is about what *you* see on your own screen while recording.
+// See "Un puntaje es secreto" in `PROJECT.md`.

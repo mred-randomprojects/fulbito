@@ -50,6 +50,48 @@ import { describe, it } from "node:test";
  * marker check is so a wrong cwd fails saying that, rather than looking like
  * a rule that has gone missing.
  */
+/**
+ * One function's body, braces balanced.
+ *
+ * It asserts that it found the function: a check that silently greps an empty
+ * string is the same vacuous pass this file's own first draft shipped with.
+ */
+function functionBody(source: string, signature: string): string {
+  const at = source.indexOf(signature);
+  assert.notEqual(at, -1, `${signature} is gone — was it renamed?`);
+  const open = source.indexOf("{", at + signature.length);
+  assert.notEqual(open, -1, `${signature} has no body`);
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === "{") depth += 1;
+    if (source[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        const body = source.slice(open + 1, i);
+        assert.ok(body.length > 100, `${signature} came back suspiciously short`);
+        return body;
+      }
+    }
+  }
+  assert.fail(`${signature} is not closed`);
+}
+
+function code(path: string): string {
+  return stripComments(read(path));
+}
+
+/**
+ * The source with its comments taken out.
+ *
+ * The checks below grep for words like "rating" and "total", and every one of
+ * these files now *explains in a comment* why it does not draw one. Grepping
+ * the raw text would fail on the explanation, which is the kind of test people
+ * fix by deleting the comment.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
 function read(path: string): string {
   const root = process.cwd();
   assert.ok(
@@ -174,6 +216,79 @@ describe("a puntaje is secret: the server", () => {
   });
 });
 
+describe("a puntaje is secret: what leaves in a message", () => {
+  /**
+   * The two PNGs and the two blocks of text that get pasted into the grupo.
+   *
+   * These carry no number about anybody and there is no switch to make them:
+   * "Mostrar los niveles" and "Mandar los niveles también" were opt-in and off
+   * by default, and they went anyway, because a door that is shut by default is
+   * still a door — one distracted tap and what you think each of them is worth
+   * is in a chat that gets forwarded. A PNG is the least recallable thing this
+   * app produces.
+   *
+   * A team total counts: it is its players' ratings with one subtraction in
+   * between, and two totals plus one swap is somebody's number.
+   */
+  const renderers = ["src/lib/lineupImage.ts", "src/lib/tournamentImage.ts"];
+
+  for (const path of renderers) {
+    it(`${path} draws no rating and no total`, () => {
+      const source = code(path);
+      for (const word of [/\brating/i, /\btotal/i, /slotRatings/, /evaluation\./]) {
+        assert.doesNotMatch(
+          source,
+          word,
+          `${path} mentions ${word} again. This picture is made to be forwarded; ` +
+            `read the header of this file before putting a number on it.`,
+        );
+      }
+    });
+  }
+
+  /**
+   * The text that goes in the chat, in both screens that build one.
+   *
+   * The whole file is not checked for either: `SplitPage` is a screen of your
+   * own as well as a share, and the team cards on it show totals behind
+   * `ScoresVisible`, which is right — that is you looking at your own numbers
+   * on your own phone. The share is the part that leaves, so the share is the
+   * part that is pinned, and the extraction asserts that it found a function
+   * rather than quietly checking an empty string.
+   */
+  it("the text pasted into the grupo carries no number about anybody", () => {
+    for (const path of ["src/components/ShareDialog.tsx", "src/components/SplitPage.tsx"]) {
+      const body = functionBody(code(path), "function buildText(");
+      for (const word of [/slotRatings/, /includeRatings/, /\.total\b/, /canShareScores/]) {
+        assert.doesNotMatch(
+          body,
+          word,
+          `buildText in ${path} is putting numbers in the message again. There is ` +
+            `no opt-in for this any more: read the header of this file first.`,
+        );
+      }
+    }
+  });
+
+  /** And the switch that used to turn them on is gone from the app. */
+  it("has no sharing checkbox left to tick", () => {
+    for (const path of [
+      "src/components/ShareDialog.tsx",
+      "src/components/SplitPage.tsx",
+      "src/lib/scorePrivacy.ts",
+    ]) {
+      for (const word of [/canShareScores/, /includeRatings/, /requestedRatings/]) {
+        assert.doesNotMatch(
+          code(path),
+          word,
+          `the "mostrar los niveles" switch is back in ${path}. It was opt-in and ` +
+            `off by default the first time, and it went anyway: read the header.`,
+        );
+      }
+    }
+  });
+});
+
 describe("a puntaje is secret: the pages anybody can open", () => {
   /**
    * The four screens mounted beside `App` in `main.tsx`. Whoever is on one of
@@ -214,7 +329,7 @@ describe("a puntaje is secret: the pages anybody can open", () => {
 
   for (const page of pages) {
     it(`${page} imports nothing that adds up other people's opinions`, () => {
-      const source = read(`src/components/${page}.tsx`);
+      const source = code(`src/components/${page}.tsx`);
 
       for (const { module, why } of forbidden) {
         assert.doesNotMatch(

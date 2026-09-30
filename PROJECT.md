@@ -279,9 +279,14 @@ backups; it never rewrites player ratings or changes team balancing. Sorting
 the roster by rating is unavailable while hidden. Match results, attendance,
 payments and written notes remain visible. Backups remain complete.
 
-Both sharing flows use `canShareScores`: screen privacy overrides even an
-already-enabled sharing checkbox, for text previews, copied text and PNGs.
-New rating displays must use the gate, including tooltips and charts.
+Sharing needs no gate at all any more, because **nothing shared carries a
+number**: the two PNGs and the two blocks of text for the grupo have no rating
+and no team total in them, and there is no checkbox to put one back.
+`canShareScores` — which used to arbitrate between this screen setting and a
+"Mostrar los niveles" tick — is gone with the tick; `src/secrecy.test.ts` pins
+its absence. This setting is now about one thing only: what *you* see on your
+own screen while somebody is recording it. New rating displays must use the
+gate, including tooltips and charts.
 
 ## Module map
 
@@ -1359,7 +1364,14 @@ Three things follow, and they are not negotiable in a code review:
    effect of a feature that is about something else — stop and say so in the
    chat before writing the code, naming exactly who would see exactly what.
    Not a line at the end of a summary. See "Stop and ask" in `AGENTS.md`.
-3. **`src/secrecy.test.ts` going red is that conversation arriving early.** It
+3. **An opt-in is not a way to keep this promise.** "Mostrar los niveles" was a
+   checkbox on both share flows, off by default and reset on every open, and it
+   went anyway: a door that is shut by default is still a door, and the thing
+   on the other side of it is a PNG in a group chat, which is the least
+   recallable object this app produces. Nothing shared carries a rating or a
+   team total, and there is no switch. Same reasoning applies to the next
+   "…unless you tick this".
+4. **`src/secrecy.test.ts` going red is that conversation arriving early.** It
    is not a lint rule to be updated to match the new code.
 
 **This exists because we shipped the opposite and nearly kept it.** El tercer

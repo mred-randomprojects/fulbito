@@ -1,5 +1,3 @@
-import { useScoresHidden } from "@/useScorePrivacy";
-import { canShareScores } from "@/lib/scorePrivacy";
 import { useState } from "react";
 import { Check, Copy, ImageDown, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,8 +43,15 @@ interface Props {
  * Two ways out of the app, both of which land in the group chat where the game
  * was organised. No link, no account, nothing to expire.
  *
- * Ratings are excluded from both by default. The whole premise of rating your
- * friends privately is that they never find out what you put.
+ * **No number about anybody goes in either of them, and there is no switch.**
+ * There used to be one — "Mostrar los niveles", off by default and reset on
+ * every open — and it went because a door that is shut by default is still a
+ * door: one distracted tap and the grupo reads what you think each of them is
+ * worth, in a message that gets forwarded. The whole premise of rating your
+ * friends privately is that they never find out what you put, and an opt-in is
+ * not a way to keep a promise like that. What the message carries is who is on
+ * which side, who is in goal, what the cancha cost and the video. See "Un
+ * puntaje es secreto" in `PROJECT.md`.
  */
 export function ShareDialog({
   open,
@@ -58,14 +63,11 @@ export function ShareDialog({
   formationA,
   formationB,
 }: Props) {
-  const hidden = useScoresHidden();
-  const [requestedRatings, setIncludeRatings] = useState(false);
-  const includeRatings = canShareScores(hidden, requestedRatings);
   const { copied, copy: copyToClipboard } = useCopy();
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const text = buildText(match, squad, evalA, evalB, formationA, formationB, includeRatings);
+  const text = buildText(match, squad, evalA, evalB, formationA, formationB);
 
   const copy = async () => {
     setError(null);
@@ -73,7 +75,7 @@ export function ShareDialog({
       setError(COPY_REFUSED);
       return;
     }
-    track({ name: "lineup_shared", via: "text", ratings: includeRatings });
+    track({ name: "lineup_shared", via: "text" });
   };
 
   const downloadImage = async () => {
@@ -86,14 +88,9 @@ export function ShareDialog({
         formationB,
         lineupA: [...evalA.lineup],
         lineupB: [...evalB.lineup],
-        ratingsA: evalA.slotRatings,
-        ratingsB: evalB.slotRatings,
-        showRatings: includeRatings,
-        totalA: evalA.total,
-        totalB: evalB.total,
       });
       downloadBlob(blob, `${slugify(match.name)}.png`);
-      track({ name: "lineup_shared", via: "image", ratings: includeRatings });
+      track({ name: "lineup_shared", via: "image" });
     } catch (e) {
       console.error("[share] image failed:", e);
       setError("No se pudo armar la imagen. Probá de nuevo.");
@@ -108,26 +105,10 @@ export function ShareDialog({
         <DialogHeader>
           <DialogTitle>Pasar los equipos</DialogTitle>
           <DialogDescription>
-            {hidden ? "Los puntajes están ocultos: tampoco salen al compartir." : "Los niveles no van, salvo que vos digas lo contrario."}
+            Los equipos, quién va al arco, la plata y el video. Los niveles de
+            cada uno no salen nunca.
           </DialogDescription>
         </DialogHeader>
-
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-secondary/30 p-3">
-          <input
-            type="checkbox"
-            checked={includeRatings}
-            disabled={hidden}
-            onChange={(e) => setIncludeRatings(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
-          />
-          <span className="text-sm">
-            <span className="font-medium">Mostrar los niveles</span>
-            <span className="block text-xs text-muted-foreground">
-              Sale el número de cada uno y el total del equipo. Va apagado
-              porque a nadie le cae bien enterarse de que es un 4.
-            </span>
-          </span>
-        </label>
 
         <div className="space-y-2">
           <Label className="flex items-center gap-1.5">
@@ -185,7 +166,6 @@ function buildText(
   evalB: TeamEvaluation,
   formationA: Formation,
   formationB: Formation,
-  includeRatings: boolean,
 ): string {
   const lines: string[] = [];
   lines.push(`⚽ ${match.name}${match.date !== "" ? ` — ${formatMatchDate(match.date)}` : ""}`);
@@ -204,19 +184,14 @@ function buildText(
   ] as const) {
     const size = evaluation.lineup.filter((p) => p != null).length;
     lines.push(
-      `${KIT_EMOJI[config.kit]} ${config.name} (${size})${
-        includeRatings ? ` — ${evaluation.total.toFixed(1)}` : ""
-      }`,
+      `${KIT_EMOJI[config.kit]} ${config.name} (${size})`,
     );
     evaluation.lineup.forEach((player, index) => {
       if (player == null) return;
-      const rating = includeRatings
-        ? ` (${evaluation.slotRatings[index].toFixed(0)})`
-        : "";
       // Who is in goal is the one bit of shape worth spelling out; the rest
       // gets rearranged in the first two minutes anyway.
       const marker = formation.slots[index]?.role === "GK" ? "🧤" : "•";
-      lines.push(`  ${marker} ${playerDisplayName(player)}${rating}`);
+      lines.push(`  ${marker} ${playerDisplayName(player)}`);
     });
     lines.push("");
   }
