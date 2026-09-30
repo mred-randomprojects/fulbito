@@ -90,6 +90,8 @@ export function RecapPage() {
   const [snapshot, setSnapshot] = useState<RecapSnapshot | null>(null);
   const [comment, setComment] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
+  /** Which uid the draft was seeded for. See the effect that fills it. */
+  const [seededFor, setSeededFor] = useState<string | null>(null);
   const [open, setOpen] = useState<PlayerId | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -202,18 +204,25 @@ export function RecapPage() {
 
   /**
    * The draft starts as whatever this account already sent, so somebody
-   * coming back sees their own answers rather than an empty form. Seeded once
-   * per stored ballot rather than on every snapshot, or a keystroke would be
-   * overwritten by the echo of the write before it.
+   * coming back sees their own answers rather than an empty form.
+   *
+   * **Waits for a snapshot**, and that is the whole of it. `setUid` runs
+   * before `watchRecap` has resolved, so seeding on "there is a uid" seeded an
+   * empty form off a page that had simply not heard back yet — and then never
+   * re-seeded, because the guard was `draft !== null`. The ballot landed a
+   * moment later and was never shown: you came back to the link and your own
+   * notas were gone. Once per uid rather than once, so signing in over the
+   * anonymous session re-reads as the account that is now writing; and never
+   * twice for the same uid, or a keystroke would be overwritten by the echo of
+   * the write before it. `VotePage` does the same thing for the same reason.
    */
   useEffect(() => {
-    if (draft !== null) return;
-    if (stored === null) {
-      if (uid !== null) setDraft({ players: {} });
-      return;
-    }
-    setDraft({ mvp: stored.mvp, players: { ...stored.players } });
-  }, [stored, uid, draft]);
+    if (uid === null || snapshot === null || seededFor === uid) return;
+    setDraft(
+      stored === null ? { players: {} } : { mvp: stored.mvp, players: { ...stored.players } },
+    );
+    setSeededFor(uid);
+  }, [uid, snapshot, stored, seededFor]);
 
   /* ---------------------------------------------------------------- */
   /* Doing                                                             */
@@ -670,7 +679,7 @@ function PlayerRow({
     <li className="rounded-xl border border-border bg-card">
       <button
         type="button"
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+        className="flex w-full items-center gap-2.5 px-2.5 py-2.5 text-left sm:gap-3 sm:px-3"
         onClick={onToggle}
         aria-expanded={expanded}
       >
@@ -678,7 +687,7 @@ function PlayerRow({
           avatar={player.avatar}
           name={player.name}
           seed={player.id}
-          size={44}
+          size={40}
           ring={kitRing}
         />
         <span className="min-w-0 flex-1">
@@ -698,23 +707,36 @@ function PlayerRow({
             came to give. There is no other number on this row: the medians,
             the count and who else voted figura are the owner's to read, on
             their own app. */}
+        {/* Fixed width and `leading-none` on both lines: at 44px square with
+            the label letter-spaced this wrapped on a phone and the box came
+            apart. It is the one thing on the row that must never look broken —
+            it is the number the whole page is asking for. */}
         <span
           className={cn(
-            "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border text-lg font-semibold tabular-nums",
+            "flex w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5",
             verdict?.score === undefined
-              ? "border-dashed border-border text-muted-foreground"
-              : "border-primary/40 bg-primary/10 text-foreground",
+              ? "border-dashed border-border"
+              : "border-primary/40 bg-primary/10",
           )}
         >
-          {verdict?.score ?? "—"}
-          <span className="text-[9px] font-normal uppercase tracking-wide text-muted-foreground">
+          <span
+            className={cn(
+              "text-lg font-semibold leading-none tabular-nums",
+              verdict?.score === undefined ? "text-muted-foreground" : "text-foreground",
+            )}
+          >
+            {verdict?.score ?? "—"}
+          </span>
+          <span className="whitespace-nowrap text-[10px] leading-none text-muted-foreground">
             tu nota
           </span>
         </span>
         {isMvp && <Star className="h-4 w-4 shrink-0 fill-current text-amber-400" aria-hidden />}
+        {/* Off on a phone: the row is avatar, name, the box and a star already,
+            and the affordance people use there is the whole row. */}
         <ChevronDown
           className={cn(
-            "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+            "hidden h-4 w-4 shrink-0 text-muted-foreground transition-transform sm:block",
             expanded && "rotate-180",
           )}
           aria-hidden
