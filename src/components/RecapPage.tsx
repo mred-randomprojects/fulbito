@@ -406,6 +406,12 @@ export function RecapPage() {
           es abajo.
         </p>
 
+        {!recap.closed && author === null && (
+          <div className="mb-3">
+            <SignIn onEnter={() => void enter()} />
+          </div>
+        )}
+
         {recap.closed && (
           <p className="mb-3 flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -445,11 +451,34 @@ export function RecapPage() {
           <SignIn onEnter={() => void enter()} />
         )}
 
+        {/* Sticky, and that is the fix rather than a flourish.
+            It used to sit at the very bottom of fourteen rows, so on a phone
+            you scored four people, never scrolled past the last one, and left
+            — and nothing on screen said the puntajes were still only in this
+            tab. The first real partido came back with zero planillas for
+            exactly that reason. Now the bar follows you down the page from the
+            moment there is something to send, and it says which of the two
+            states it is in. `VotePage` does the same thing. */}
         {!recap.closed && author !== null && draft !== null && hasVerdicts(draft) && (
-          <Button className="mt-3 w-full" disabled={busy || saved} onClick={() => void sendReview()}>
-            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-            {saved ? "Guardado" : stored === null ? "Mandar mis puntajes" : "Actualizar mis puntajes"}
-          </Button>
+          <div className="sticky bottom-3 z-10 mt-3">
+            <Button
+              className="w-full shadow-lg"
+              disabled={busy || saved}
+              onClick={() => void sendReview()}
+            >
+              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              {saved
+                ? "Guardado ✓"
+                : stored === null
+                  ? "Mandar mis puntajes"
+                  : "Guardar los cambios"}
+            </Button>
+            {!saved && (
+              <p className="mt-1 text-center text-[11px] text-muted-foreground">
+                Lo que pusiste todavía no se mandó.
+              </p>
+            )}
+          </div>
         )}
       </section>
 
