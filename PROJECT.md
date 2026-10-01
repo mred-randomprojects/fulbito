@@ -1232,12 +1232,21 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   sentence stays, and `recapSeed.test.ts` still pins it, because somebody
   seeing numbers they did not type deserves to know where they came from — and
   because the day a ballot carries a name again, that test has to go red.
+- **Say what the page shows, never that nobody can find out.** The rules stop
+  every *client* from tying a ballot to an account — the markers cannot be read
+  by anybody else or listed by anybody at all — but whoever holds the Firebase
+  project's admin key reads everything, and here that is the organiser. The page
+  once said "ni el que armó el partido" and the organiser struck it: a promise
+  the app cannot keep is worse than no promise. So the copy says what is on the
+  page ("en la página no sale quién puso qué") and what the app shows the
+  organiser ("la app no te muestra quién puso qué"), and `recapSeed.test.ts`
+  goes red if "anónimo" or "nadie" creeps back into the seed notice.
 - **Every promise is said once, where it applies.** The page used to explain
   the anonymity three times and show the sign-in box three times, and read like
   terms and conditions. Now there are four sentences and each sits where it is
-  true: "son anónimas" over the rows, "va con tu nombre" over the thread, the
-  address beside the comment button — the only act that stores one — and the
-  promedio's floor on the row that is waiting for it. Shortening the page further
+  true: what the page shows about a nota over the rows, "va con tu nombre" over
+  the thread, the address beside the comment button — the only act that stores
+  one — and the promedio's floor on the row that is waiting for it. Shortening the page further
   must keep all four. Dropping one is not a tidy-up: somebody writing a harsh
   line about a teammate because they thought the thread was private is exactly
   the failure the second one prevents.

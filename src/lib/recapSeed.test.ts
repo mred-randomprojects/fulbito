@@ -78,19 +78,19 @@ describe("seedNotice", () => {
   });
 
   /**
-   * This used to be a warning: the encuesta was anonymous and a recap ballot
-   * was signed, so a pre-filled form sent unchanged published what somebody
-   * had said anonymously, with their name on it. The ballots are anonymous
-   * now, so the bridge costs nothing and the sentence says so instead — and
-   * the test still pins it, because "esto también es anónimo" is a promise and
-   * the day it stops being true this has to go red.
+   * This sentence has been a warning ("what you said anonymously goes out
+   * signed") and then a promise ("esto también es anónimo"). It is neither now,
+   * by the organiser's decision: the promise was more than the app can keep,
+   * because whoever holds the Firebase project's admin key can tie a ballot to
+   * an account, and here that is the organiser. So it says where the numbers
+   * came from and promises nothing about who can see them — and this test goes
+   * red if a promise creeps back in.
    */
-  it("says the encuesta case is anonymous on both sides", () => {
+  it("says the numbers came from the encuesta, and promises nothing about who sees them", () => {
     const notice = seedNotice("poll");
     assert.notEqual(notice, null);
     assert.match(notice!, /encuesta/);
-    assert.match(notice!, /anónimo/);
-    assert.doesNotMatch(notice!, /con tu nombre/);
+    assert.doesNotMatch(notice!, /anónim|nadie|ni el que|con tu nombre/);
   });
 
   it("says where the owner's numbers came from", () => {

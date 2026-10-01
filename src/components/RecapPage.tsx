@@ -537,14 +537,16 @@ export function RecapPage() {
 
       <section className="mb-6">
         <h2 className="mb-1 text-xl font-semibold tracking-tight">El uno x uno</h2>
-        {/* One line, and the promise in it is the one that makes the numbers
-            honest. Everything this paragraph used to explain is said where it
-            happens instead: the promedio's floor on the row that is waiting for
-            it, the name on a comment beside the comment box. */}
+        {/* One line, and it says what the page shows — never that nobody can
+            find out. It used to say "ni el que armó el partido", and that was
+            false: the rules stop every *client* from tying a ballot to an
+            account, but whoever holds the Firebase project's admin key can
+            read the markers, and here that is the organiser. So: what is on
+            this page, and nothing about what is not. See "Say what the page
+            shows" in PROJECT.md. */}
         <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-          Tocá a cada uno y ponele nota.{" "}
-          <span className="text-foreground">Son anónimas</span>: nadie sabe qué
-          puso cada uno, ni el que armó el partido.
+          Tocá a cada uno y ponele nota. En la página no sale quién puso qué: se
+          ve el promedio del grupo.
         </p>
 
         {!recap.closed && author === null && (
@@ -859,9 +861,9 @@ function SignIn({ onEnter }: { onEnter: () => void }) {
           does not type a 4. The two halves are named separately now, because
           they really are different: the numbers are anonymous, the comments are
           not. */}
-      {/* One line now: both halves of that promise are said right where they
-          apply — "son anónimas" over the rows, "va con tu nombre" over the
-          thread — so this box only has to say what the button is for. */}
+      {/* One line now: what the page shows about a nota is said over the rows
+          and "va con tu nombre" over the thread, so this box only has to say
+          what the button is for. */}
       <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
         Entrá con Google para puntuar y comentar. Para mirar no hace falta.
       </p>

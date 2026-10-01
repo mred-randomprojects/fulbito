@@ -91,7 +91,7 @@ export function seedNotice(source: SeedSource): string | null {
     case "roster":
       return "Arrancamos con los niveles de tu plantel. Ajustalos según cómo jugaron hoy.";
     case "poll":
-      return "Arrancamos con lo que pusiste en la encuesta. Ajustá lo que haga falta: también es anónimo.";
+      return "Arrancamos con lo que pusiste en la encuesta. Ajustá lo que haga falta.";
     case "none":
       return null;
   }
