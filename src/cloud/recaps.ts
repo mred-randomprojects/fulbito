@@ -284,16 +284,14 @@ export interface RecapSnapshot {
   recap: Recap | null;
   comments: RecapComment[];
   /**
-   * Every ballot, to whoever holds the link — and not one of them says who
-   * wrote it.
+   * Every ballot — **for the owner's screens only**, and empty everywhere else.
    *
-   * There is no server here to work out a median, so the page does it, which
-   * means the page needs the pile. What makes that safe is that the documents
-   * are anonymous rather than that they are hidden: the id is random and the
-   * only thing tying one to an account is a marker nobody else can read. The
-   * screen still holds a player's number back until two people have given one
-   * (`MIN_VOTERS`), which is manners rather than a wall — the same bargain la
-   * votación makes with its counts.
+   * The pile used to be read by whoever held the link, so the public page
+   * could draw a median. It is the owner's now: the rules refuse a list to
+   * anybody but the recap's owner and the site owner, and `watchRecap` only
+   * asks for it when told to (`withBallots`), because a refused listener would
+   * take the whole page down with it. Somebody's own ballot is fetched on its
+   * own, by `fetchOwnRecapBallot`.
    */
   ballots: RecapBallot[];
 }
@@ -316,6 +314,12 @@ export async function watchRecap(
   id: string,
   onChange: (snapshot: RecapSnapshot) => void,
   onError: (error: unknown) => void,
+  /**
+   * Whether to read the pile — the owner's screens, and nothing else. The
+   * public page passes `false` and gets `ballots: []`; asking from there would
+   * be refused by the rules, and the refusal would break the page.
+   */
+  { withBallots }: { withBallots: boolean },
 ): Promise<() => void> {
   const { Timestamp, collection, doc, onSnapshot } = await import("firebase/firestore");
   const recapRef = doc(db, RECAPS, id);
@@ -338,16 +342,17 @@ export async function watchRecap(
   let meta: unknown | null | undefined;
   let faces: unknown[] | undefined;
   let comments: RecapComment[] | undefined;
-  let ballots: RawBallot[] | undefined;
+  // Nothing to wait for when the pile is not being read at all.
+  let ballots: RawBallot[] | undefined = withBallots ? undefined : [];
 
   const emit = () => {
-    if (meta === undefined || faces === undefined) return;
-    if (comments === undefined || ballots === undefined) return;
+    if (meta === undefined || faces === undefined || comments === undefined) return;
     const recap = meta === null ? null : normalizeRecap(meta, faces, id);
     if (recap === null) {
       onChange({ recap: null, comments: [], ballots: [] });
       return;
     }
+    if (ballots === undefined) return;
     // The recap's own list is the authority over what a ballot may say — see
     // `normalizeBallot`, and the same decision in `lib/poll.ts`.
     const known = new Set<PlayerId>([...recap.a.players, ...recap.b.players]);
@@ -358,10 +363,41 @@ export async function watchRecap(
     onChange({ recap, comments, ballots: parsed });
   };
 
+  /**
+   * The pile's listener, attached only once the recap exists. The rule that
+   * lets the owner list it reads the recap to find its owner, so asking under
+   * a match with nothing published is refused — and every match is one of
+   * those until the owner publishes it.
+   */
+  let stopBallots: (() => void) | null = null;
+  const watchBallots = () => {
+    if (!withBallots || stopBallots !== null) return;
+    stopBallots = onSnapshot(
+      collection(recapRef, BALLOTS),
+      (snap) => {
+        ballots = snap.docs.map((entry) => {
+          const data: unknown = entry.data({ serverTimestamps: "estimate" });
+          return { id: entry.id, data, at: timestampOf(data, "at") };
+        });
+        emit();
+      },
+      onError,
+    );
+  };
+
   const stopMeta = onSnapshot(
     recapRef,
     (snap) => {
       meta = snap.exists() ? snap.data() : null;
+      if (meta !== null) {
+        watchBallots();
+      } else if (stopBallots !== null) {
+        // Taken down: the rule that let the owner list the pile reads the
+        // recap to find its owner, and there is no recap left to read.
+        stopBallots();
+        stopBallots = null;
+        ballots = undefined;
+      }
       emit();
     },
     onError,
@@ -392,23 +428,11 @@ export async function watchRecap(
     },
     onError,
   );
-  const stopBallots = onSnapshot(
-    collection(recapRef, BALLOTS),
-    (snap) => {
-      ballots = snap.docs.map((entry) => {
-        const data: unknown = entry.data({ serverTimestamps: "estimate" });
-        return { id: entry.id, data, at: timestampOf(data, "at") };
-      });
-      emit();
-    },
-    onError,
-  );
-
   return () => {
     stopMeta();
     stopFaces();
     stopComments();
-    stopBallots();
+    if (stopBallots !== null) stopBallots();
   };
 }
 
@@ -554,6 +578,31 @@ export async function fetchMyRecapBallotId(
   const data: unknown = snap.data();
   const ballotId = str(isRecord(data) ? data.ballotId : undefined);
   return ballotId === "" ? null : ballotId;
+}
+
+/**
+ * This account's own ballot here, raw, or `null` when it has none.
+ *
+ * The public page no longer reads the pile, so this is how somebody coming
+ * back gets their own fourteen numbers: the marker names the id, and the
+ * rules let the account whose marker names it — and the owner — read that
+ * one document. Raw because the recap's own list of players is what
+ * `normalizeBallot` filters against, and the page may not have it yet.
+ */
+export async function fetchOwnRecapBallot(
+  db: Firestore,
+  id: string,
+  ballotId: string,
+): Promise<{ data: unknown; at: string } | null> {
+  const { Timestamp, doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, RECAPS, id, BALLOTS, ballotId));
+  if (!snap.exists()) return null;
+  const data: unknown = snap.data({ serverTimestamps: "estimate" });
+  const at: unknown = isRecord(data) ? data.at : undefined;
+  return {
+    data,
+    at: at instanceof Timestamp ? at.toDate().toISOString() : new Date(0).toISOString(),
+  };
 }
 
 /**

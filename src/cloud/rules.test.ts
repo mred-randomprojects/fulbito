@@ -46,6 +46,7 @@ import {
   deleteRecap,
   fetchMyRecapBallotId,
   fetchOwnRatings,
+  fetchOwnRecapBallot,
   postComment,
   publishRecap,
   setIgnoredBallots,
@@ -739,22 +740,37 @@ describe("recaps", () => {
   });
 
   /**
-   * The promise the page prints. A puntaje is read by everybody — there is no
-   * server to work out a median, so the page does it — and what makes that
-   * safe is that there is no name to find: not on the document, and not
-   * through the markers, which nobody may enumerate.
+   * The pile is the owner's. It used to be read by whoever held the link, so
+   * the public page could draw a median; the organiser struck that — no number
+   * about anybody on that page, not even an average — and a page that merely
+   * stops drawing one is not the fix while the link still reads the pile.
    */
-  it("publishes the numbers to whoever holds the link, and the names to nobody", async () => {
+  it("keeps the pile to the owner, each ballot to its voter, and names to nobody", async () => {
     const id = await publish();
     const ballotId = await claimRecapBallotId(as(VOTER), id, "voter-1");
     await submitRecapBallot(as(VOTER), id, ballotId, { players: { [MAXI]: { score: 40 } } });
 
-    // Anybody with the link reads the pile, which is what the averages are.
-    const seen = await getDocs(collection(as(DEVICE_A), "recaps", id, "ballots"));
+    // Nobody with only the link reads a number: not a device, not another
+    // Google account, not by listing and not by naming the id.
+    await denied(getDocs(collection(as(DEVICE_A), "recaps", id, "ballots")));
+    await denied(getDocs(collection(as(STRANGER), "recaps", id, "ballots")));
+    await denied(getDoc(doc(as(DEVICE_A), "recaps", id, "ballots", ballotId)));
+    await denied(getDoc(doc(as(STRANGER), "recaps", id, "ballots", ballotId)));
+    // Nor the super admin who is not the site owner: auditing an encuesta is
+    // not reading everybody's puntajes.
+    await denied(getDocs(collection(as(OTHER_ADMIN), "recaps", id, "ballots")));
+
+    // The owner reads the pile, with no name anywhere on it.
+    const seen = await getDocs(collection(as(OWNER), "recaps", id, "ballots"));
     assert.equal(seen.size, 1);
     const stored = seen.docs[0].data();
     assert.deepEqual(Object.keys(stored).sort(), ["at", "players"]);
     assert.equal(JSON.stringify(stored).includes("voter"), false);
+    // So does the site owner, for "Ver como" on somebody else's match.
+    assert.equal((await getDocs(collection(as(SITE_OWNER), "recaps", id, "ballots"))).size, 1);
+
+    // And the voter reads their own, which is how the page brings it back.
+    assert.notEqual(await fetchOwnRecapBallot(as(VOTER), id, ballotId), null);
 
     // And nobody — not the owner, not a super admin, not the site owner —
     // can walk the markers to find out whose it was.
@@ -820,7 +836,8 @@ describe("recaps", () => {
     await submitRecapBallot(as(STRANGER), id, ballotId, { players: { [MAXI]: { score: 80 } } });
     await writeIdentity(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" });
     const comments = await getDocs(collection(as(DEVICE_A), "recaps", id, "comments"));
-    const ballots = await getDocs(collection(as(DEVICE_A), "recaps", id, "ballots"));
+    // The pile is the owner's to read now, and even there it carries no address.
+    const ballots = await getDocs(collection(as(OWNER), "recaps", id, "ballots"));
     const seen = JSON.stringify([
       ...comments.docs.map((d) => d.data()),
       ...ballots.docs.map((d) => d.data()),

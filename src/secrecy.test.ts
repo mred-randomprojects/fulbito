@@ -212,6 +212,35 @@ describe("a puntaje is secret: the server", () => {
   });
 
   /**
+   * And nobody reads the pile but its owner. This file once let el tercer
+   * tiempo's ballots be read by any session holding the link, on the argument
+   * that an anonymous number is harmless and the page needed the pile to draw
+   * a median. The organiser struck both: no number about anybody on that page,
+   * not even an average, and the pile is the owner's to read like an
+   * encuesta's. A voter still reads the one ballot their marker names, which
+   * is how they come back to change it.
+   */
+  it("keeps el tercer tiempo's ballots to the owner and each to its voter", () => {
+    const recapBallots = rules
+      .split("match /recaps/{recapId}")[1]
+      ?.split("match /ballots/{ballotId}")[1];
+    assert.ok(recapBallots !== undefined, "the recap ballots block is gone — was it renamed?");
+    const body = recapBallots.slice(0, recapBallots.indexOf("match /voters"));
+    for (const statement of readLines(body)) {
+      assert.match(
+        statement,
+        /isRecapOwner\(\)|isSiteOwner\(\)|claims\(/,
+        `a read of el tercer tiempo's ballots that asks nobody anything: ${statement}`,
+      );
+      assert.doesNotMatch(
+        statement,
+        /if request\.auth != null;?$/,
+        `el tercer tiempo's ballots are readable by any session again: ${statement}`,
+      );
+    }
+  });
+
+  /**
    * The other half, and the one that does the work: the markers that tie an
    * account to a ballot id. Open `list` to the owner and every anonymous
    * number has a name beside it again, in one query.
@@ -358,30 +387,32 @@ describe("a puntaje is secret: the pages anybody can open", () => {
     { module: "lib/balance", why: "scores a team, which is its players' ratings" },
     { module: "lib/groups", why: "scores a split, which is the same numbers" },
     { module: "lib/insights", why: "says out loud which side is better" },
+    {
+      module: "lib/recapFeedback",
+      why: "is what the grupo's puntajes add up to — medians, counts, la figura",
+    },
   ];
 
   /**
-   * `lib/recapFeedback` used to be banned from these pages outright, when el
-   * tercer tiempo's ballots were signed and pooling them on a public page
-   * would have meant publishing attributed opinions. They are anonymous now
-   * and the page is *meant* to pool them — "le pusieron 3 notas, 72" is the
-   * reason anybody opens the link twice — so the rule moved rather than went:
-   * what that module hands out may not carry a person.
+   * `lib/recapFeedback` is banned from these pages outright, and it has been
+   * here before. It was banned while el tercer tiempo's ballots were signed;
+   * it was let back in, by name, when they became anonymous, so the public page
+   * could draw "El grupo: 72 · 3 notas" and la figura; and the organiser threw
+   * it out again: nobody gets to see what the grupo thinks of a player, not
+   * even averaged. The owner reads it on their own app, which is the only
+   * place that module is for.
    *
-   * It is checked at the source: nothing in `recapFeedback` may mention a
-   * name, a uid or an author, so a future `lines`-style field cannot come back
-   * and be rendered by the two pages below without this going red first.
+   * The module itself still may not mention a person, because the owner's
+   * screens are no place for one either.
    */
-  const FEEDBACK_ALLOWED = ["myBallot", "countedBallots", "summariseFeedback", "figura", "topScored", "answerCount", "PlayerFeedback"];
-
   it("lib/recapFeedback hands out numbers, never a person", () => {
     const source = code("src/lib/recapFeedback.ts");
     for (const word of [/\bname\b/, /\buid\b/, /\bauthor\b/, /FeedbackLine/]) {
       assert.doesNotMatch(
         source,
         word,
-        `lib/recapFeedback mentions ${word} again. Everything it returns is ` +
-          `rendered on a page anybody can open; read the header of this file first.`,
+        `lib/recapFeedback mentions ${word} again. Its ballots carry no name ` +
+          `by design; read the header of this file first.`,
       );
     }
   });
@@ -396,21 +427,6 @@ describe("a puntaje is secret: the pages anybody can open", () => {
           new RegExp(`from "(@/|\\.\\./)${module}"`),
           `${page} now imports ${module}, which ${why}. That page is opened by ` +
             `whoever was sent the link. Read the header of this file before changing it.`,
-        );
-      }
-
-      const feedback = /import\s*{([^}]*)}\s*from\s*"@\/lib\/recapFeedback"/.exec(source);
-      if (feedback === null) return;
-      const imported = feedback[1]
-        .split(",")
-        .map((name) => name.replace(/^\s*type\s+/, "").trim())
-        .filter((name) => name !== "");
-      for (const name of imported) {
-        assert.ok(
-          FEEDBACK_ALLOWED.includes(name),
-          `${page} now imports ${name} from lib/recapFeedback. Everything there but ` +
-            `${FEEDBACK_ALLOWED.join(", ")} is other people's puntajes, and this page is ` +
-            `opened by whoever was sent the link. Read the header of this file first.`,
         );
       }
     });

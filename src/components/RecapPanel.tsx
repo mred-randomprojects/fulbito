@@ -270,11 +270,12 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
         <p className="mb-2 text-sm leading-relaxed text-muted-foreground">
           Se manda un link al grupo con el resultado y las dos formaciones. El
           que lo abre ve cómo salió; si entra con Google puede ponerle nota a
-          cada uno, votar la figura y comentar. Acá vas a ver cuántas planillas
-          llegaron, y tocando a cada jugador en la cancha, su promedio; la app no
-          te muestra quién puso qué. En la página el promedio sale recién con dos
-          notas. Los comentarios los lee todo el grupo, con nombre. Tus notas,
-          la plata y todo lo que escribiste para vos no salen.
+          cada uno, votar la figura y comentar. Las notas las ves vos, acá:
+          cuántas planillas llegaron, y tocando a cada jugador en la cancha, su
+          promedio; la app no te muestra quién puso qué. En la página no se ve
+          ninguna nota, ni el promedio, ni la figura. Los comentarios los lee
+          todo el grupo, con nombre. Tus notas, la plata y todo lo que
+          escribiste para vos no salen.
         </p>
         <Button className="w-full" disabled={busy} onClick={() => void publish()}>
           {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}

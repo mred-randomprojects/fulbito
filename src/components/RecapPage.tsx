@@ -24,6 +24,7 @@ import {
   ensureAnyUid,
   fetchMyRecapBallotId,
   fetchOwnRatings,
+  fetchOwnRecapBallot,
   postComment,
   submitRecapBallot,
   watchRecap,
@@ -49,19 +50,13 @@ import {
   cleanText,
   commentOrder,
   hasVerdicts,
+  normalizeBallot,
   readableName,
   recapText,
   type PlayerVerdict,
   type Recap,
   type RecapPlayer,
 } from "@/lib/recap";
-import {
-  countedBallots,
-  figura,
-  myBallot,
-  summariseFeedback,
-  type PlayerFeedback,
-} from "@/lib/recapFeedback";
 import { KITS, type PlayerId } from "@/types";
 import { track } from "@/lib/track";
 import { useTracking } from "@/useTracking";
@@ -124,8 +119,16 @@ export function RecapPage() {
    * `lib/recapSeed.ts` for why an answer about the anonymous session is not an
    * answer about the account that just signed in, and why the form waits for
    * one before it opens.
+   *
+   * It carries the ballot too, raw: this page no longer reads the pile — the
+   * rules give it to the owner alone — so the one ballot it may read is
+   * fetched by the id the marker names, in the same step.
    */
-  const [marker, setMarker] = useState<{ uid: string; ballotId: string | null } | null>(null);
+  const [marker, setMarker] = useState<{
+    uid: string;
+    ballotId: string | null;
+    own: { data: unknown; at: string } | null;
+  } | null>(null);
   /** Where the numbers in the form came from, for the line above the rows. */
   const [source, setSource] = useState<SeedSource>("none");
   const [open, setOpen] = useState<PlayerId | null>(null);
@@ -161,8 +164,15 @@ export function RecapPage() {
         // find your own answers in a pile of documents that carry no names.
         // It only reads: claiming happens when somebody actually sends.
         void fetchMyRecapBallotId(db, matchId, who)
-          .then((found) => {
-            if (live) setMarker({ uid: who, ballotId: found });
+          .then(async (found) => {
+            // A ballot that will not load is a form that seeds instead: worse,
+            // not broken — sending still lands on the same id, because the
+            // marker can never be re-pointed.
+            const own =
+              found === null
+                ? null
+                : await fetchOwnRecapBallot(db, matchId, found).catch(() => null);
+            if (live) setMarker({ uid: who, ballotId: found, own });
           })
           .catch(() => {
             // No marker, no session, no permission: nothing filed under this
@@ -170,7 +180,7 @@ export function RecapPage() {
             // of this existed. Recorded as an answer either way, because the
             // seeding below waits for one and a lookup that failed must not
             // hold the form shut for ever.
-            if (live) setMarker({ uid: who, ballotId: null });
+            if (live) setMarker({ uid: who, ballotId: null, own: null });
           });
         stop = await watchRecap(
           db,
@@ -187,6 +197,8 @@ export function RecapPage() {
               message: "No se pudo abrir el partido. Fijate la conexión y probá de nuevo.",
             });
           },
+          // Never the pile: it is the owner's to read, on their own app.
+          { withBallots: false },
         );
         if (!live) stop();
       } catch {
@@ -236,41 +248,26 @@ export function RecapPage() {
     [snapshot?.comments],
   );
   /**
-   * This account's own ballot, and the only one this page ever has.
-   *
-   * There is no median here, no figura and nobody else's line about anybody —
-   * not hidden, *absent*: `watchRecap` never fetches them and the rules would
-   * refuse if it tried. A puntaje is an opinion about somebody who is in the
-   * same grupo, so the person who asked for it is the one who reads it. The
-   * debate about the game stays out loud, below.
-   */
-  const ballots = useMemo(
-    () => countedBallots(snapshot?.ballots ?? [], recap?.ignored ?? []),
-    [snapshot?.ballots, recap?.ignored],
-  );
-  /**
    * Which ballot is this account's, *once that is known*. `null` covers both
    * "it has none" and "nobody has asked yet", which is why nothing may seed off
    * it until `ballotKnown` says the question has been answered for this uid.
    */
   const myBallotId = ballotKnown(marker, uid) ? marker?.ballotId ?? null : null;
-  const stored = useMemo(() => myBallot(ballots, myBallotId), [ballots, myBallotId]);
   /**
-   * What the grupo said, pooled. Anonymous all the way down: these are
-   * documents with no name on them, and `summariseFeedback` holds a player's
-   * number back until two people have given one, so a page with one answer on
-   * it never reads as somebody's private opinion handed around.
+   * This account's own ballot, and **the only ballot this page ever has**.
+   *
+   * There is no median here, no figura, no count of who scored whom — not
+   * hidden, *absent*: `watchRecap` is told not to read the pile and the rules
+   * refuse it to anybody but the owner. A puntaje is read by the person who
+   * asked for it, on their own app. What the grupo thinks of a player is not
+   * something the grupo gets to see, not even averaged.
    */
-  const ids = useMemo<PlayerId[]>(
-    () => (recap === null ? [] : [...recap.a.players, ...recap.b.players]),
-    [recap],
-  );
-  const feedback = useMemo(() => summariseFeedback(ids, ballots), [ids, ballots]);
-  const byPlayer = useMemo(
-    () => new Map(feedback.map((entry) => [entry.playerId, entry])),
-    [feedback],
-  );
-  const best = useMemo(() => figura(feedback), [feedback]);
+  const stored = useMemo(() => {
+    const own = ballotKnown(marker, uid) ? marker?.own ?? null : null;
+    if (recap === null || myBallotId === null || own === null) return null;
+    const known = new Set<PlayerId>([...recap.a.players, ...recap.b.players]);
+    return normalizeBallot(myBallotId, own.data, own.at, known);
+  }, [marker, uid, recap, myBallotId]);
   const faces = useMemo(
     () => new Map((recap?.players ?? []).map((player) => [player.id, player])),
     [recap?.players],
@@ -406,8 +403,10 @@ export function RecapPage() {
     try {
       const { db } = await loadCloud();
       const ballotId = myBallotId ?? (await claimRecapBallotId(db, matchId, uid));
-      setMarker({ uid, ballotId });
       await submitRecapBallot(db, matchId, ballotId, draft);
+      // What was just filed is this account's ballot now; there is no pile
+      // listener to bring it back, so the page keeps it itself.
+      setMarker({ uid, ballotId, own: { data: draft, at: new Date().toISOString() } });
       setSaved(true);
       track({ name: "recap_reviewed", players: Object.keys(draft.players).length });
     } catch {
@@ -495,23 +494,6 @@ export function RecapPage() {
     <Shell>
       <Scoreboard recap={recap} when={when} />
 
-      {best !== null && (
-        <p className="mb-4 flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
-          <Star className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
-          <span>
-            <span className="font-medium">
-              {best.tied ? "Empatada la figura" : "La figura"}
-            </span>
-            {": "}
-            {faces.get(best.playerId)?.name ?? "alguien"}
-            <span className="text-muted-foreground">
-              {" "}
-              · {best.votes} {best.votes === 1 ? "voto" : "votos"}
-            </span>
-          </span>
-        </p>
-      )}
-
       {recap.videos.length > 0 && (
         <div className="mb-5 space-y-1.5">
           {recap.videos.map((video) => (
@@ -537,16 +519,15 @@ export function RecapPage() {
 
       <section className="mb-6">
         <h2 className="mb-1 text-xl font-semibold tracking-tight">El uno x uno</h2>
-        {/* One line, and it says what the page shows — never that nobody can
-            find out. It used to say "ni el que armó el partido", and that was
-            false: the rules stop every *client* from tying a ballot to an
-            account, but whoever holds the Firebase project's admin key can
-            read the markers, and here that is the organiser. So: what is on
-            this page, and nothing about what is not. See "Say what the page
-            shows" in PROJECT.md. */}
+        {/* One line: what this page shows (nothing) and who does see the notas
+            (the organiser and the maintainers) — never that nobody can find
+            out. It once said "ni el que armó el partido", which was false, and
+            then "se ve el promedio del grupo", which was true and was the
+            problem. See "Say what the page shows" in PROJECT.md. */}
         <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-          Tocá a cada uno y ponele nota. En la página no sale quién puso qué: se
-          ve el promedio del grupo.
+          Tocá a cada uno y ponele nota. Acá no se muestra ninguna, ni el
+          promedio: las ven sólo el que armó el partido y los que mantienen la
+          app.
         </p>
 
         {!recap.closed && author === null && (
@@ -580,7 +561,6 @@ export function RecapPage() {
           <Side
             side={recap.a}
             faces={faces}
-            byPlayer={byPlayer}
             draft={draft}
             open={open}
             onOpen={setOpen}
@@ -592,7 +572,6 @@ export function RecapPage() {
           <Side
             side={recap.b}
             faces={faces}
-            byPlayer={byPlayer}
             draft={draft}
             open={open}
             onOpen={setOpen}
@@ -877,7 +856,6 @@ function SignIn({ onEnter }: { onEnter: () => void }) {
 function Side({
   side,
   faces,
-  byPlayer,
   draft,
   open,
   onOpen,
@@ -888,7 +866,6 @@ function Side({
 }: {
   side: Recap["a"];
   faces: ReadonlyMap<PlayerId, RecapPlayer>;
-  byPlayer: ReadonlyMap<PlayerId, PlayerFeedback>;
   draft: Draft | null;
   open: PlayerId | null;
   onOpen: (id: PlayerId | null) => void;
@@ -909,7 +886,6 @@ function Side({
             key={id}
             player={faces.get(id) ?? { id, name: "Alguien", avatar: "" }}
             kitRing={kit.ring}
-            pooled={byPlayer.get(id) ?? null}
             verdict={draft?.players[id] ?? null}
             isMvp={draft?.mvp === id}
             expanded={open === id}
@@ -928,7 +904,6 @@ function Side({
 function PlayerRow({
   player,
   kitRing,
-  pooled,
   verdict,
   isMvp,
   expanded,
@@ -940,8 +915,6 @@ function PlayerRow({
 }: {
   player: RecapPlayer;
   kitRing: string;
-  /** What everybody said, pooled — never one person's answer. */
-  pooled: PlayerFeedback | null;
   verdict: PlayerVerdict | null;
   isMvp: boolean;
   expanded: boolean;
@@ -974,22 +947,12 @@ function PlayerRow({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-base font-medium">{player.name}</span>
           <span className="block text-xs text-muted-foreground">
-            {/* The grupo's number, once two people have given one — below that
-                `median` is null and nothing is shown, because one puntaje read
-                off a screen is one person's opinion of somebody. Never who
-                gave it: these documents carry no names. */}
-            {pooled !== null && pooled.median !== null ? (
-              <>
-                El grupo: {Number.isInteger(pooled.median) ? pooled.median : pooled.median.toFixed(1)}
-                <span className="opacity-70">
-                  {" "}
-                  · {pooled.scores} {pooled.scores === 1 ? "nota" : "notas"}
-                </span>
-                {pooled.mvp > 0 && <span className="text-amber-400"> · ⭐ {pooled.mvp}</span>}
-              </>
-            ) : pooled !== null && pooled.scores > 0 ? (
-              <>Falta una nota más para el promedio</>
-            ) : verdict?.thumb === "up" ? (
+            {/* Only what *you* said. This line used to carry the grupo's median
+                and its count — "El grupo: 72 · 3 notas", "Falta una nota más" —
+                and that is exactly what the organiser does not want anybody to
+                see. It is gone from the page and the pile is gone from the
+                rules; the owner reads it on their own cancha. */}
+            {verdict?.thumb === "up" ? (
               "👍 Jugó bien"
             ) : verdict?.thumb === "down" ? (
               "👎 Jugó mal"

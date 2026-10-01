@@ -57,6 +57,9 @@ export function useMatchRecap(matchId: MatchId): MatchRecap {
           () => {
             if (live) setFailed(true);
           },
+          // The owner's own screens are the one place the pile is read: the
+          // rules refuse it to anybody else, and the public page never asks.
+          { withBallots: true },
         );
         if (!live) stop();
       } catch {

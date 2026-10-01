@@ -173,10 +173,10 @@ any other app, full screen and with no signal needed.
   grupo as its own page: the scoreline, the two formations with the faces, and
   the video. Anybody with the link reads it without an account; anybody who
   signs in with Google puts a nota de 0 a 100 on each player, un pulgar para
-  arriba o para abajo, vota la figura y comenta el partido. **Las notas no
-  llevan nombre**: se guardan sueltas, la app no le muestra a nadie quién puso
-  qué, y lo que se ve es el promedio del grupo a partir de dos notas. Así el 4
-  honesto no hay que bancárselo en el asado. (Quien tiene la llave de
+  arriba o para abajo, vota la figura y comenta el partido. **Las notas son
+  del que armó el partido**: en la página no se ve ninguna, ni el promedio, ni
+  la figura — él las ve en su app, y la app no le muestra quién puso qué. Así
+  el 4 honesto no hay que bancárselo en el asado. (Quien tiene la llave de
   administrador del proyecto de Firebase puede atar una planilla a una cuenta;
   la página no promete lo contrario.) Lo que sí va firmado son los comentarios, que son
   sobre el partido y los lee cualquiera con el link: la línea es esa, un número

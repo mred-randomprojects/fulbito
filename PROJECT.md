@@ -1127,14 +1127,27 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   sentence about a named person is the one combination with nothing to
   recommend it — it cannot be averaged, it cannot be answered — so the app does
   not have one.
-- **The pile is public; a single number is not.** Anybody with the link reads
-  every ballot, because there is no server here to work out a median and the
-  page does it. `summariseFeedback` holds a player's number back below
-  `MIN_VOTERS` — two, imported from `lib/crowd.ts` rather than re-argued — so a
-  page with one answer on it says "falta una nota más" instead of handing back
-  one person's opinion. That floor is manners, enforced in the screen; what
-  makes the arrangement *safe* is that there is no name to find, which is
-  enforced by the rules. The same bargain la votación makes with its counts.
+- **The pile is the owner's, and the page shows no number at all.** Not a
+  nota, not a median, not a count, not la figura. It was otherwise for a day:
+  anybody with the link read every ballot so the page could draw "El grupo: 72
+  · 3 notas" and the figura banner, with a floor of two answers, on the
+  argument that an anonymous number is harmless. The organiser struck it:
+  nobody gets to see what the grupo thinks of a player, not even averaged.
+  **Anonymous is not private**, and only private was ever promised. So:
+  - `firestore.rules` gives `list` on a recap's ballots to its owner and the
+    site owner ("Ver como"), and `get` additionally to the account whose
+    marker names that ballot — which is how a voter comes back to change it.
+    Not `isSuperAdmin()`: auditing an encuesta is not reading everybody's
+    puntajes.
+  - `watchRecap` reads the pile only when asked (`withBallots`), and only
+    `useMatchRecap` — the owner's own screens — asks. It attaches that
+    listener once the recap exists, because the rule reads the recap to find
+    its owner and every unpublished match would otherwise come back refused.
+  - The page fetches the one ballot it may read, its own, with
+    `fetchOwnRecapBallot`, by the id the marker names.
+  - `secrecy.test.ts` pins both halves: the rules block may not be readable by
+    a bare session, and no page outside the wall may import
+    `lib/recapFeedback`.
 - **The owner moderates ballots, never people.** `ignored` holds ballot ids,
   which is all anybody can name here: setting one aside takes the whole ballot
   out, and the panel lists them as "Planilla 1, 2, 3…" because that is
@@ -1238,16 +1251,18 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   project's admin key reads everything, and here that is the organiser. The page
   once said "ni el que armó el partido" and the organiser struck it: a promise
   the app cannot keep is worse than no promise. So the copy says what is on the
-  page ("en la página no sale quién puso qué") and what the app shows the
-  organiser ("la app no te muestra quién puso qué"), and `recapSeed.test.ts`
-  goes red if "anónimo" or "nadie" creeps back into the seed notice.
+  page and who does see the notas ("acá no se muestra ninguna, ni el promedio:
+  las ven sólo el que armó el partido y los que mantienen la app"), and what
+  the app shows the organiser ("la app no te muestra quién puso qué");
+  `recapSeed.test.ts` goes red if "anónimo" or "nadie" creeps back into the
+  seed notice.
 - **Every promise is said once, where it applies.** The page used to explain
   the anonymity three times and show the sign-in box three times, and read like
-  terms and conditions. Now there are four sentences and each sits where it is
-  true: what the page shows about a nota over the rows, "va con tu nombre" over
-  the thread, the address beside the comment button — the only act that stores
-  one — and the promedio's floor on the row that is waiting for it. Shortening the page further
-  must keep all four. Dropping one is not a tidy-up: somebody writing a harsh
+  terms and conditions. Now there are three sentences and each sits where it
+  is true: who sees the notas, and that this page shows none, over the rows;
+  "va con tu nombre" over the thread; and the address beside the comment
+  button — the only act that stores one. Shortening the page further must keep
+  all three. Dropping one is not a tidy-up: somebody writing a harsh
   line about a teammate because they thought the thread was private is exactly
   the failure the second one prevents.
 - **Four ways to say how somebody played**, because they answer different
@@ -1260,10 +1275,10 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   a pile is, and now imports `MIN_VOTERS` as well. It used to argue the
   opposite — no floor, because every number had a name beside it — and that
   reasoning went with the signature. The count is shown either way, so "7,5 de
-  uno solo" is never mistaken for a consensus. Nothing that module returns
-  carries a name, a uid or a line of text, and `secrecy.test.ts` greps it to
-  keep that true: everything it hands out is rendered on a page anybody can
-  open.
+  uno solo" is never mistaken for a consensus. It is read on the owner's
+  screens and nowhere else — the pages outside the wall may not import it at
+  all — and nothing it returns carries a name, a uid or a line of text, which
+  `secrecy.test.ts` greps it to keep true.
 - **What comes back is read beside your own line.** On the cancha, the card a
   tap on a player opens carries "lo que dijo el grupo" *under* your own box —
   under, so other people's opinions do not anchor what you were about to write,
@@ -1514,9 +1529,14 @@ a build, a full test run, a rules suite and a review, because not one of them
 asked the question: the redaction tests pin what a *published document
 contains*, and this was a leak in who may **read** it and in what a public page
 **renders**. It was caught by the person whose grupo it was, in a sentence that
-should never have needed saying. The two tests named above are what ask the
-question now, and `secrecy.test.ts` had a bug of exactly the same shape in its
-first draft — it parsed the wrong brace, checked nothing, and passed — which is
+should never have needed saying. **And it went out a second time, in a
+politer shape:** the ballots became anonymous, the pile was handed back to the
+link so the page could draw a median and la figura, and `secrecy.test.ts` was
+loosened to let it — by name, with a comment explaining why it was fine. It
+was not: anonymous is not private, and the organiser struck it again. A test
+that can be relaxed with a well-argued comment will be. The two tests named
+above are what ask the question now, and `secrecy.test.ts` had a bug of exactly
+the same shape in its first draft — it parsed the wrong brace, checked nothing, and passed — which is
 written up in its own header as the reason its helpers assert that they found
 something.
 
@@ -1807,10 +1827,9 @@ something.
   its key set is pinned by a test, and `firestore.rules` refuses any field that
   is not on the list a second time. So `Match.reviews`, `Match.notes`,
   `forecastNotes`, the payments and every rating stay where they are. **And
-  what comes in carries nobody's name.** A puntaje is an anonymous ballot: the
-  pile is public because the page has to average it, a single number is held
-  back below two, and there is no uid on a ballot and no way to enumerate the
-  markers. What the grupo writes *in words* is the opposite and always was —
+  what comes in carries nobody's name.** A puntaje is an anonymous ballot,
+  read by the owner alone: the public page shows no number at all, there is no
+  uid on a ballot, and there is no way to enumerate the markers. What the grupo writes *in words* is the opposite and always was —
   the comment thread, read by everybody, signed by everybody. The line is the
   same one the app draws everywhere else, now drawn on both sides of the wall:
   **a number about a person is answered without a name, and a sentence about a

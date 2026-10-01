@@ -378,8 +378,9 @@ service cloud.firestore {
     //
     //     A puntaje is the opposite and gets the encuesta's treatment: a
     //     ballot with no uid and no name on it, one per account by way of a
-    //     marker only that account can read. An honest 4 is one nobody should
-    //     have to defend at the asado. See the `ballots` block below.
+    //     marker only that account can read — and the pile is the owner's
+    //     to read, like an encuesta's, never the link's. See the `ballots`
+    //     block below.
     //
     //   - **One person, one ballot, by marker.** The encuesta's
     //     marker-before-ballot dance is here in full, for the first time:
@@ -525,7 +526,21 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/recaps/$(recapId)/voters/$(request.auth.uid)).data.ballotId == id;
         }
 
-        allow read: if request.auth != null;
+        // **The owner reads the pile; a voter reads the one their marker
+        // names; nobody else reads any.** This used to be `request.auth !=
+        // null` — every ballot readable by any session, including the
+        // anonymous one the page mints on open — on the argument that an
+        // anonymous number is harmless and the page needs the pile to work
+        // out a median. The organiser struck both halves: a puntaje is read by
+        // the person who asked for it, and the page shows no number at all,
+        // not even an average. A page that merely stops drawing them is not
+        // the fix; the person holding the link holds a console too.
+        //
+        // The site owner reads them as well, for "Ver como" on somebody
+        // else's match — the same power `isSiteOwner()` has over the rest of
+        // that account.
+        allow list: if isRecapOwner() || isSiteOwner();
+        allow get: if isRecapOwner() || isSiteOwner() || claims(ballotId);
         allow create, update: if claims(ballotId)
           && isOpen()
           && request.resource.data.keys().hasOnly(['players', 'mvp', 'at'])
