@@ -7,6 +7,7 @@ import {
   readOwnCopy,
   seedNotice,
   seedScores,
+  seedStillWanted,
 } from "./recapSeed.js";
 
 function pid(name: string): PlayerId {
@@ -129,12 +130,9 @@ describe("readOwnCopy", () => {
   });
 
   /**
-   * The whole reason this is asked by match and not by uid. A Firebase uid is
-   * stable only for as long as the auth account behind it is, and the organiser
-   * whose link this is had six of them: the session that was live was not the
-   * one that published the recap, so every uid-shaped test shut the door on the
-   * one person the page was certain to have numbers for. The match is in this
-   * browser or it is not, and no sign-in can change the answer.
+   * Why this is asked by match and not by uid: the match is in this browser or
+   * it is not, and no sign-in, sign-out or change of session can change the
+   * answer. The organiser gets their numbers before they have even signed in.
    */
   it("needs no session, and no uid to match anything", () => {
     const seeded = seedScores(
@@ -228,5 +226,27 @@ describe("ballotKnown", () => {
   it("is not an answer about a different session", () => {
     assert.equal(ballotKnown({ uid: "anon-7" }, "maxi"), false);
     assert.equal(ballotKnown({ uid: "maxi" }, null), false);
+  });
+});
+
+describe("seedStillWanted", () => {
+  /**
+   * The bug this exists for: the seed was cancelled in the effect's cleanup,
+   * and starting a seed re-runs that effect, so anything that needed a round
+   * trip — the cloud plantel, the encuesta answers — was dropped on arrival.
+   * A re-render is not a reason to throw a seed away.
+   */
+  it("keeps a seed that arrives after the page has re-rendered", () => {
+    assert.equal(seedStillWanted("maxi", "maxi"), true);
+  });
+
+  /**
+   * The one thing that does make it stale: a newer session started its own.
+   * The anonymous uid the page minted on open has been replaced by a sign-in,
+   * and these numbers are an answer about somebody who is no longer looking.
+   */
+  it("drops a seed once a newer session has started its own", () => {
+    assert.equal(seedStillWanted("maxi", "anon-7"), false);
+    assert.equal(seedStillWanted(null, "maxi"), false);
   });
 });

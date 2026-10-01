@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   Check,
@@ -37,6 +37,7 @@ import {
   readOwnCopy,
   seedNotice,
   seedScores,
+  seedStillWanted,
   type SeedSource,
 } from "@/lib/recapSeed";
 import { isCancelledSignIn } from "@/lib/authErrors";
@@ -108,6 +109,11 @@ export function RecapPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   /** Which uid the draft was seeded for. See the effect that fills it. */
   const [seededFor, setSeededFor] = useState<string | null>(null);
+  /**
+   * Which uid the seed in flight belongs to — a ref, not state, and not the
+   * effect's cleanup. See `seedStillWanted` for why the cleanup was the bug.
+   */
+  const seedingFor = useRef<string | null>(null);
   /**
    * The answer to "has this account already sent a ballot here?", and which uid
    * it is an answer about.
@@ -310,6 +316,7 @@ export function RecapPage() {
     // Claimed up front: everything below is async, and a second pass would
     // fetch the same things again and race its own result into the form.
     setSeededFor(uid);
+    seedingFor.current = uid;
 
     if (stored !== null) {
       setDraft({ mvp: stored.mvp, players: { ...stored.players } });
@@ -318,22 +325,21 @@ export function RecapPage() {
     }
 
     const ids: PlayerId[] = [...recap.a.players, ...recap.b.players];
-    let live = true;
+    const startedFor = uid;
 
-    void (async () => {
-      const seeded = await loadSeed(uid, recap, ids);
+    // No cleanup on purpose. This used to cancel itself in the effect's
+    // cleanup, and the line just above re-runs this effect, so every seed that
+    // needed a round trip — the cloud plantel, the encuesta — was thrown away
+    // the moment it arrived. Only a newer session may drop it.
+    void loadSeed(uid, recap, ids).then((seeded) => {
+      if (seeded === null || !seedStillWanted(seedingFor.current, startedFor)) return;
       // Nothing is overwritten on arrival: somebody who started typing while
       // this was in flight has said something, and a seed never beats that.
-      if (!live || seeded === null) return;
       setDraft((current) =>
         current === null || hasVerdicts(current) ? current : { players: seeded.scores },
       );
       setSource(seeded.source);
-    })();
-
-    return () => {
-      live = false;
-    };
+    });
   }, [uid, snapshot, recap, stored, seededFor, marker]);
 
   /* ---------------------------------------------------------------- */

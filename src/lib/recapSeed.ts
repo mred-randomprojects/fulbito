@@ -114,19 +114,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * it at all, and the ratings on the plantel it would start a puntaje from.
  *
  * **This is the identity test for the pre-filled form, and it is deliberately
- * not the uid.** The obvious test — "is the account looking at this page the
- * one that published it?" — is the one that was tried and that broke. A Firebase
- * uid is stable only for as long as the auth account behind it is, and in this
- * project one person's Google address has collected six of them across a year
- * of rebuilding the backend; the live session was simply not the session that
- * had published the recap, so the organiser opened their own link to fourteen
- * dashes with the whole plantel sitting in the same browser. The cloud roster
- * cannot be read any other way — an island is keyed by uid and that is what
- * makes it safe — but the copy on this device needs no permission at all, so it
- * does not have to ask that question. It asks a better one: **does this browser
- * hold the very match this link is about?** Match ids come out of
- * `crypto.randomUUID`, so the only browser that can answer yes is one the
- * organiser set that game up in.
+ * not the uid.** The cloud roster cannot be read any other way — an island is
+ * keyed by uid and that is what makes it safe — but the copy on this device
+ * needs no permission at all, so it does not have to ask who is signed in. It
+ * asks a question that needs no session, no network and no answer from
+ * Firebase: **does this browser hold the very match this link is about?** Match
+ * ids come out of `crypto.randomUUID`, so the only browser that can answer yes
+ * is one the organiser set that game up in — signed in or not, and whatever
+ * session is live.
+ *
+ * (A uid-gated first version of this was argued for with "the organiser's uid
+ * changed under them": six Firebase sessions under one address turned up in
+ * this browser's IndexedDB. That reading was wrong. `mred-randomprojects.github.io`
+ * is one origin shared by every sibling app published there, so its
+ * `firebaseLocalStorageDb` holds one session per *app* — six apps, six
+ * projects, six uids — and Fulbito's own project has exactly one account for
+ * that address. The door stayed match-shaped because it is the better test,
+ * not because of that story.)
  *
  * **It widens nothing, and that is why it may be this loose.** Everything it
  * returns is already in `localStorage` on this device, which means the plantel
@@ -183,6 +187,24 @@ export function readOwnCopy(raw: string | null, matchId: string): OwnCopy {
     ratings.set(id as PlayerId, toCurrentScale(rating, scale));
   }
   return { knowsMatch, ratings };
+}
+
+/**
+ * Whether a seed that has just arrived is still the one the page wants.
+ *
+ * The seed is fetched once per uid and may need a round trip — the owner's
+ * cloud plantel, or this account's encuesta answers — so it lands after the
+ * page has re-rendered at least once. It used to be cancelled in the effect's
+ * cleanup, and the effect re-runs on the very state it sets when it starts
+ * (`seededFor`), so **every seed that needed the network was discarded on
+ * arrival**: the encuesta door, the one meant for everybody who is not the
+ * organiser, never filled a single form. Only one thing makes a seed stale,
+ * and it is not a re-render: a *newer session* having started its own — the
+ * anonymous one being replaced by a sign-in — because then these numbers are
+ * an answer about somebody who is no longer the one looking.
+ */
+export function seedStillWanted(seedingFor: string | null, startedFor: string): boolean {
+  return seedingFor === startedFor;
 }
 
 /**

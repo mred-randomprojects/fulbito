@@ -766,39 +766,27 @@ edited one — reload stale tabs before a torneo night.
 
 Signing in is optional, and everything about the design follows from that.
 
-**A uid is not a person, and this project has the receipts.** Every island,
-every `ownerUid` and every one-vote-per-account marker in this app hangs off
-`request.auth.uid`, which is stable for exactly as long as the auth account
-behind it is — not as long as the Google address is. Rebuild the Firebase
-project, rotate the web config, delete a user out of the console, and the next
-sign-in with the same address mints a **new** uid. The organiser of this app's
-own grupo has six of them under one address, dated April to September 2026, one
-per web-app config the browser has ever seen (`firebase:authUser:<apiKey>` is
-the key those sessions are stored under, so each config is a fresh session and
-a fresh sign-in). The live one is not the one that published the partido of
-29/9.
+**One origin, shared with every sibling app.** Fulbito is served from
+`mred-randomprojects.github.io/fulbito/`, and the origin is
+`mred-randomprojects.github.io` — the same one `execute`, `cuentas`,
+`candito-tool`, `nutriapp` and `dineros` are served from. A browser keys
+`localStorage` and IndexedDB by origin, not by path, so all of them share one
+store. Two consequences, one practical and one that matters:
 
-What that costs, so nobody is surprised by it twice:
-
-- The cloud copy is split across up to six islands, and a device syncing under
-  one of them is not syncing with a device under another.
-- Only the uid in `ownerUid` can close, re-publish or take down a recap, read
-  its `identities`, or set a ballot aside. The others are refused by the rules,
-  correctly.
-- `voters/{uid}` means one ballot *per account*, so one person with six
-  accounts is six ballots, and a ballot sent under an old uid cannot be found
-  again under the new one.
-- Anything keyed off the **address** rather than the uid is unaffected, which
-  is why "Ver como" and the super-admin reads kept working throughout:
-  `isSiteOwner()` and `isSuperAdmin()` compare `request.auth.token.email`.
-
-Two things follow for anybody changing code here. **Never use a uid as a stand
-in for "this person" where a cheaper, local signal exists** — `readOwnCopy` in
-`lib/recapSeed.ts` is the worked example: it asks whether this browser holds
-the match instead of whether this account published it, and it is right where
-the uid test was wrong. And **merging the islands is a data migration**: it
-rewrites stored documents under a different key, so it stops and asks and takes
-a backup first, per `AGENTS.md`.
+- **Debugging:** `firebaseLocalStorageDb` in this origin holds one Firebase
+  session *per app* (`firebase:authUser:<apiKey>:[DEFAULT]`), each from its own
+  project with its own uid for the same Google address. Six sessions under one
+  mail there are six apps, not one account that drifted — Fulbito's project has
+  one account per address ("Link accounts that use the same email" is on). This
+  was misread once, during the tercer tiempo seed bug, as a uid that had changed
+  under its owner; it had not.
+- **Secrecy:** every app on this origin can read `fulbito-data` — every rating
+  in the plantel — and Fulbito's Firebase session out of IndexedDB. Today that
+  is all the same author's code, so no extra *person* can read a puntaje; but a
+  bug or a compromised dependency in any sibling is a bug in this one. The fix
+  would be an origin of its own (a custom domain, or a Pages site of its own),
+  and that is a data migration for every user — `localStorage` does not follow
+  a site to a new origin — so it is a decision for the owner, not a tidy-up.
 
 The cloud copy is **one document per record** — `users/{uid}/players/{id}`,
 `users/{uid}/matches/{id}`, `users/{uid}/teams/{id}`, and
@@ -1181,18 +1169,15 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
      home; because it costs no round trip and works with no signal; and because
      it is the only door that does not depend on a uid.
 
-     **It is opened by the match, not by the account, and that is the whole
-     lesson of this bug.** The obvious test — "is the account looking at this
-     page the one that published it?" — shipped first and failed on the one
-     reader it was certain to have numbers for. A Firebase uid is stable only
-     for as long as the auth account behind it is; this project's own organiser
-     had collected six of them under one Google address across a year of
-     rebuilding the backend, and the session that was live was not the session
-     that had published the recap. So the question asked is **does this browser
-     hold the very match this link is about?** Match ids come out of
-     `crypto.randomUUID`, so the only browser that can answer yes is one the
-     organiser set that game up in, and no sign-in, sign-out or new uid changes
-     the answer.
+     **It is opened by the match, not by the account.** The question asked is
+     **does this browser hold the very match this link is about?** — which
+     needs no session, no network and no answer from Firebase. Match ids come
+     out of `crypto.randomUUID`, so the only browser that can answer yes is one
+     the organiser set that game up in, and no sign-in, sign-out or change of
+     session changes the answer. (It was briefly gated on
+     `uid === ownerUid` instead, argued for by a uid that had supposedly
+     drifted; it had not — see "One origin, shared with every sibling app"
+     under Sync.)
 
      It widens nothing, which is why it may be that loose: everything it returns
      is already in `localStorage` on that device, so the plantel screen shows the
@@ -1205,8 +1190,7 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
      uid, the one time a page outside the wall reads a roster and it can only
      ever read the reader's), for the phone that has never had the app open. It
      *is* behind `uid === ownerUid`, because an island is keyed by uid and there
-     is no other way to ask — and when the uid has moved on it correctly comes
-     back with nothing. It also needs sync to have been turned on at all:
+     is no other way to ask. It also needs sync to have been turned on at all:
      signing in to publish a recap turns nothing on (`lib/syncConsent.ts` is
      deliberate about that), so for an organiser who never enabled it this
      collection is simply empty.
@@ -1226,6 +1210,14 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   asked about for the same kind of reason — the page mints an anonymous session
   on open and replaces it on sign-in, and "nothing filed" under a throwaway uid
   says nothing about the account that just arrived.
+
+  **And a seed that arrives late is kept, which it was not.** The seed used to
+  be cancelled in the effect's cleanup, and starting a seed sets `seededFor`,
+  which re-runs that same effect — so every seed that needed a round trip was
+  thrown away the moment it landed. Doors 2 and 3 have therefore never filled a
+  form: nobody who answered an encuesta ever saw their answers come back here.
+  `seedStillWanted` replaces the cleanup: only a *newer session* starting its
+  own seed makes one stale, never a re-render.
 
   **The encuesta case used to have a real cost, and it is gone rather than
   forgotten.** Those answers were given anonymously, and a recap ballot was
