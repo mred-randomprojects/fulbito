@@ -315,6 +315,7 @@ gate, including tooltips and charts.
 | `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
 | `lib/reviews.ts` | What counts as a line of the uno x uno, and one player's history of them |
 | `lib/recap.ts` | El tercer tiempo: what a finished match publishes and what it never does, plus the comments and ballots that come back |
+| `lib/recapSeed.ts` | What a recap's uno x uno opens pre-filled with — the reader's own ratings or their own encuesta answers — and what the page has to say about where they came from |
 | `lib/recapFeedback.ts` | What the grupo's puntajes add up to: a median per player, the thumbs, la figura, and taking a line into the uno x uno |
 | `useMatchRecap.ts` | The recap of the match that is open, watched once and handed to the panel and the player's card |
 | `lib/video.ts` | What an address pasted onto a match is — YouTube, Vimeo, Drive, a file, a link, or nothing — what a player needs to show it, the same link twice, and the lines the chat gets |
@@ -1058,7 +1059,8 @@ Same shape as the other two — a root collection, a page mounted beside `App`
 
 ```
 recaps/{matchId}                      { ownerUid, title, date, goalsA, goalsB,
-                                        a, b, videos, createdAt, closed?, ignored? }
+                                        a, b, videos, pollId?, createdAt,
+                                        closed?, ignored? }
 recaps/{matchId}/players/{playerId}   { ownerUid, name, avatar }
 recaps/{matchId}/comments/{commentId} { uid, name, text, at }
 recaps/{matchId}/reviews/{uid}        { uid, name, mvp?, players, at }
@@ -1118,6 +1120,30 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   **cannot be edited** — an edit leaves no mark, and a thread where somebody can
   quietly rewrite what a reply was replying to is worse than one where a
   deletion is visible by its absence.
+- **The form opens pre-filled, with your own numbers and nobody else's.**
+  Nobody arrives at that page with an opinion of nothing: the owner has a
+  rating on every player already, and whoever answered the last encuesta said
+  what they thought a week ago. Starting from fourteen empty boxes is how a
+  page gets answered by three people. So `lib/recapSeed.ts` seeds the scores —
+  and only the scores, because a thumb, a line and the figura are about tonight
+  and have nothing to copy from — from exactly one of two places, both of them
+  the reader's own: the owner's own plantel (`fetchOwnRatings`, their uid, the
+  one time a page outside the wall reads a roster and it can only ever read the
+  reader's), or this account's own answers to the encuesta the recap points at
+  (`pollId` → `voters/{uid}` → their own ballot, all three readable by that
+  account under the rules that were already there). A ballot already sent for
+  this match beats both: coming back to change one puntaje must not reset the
+  other thirteen.
+  **The encuesta case has a real cost and the page says it out loud.** Those
+  answers were given anonymously; a recap ballot is signed and read by the
+  organiser. Somebody who sends a pre-filled form unchanged therefore hands
+  over, with their name on it, what they had said anonymously — so the notice
+  above the rows says exactly that before they send, and `recapSeed.test.ts`
+  pins the sentence. It was taken deliberately, with the trade on the table:
+  the alternative was fourteen numbers nobody retypes. For this grupo the delta
+  is small (the owner is also a super admin, who may already attribute a ballot
+  through `identities`); for any other owner of this app it is not, which is
+  why the warning is not optional.
 - **Four ways to say how somebody played**, because they answer different
   moods: a thumb (the quick pass down the team), a 0–100 puntaje, a line of
   text, and one vote for la figura per person. All optional, all on the same

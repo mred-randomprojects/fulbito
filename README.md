@@ -180,6 +180,12 @@ any other app, full screen and with no signal needed.
   mirando lo que puso el resto, y nadie se entera de que el Gordo le puso un 4.
   Lo único que se lee entre todos son los comentarios, que son sobre el partido
   y van con el nombre al lado, que es lo que mantiene la cosa civilizada.
+  El formulario no arranca vacío: a vos te arranca con los niveles que ya
+  tenés cargados, y al que contestó la última encuesta le arranca con lo que
+  había puesto ahí, para que ajuste después de verlos jugar. Siempre los
+  números propios de cada uno, nunca los de otro — y en el caso de la encuesta
+  la página avisa, antes de mandar, que aquello era anónimo y esto va con el
+  nombre al lado.
   Lo que escriben vuelve a tu app debajo de tu propio uno x uno, y se suma con
   un toque si te gusta: nunca le mueve el puntaje a nadie. Vos cerrás el hilo
   cuando ya está, o lo das de baja del todo, y si alguien vota de mala fe le

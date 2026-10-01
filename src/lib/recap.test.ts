@@ -106,6 +106,12 @@ describe("recapFromMatch — the redaction", () => {
    * chat under somebody's name — so the key set is pinned rather than
    * described.
    */
+  it("carries a pointer to the encuesta only when there is one", () => {
+    assert.equal("pollId" in recapFromMatch(match(), "owner", "now")!, false);
+    assert.equal("pollId" in recapFromMatch(match(), "owner", "now", "")!, false);
+    assert.equal(recapFromMatch(match(), "owner", "now", "poll-1")!.pollId, "poll-1");
+  });
+
   it("publishes exactly these fields and no others", () => {
     const recap = recapFromMatch(match(), "owner", "2026-03-11T00:00:00.000Z");
     assert.notEqual(recap, null);
@@ -459,7 +465,7 @@ describe("recapDiffers", () => {
   /** A published recap of `match()`, as the owner first put it up. */
   function published(extras: Partial<Recap> = {}): Recap {
     const fresh = recapFromMatch(match(), "owner", "2026-03-11T00:00:00.000Z")!;
-    return { ...fresh, id: "m1", players: [], closed: false, ignored: [], ...extras };
+    return { ...fresh, id: "m1", players: [], pollId: "", closed: false, ignored: [], ...extras };
   }
 
   it("is false when nothing moved", () => {

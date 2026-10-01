@@ -437,7 +437,7 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.keys().hasOnly(
              ['ownerUid', 'title', 'date', 'goalsA', 'goalsB', 'a', 'b',
-              'videos', 'createdAt', 'closed', 'ignored'])
+              'videos', 'pollId', 'createdAt', 'closed', 'ignored'])
         && request.resource.data.title is string
         && request.resource.data.title.size() <= 80
         && request.resource.data.goalsA is int
@@ -447,9 +447,16 @@ service cloud.firestore {
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.keys().hasOnly(
              ['ownerUid', 'title', 'date', 'goalsA', 'goalsB', 'a', 'b',
-              'videos', 'createdAt', 'closed', 'ignored']);
+              'videos', 'pollId', 'createdAt', 'closed', 'ignored']);
       allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
 
+      // `pollId` points at the owner's latest encuesta, so somebody opening the
+      // link can start from their own answers to it instead of fourteen empty
+      // boxes — `lib/recapSeed.ts` has the reasoning and the cost. It is a
+      // pointer and nothing else: reading that poll still needs a Google
+      // account, and every ballot under it stays unreadable to anybody but the
+      // poll's owner, the super admins, and the account that wrote it.
+      //
       // The faces, one document each: an avatar is an inline data URL of up
       // to 60 KB and twenty on one document cross Firestore's 1 MiB cap.
       match /players/{playerId} {

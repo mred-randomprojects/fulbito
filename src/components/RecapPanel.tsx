@@ -22,6 +22,7 @@ import {
   setIgnoredReviews,
   setRecapClosed,
 } from "@/cloud/recaps";
+import { listMyPolls } from "@/cloud/polls";
 import { isCancelledSignIn } from "@/lib/authErrors";
 import { formatMatchDate } from "@/lib/dates";
 import { canPublish, commentOrder, recapDiffers, recapText } from "@/lib/recap";
@@ -135,7 +136,16 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
     setError(null);
     try {
       const { db } = await loadCloud();
-      const ok = await publishRecap(db, user.uid, match, players);
+      // The latest encuesta goes on the recap, so whoever opens the link can
+      // start from their own answers to it rather than from fourteen empty
+      // boxes. The newest one, because that is what "lo que pensás de cada
+      // uno" means today; a grupo with none publishes without it and the page
+      // simply opens blank. A failed lookup is not worth failing a publish
+      // over — see `lib/recapSeed.ts` for what it buys and what it costs.
+      const pollId = await listMyPolls(db, user.uid)
+        .then((polls) => polls[0]?.id)
+        .catch(() => undefined);
+      const ok = await publishRecap(db, user.uid, match, players, pollId);
       if (!ok) setError("Falta el resultado o falta gente en la cancha.");
       else track({ name: "recap_published" });
     } catch {

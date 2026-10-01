@@ -313,6 +313,27 @@ export async function claimBallotId(
   }
 }
 
+/**
+ * Which ballot this account owns in this poll, **without claiming one**.
+ *
+ * `claimBallotId` creates the marker when there is none, which is right when
+ * somebody is about to answer and wrong everywhere else: calling it to *look*
+ * would spend a person's single vote on a poll they never opened. This only
+ * reads, and `null` means they have not voted in it.
+ */
+export async function fetchMyBallotId(
+  db: Firestore,
+  pollId: string,
+  uid: string,
+): Promise<string | null> {
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, POLLS, pollId, VOTERS, uid));
+  if (!snap.exists()) return null;
+  const data: unknown = snap.data();
+  const ballotId = str(isRecord(data) ? data.ballotId : undefined);
+  return ballotId === "" ? null : ballotId;
+}
+
 /** A ballot already started, so somebody can pick it up where they left it. */
 export async function fetchBallot(
   db: Firestore,

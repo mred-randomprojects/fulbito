@@ -1,6 +1,6 @@
 import type { Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
-import type { Player, PlayerId } from "@/types";
+import { toCurrentScale, type Player, type PlayerId } from "@/types";
 import {
   normalizeComment,
   normalizeIdentity,
@@ -118,9 +118,16 @@ export async function publishRecap(
   ownerUid: string,
   match: PublishableMatch,
   players: readonly Player[],
+  /**
+   * The owner's latest encuesta, so somebody opening the link can be shown
+   * their own answers to it as a starting point. Looked up by the caller
+   * rather than here: a panel that already knows has no reason to pay for the
+   * query again, and a build with no encuestas passes nothing.
+   */
+  pollId?: string,
 ): Promise<boolean> {
   const { collection, doc, writeBatch } = await import("firebase/firestore");
-  const recap = recapFromMatch(match, ownerUid, new Date().toISOString());
+  const recap = recapFromMatch(match, ownerUid, new Date().toISOString(), pollId);
   if (recap === null) return false;
 
   const recapRef = doc(collection(db, RECAPS), match.id);
@@ -201,6 +208,41 @@ export async function deleteRecap(db: Firestore, id: string): Promise<void> {
     await batch.commit();
   }
   await deleteDoc(recapRef);
+}
+
+/**
+ * The owner's own ratings, off their own cloud copy of the plantel.
+ *
+ * **The one time a page outside the wall reads a roster, and it reads only the
+ * reader's own.** `users/{uid}` is a wall and stays one: this is called with
+ * the viewer's uid, the rules allow an account its own documents and nobody
+ * else's, so the worst it can do is show somebody what they already have on
+ * their own phone. A recap opened by anybody else never calls it.
+ *
+ * Only the overall rating comes back — not the positions, the attributes, the
+ * notes, the avoid lists or anything else on a ficha — because the only
+ * question being asked is what number to start a puntaje at.
+ *
+ * `toCurrentScale` rather than a bare read: a player document written before
+ * the scale changed carries no `ratingScale` and means 1–10, so a 7 there is a
+ * 70 here. Without it the form would open with everybody on a 7.
+ */
+export async function fetchOwnRatings(
+  db: Firestore,
+  uid: string,
+): Promise<Map<PlayerId, number>> {
+  const { collection, getDocs } = await import("firebase/firestore");
+  const snap = await getDocs(collection(db, "users", uid, "players"));
+  const out = new Map<PlayerId, number>();
+  for (const entry of snap.docs) {
+    const data: unknown = entry.data();
+    if (!isRecord(data)) continue;
+    const rating = data.rating;
+    if (typeof rating !== "number" || !Number.isFinite(rating)) continue;
+    const scale = typeof data.ratingScale === "number" ? data.ratingScale : undefined;
+    out.set(entry.id as PlayerId, toCurrentScale(rating, scale));
+  }
+  return out;
 }
 
 /** Whether this match already has a recap up, for the panel on the match. */

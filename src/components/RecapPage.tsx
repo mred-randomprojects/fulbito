@@ -21,11 +21,15 @@ import { loadCloud } from "@/cloud/firebase";
 import {
   deleteComment,
   ensureAnyUid,
+  fetchOwnRatings,
   postComment,
   setMyReview,
   watchRecap,
   type RecapSnapshot,
 } from "@/cloud/recaps";
+import { fetchBallot, fetchMyBallotId } from "@/cloud/polls";
+import { voteRating } from "@/lib/poll";
+import { hasSeed, seedNotice, seedScores, type SeedSource } from "@/lib/recapSeed";
 import { isCancelledSignIn } from "@/lib/authErrors";
 import { formatMatchDate } from "@/lib/dates";
 import {
@@ -92,6 +96,8 @@ export function RecapPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   /** Which uid the draft was seeded for. See the effect that fills it. */
   const [seededFor, setSeededFor] = useState<string | null>(null);
+  /** Where the numbers in the form came from, for the line above the rows. */
+  const [source, setSource] = useState<SeedSource>("none");
   const [open, setOpen] = useState<PlayerId | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -203,26 +209,56 @@ export function RecapPage() {
   );
 
   /**
-   * The draft starts as whatever this account already sent, so somebody
-   * coming back sees their own answers rather than an empty form.
+   * What the form opens with.
    *
-   * **Waits for a snapshot**, and that is the whole of it. `setUid` runs
-   * before `watchRecap` has resolved, so seeding on "there is a uid" seeded an
-   * empty form off a page that had simply not heard back yet — and then never
-   * re-seeded, because the guard was `draft !== null`. The ballot landed a
-   * moment later and was never shown: you came back to the link and your own
-   * notas were gone. Once per uid rather than once, so signing in over the
-   * anonymous session re-reads as the account that is now writing; and never
-   * twice for the same uid, or a keystroke would be overwritten by the echo of
-   * the write before it. `VotePage` does the same thing for the same reason.
+   * In order: a ballot this account already sent for this match wins outright
+   * — coming back to change one puntaje must not reset the other thirteen.
+   * Failing that it is seeded, and the only thing anybody is ever seeded with
+   * is **their own** numbers: the owner's own plantel on the owner's own
+   * screen, or this account's own answers to the encuesta the recap points at.
+   * `lib/recapSeed.ts` has the rule and, for the encuesta case, what it costs
+   * — the page says that out loud above the rows, which is the point of
+   * keeping the sentence in a tested module.
+   *
+   * **Waits for a snapshot.** `setUid` runs before `watchRecap` resolves, so
+   * seeding on "there is a uid" seeded an empty form off a page that had not
+   * heard back yet, and then never re-seeded, because the guard was "is the
+   * draft still null" — the ballot landed a moment later and was dropped. Once
+   * per uid rather than once, so signing in over the anonymous session re-reads
+   * as the account that is now writing; never twice for the same uid, or a
+   * keystroke would be overwritten by the echo of the write before it.
    */
   useEffect(() => {
-    if (uid === null || snapshot === null || seededFor === uid) return;
-    setDraft(
-      stored === null ? { players: {} } : { mvp: stored.mvp, players: { ...stored.players } },
-    );
+    if (uid === null || snapshot === null || recap === null || seededFor === uid) return;
+    // Claimed up front: everything below is async, and a second pass would
+    // fetch the same things again and race its own result into the form.
     setSeededFor(uid);
-  }, [uid, snapshot, stored, seededFor]);
+
+    if (stored !== null) {
+      setDraft({ mvp: stored.mvp, players: { ...stored.players } });
+      setSource("mine");
+      return;
+    }
+
+    setDraft({ players: {} });
+    const ids: PlayerId[] = [...recap.a.players, ...recap.b.players];
+    let live = true;
+
+    void (async () => {
+      const seeded = await loadSeed(uid, recap.ownerUid, recap.pollId, ids);
+      // Nothing is overwritten on arrival: somebody who started typing while
+      // this was in flight has said something, and a seed never beats that.
+      if (!live || seeded === null) return;
+      setDraft((current) =>
+        current === null || hasVerdicts(current) ? current : { players: seeded.scores },
+      );
+      setSource(seeded.source);
+    })();
+
+    return () => {
+      live = false;
+    };
+  }, [uid, snapshot, recap, stored, seededFor]);
 
   /* ---------------------------------------------------------------- */
   /* Doing                                                             */
@@ -412,6 +448,24 @@ export function RecapPage() {
           </div>
         )}
 
+        {/* Where the numbers in the form came from, said before anybody sends
+            them. In the encuesta case this is the sentence that keeps a
+            promise honest — those answers were given anonymously, and what
+            goes from here goes with a name on it. `lib/recapSeed.ts` owns the
+            wording and a test pins it. */}
+        {seedNotice(source) !== null && (
+          <p
+            className={cn(
+              "mb-3 rounded-lg border px-3 py-2 text-xs leading-relaxed",
+              source === "poll"
+                ? "border-amber-500/40 bg-amber-500/5 text-amber-200"
+                : "border-border bg-muted/40 text-muted-foreground",
+            )}
+          >
+            {seedNotice(source)}
+          </p>
+        )}
+
         {recap.closed && (
           <p className="mb-3 flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -580,6 +634,66 @@ export function RecapPage() {
       </p>
     </Shell>
   );
+}
+
+
+/**
+ * The numbers a form opens with, fetched for whoever is looking.
+ *
+ * Two doors, and both of them lead to the reader's own data:
+ *
+ * - **The owner** reads their own plantel out of their own cloud copy. The
+ *   rules give an account its own documents and nobody else's, so this can
+ *   never show somebody else's ratings; and a recap opened by anybody else
+ *   does not take this branch at all.
+ * - **Anybody else** reads their own answers to the encuesta the recap points
+ *   at: the marker at `voters/{uid}` names their ballot and the rules let that
+ *   account — and only the owner, the super admins and it — read that ballot.
+ *   `fetchMyBallotId` is used rather than `claimBallotId` on purpose: claiming
+ *   would spend somebody's single vote on a poll they never opened.
+ *
+ * Any failure is a form that opens empty, which is what the page did before
+ * and is never worth an error on screen. An anonymous session reads nothing:
+ * it has no plantel and no encuesta, and `voters/{uid}` under a throwaway uid
+ * is a document that does not exist.
+ */
+async function loadSeed(
+  uid: string,
+  ownerUid: string,
+  pollId: string,
+  ids: readonly PlayerId[],
+): Promise<{ scores: Partial<Record<PlayerId, PlayerVerdict>>; source: SeedSource } | null> {
+  try {
+    const { db } = await loadCloud();
+
+    if (uid === ownerUid) {
+      const ratings = await fetchOwnRatings(db, uid);
+      const scores = seedScores(ids, ratings);
+      return hasSeed(scores) ? { scores, source: "roster" } : null;
+    }
+
+    if (pollId === "") return null;
+    const ballotId = await fetchMyBallotId(db, pollId, uid);
+    if (ballotId === null) return null;
+    const ballot = await fetchBallot(db, pollId, ballotId);
+    if (ballot === null) return null;
+
+    const ratings = new Map<PlayerId, number>();
+    for (const [id, vote] of Object.entries(ballot.votes)) {
+      if (vote === undefined) continue;
+      // The overall and nothing else: a role rating is an opinion about where
+      // somebody plays, not about how they played on Thursday.
+      const rating = voteRating(vote.overall, vote.scale);
+      if (rating !== undefined) ratings.set(id as PlayerId, rating);
+    }
+    const scores = seedScores(ids, ratings);
+    return hasSeed(scores) ? { scores, source: "poll" } : null;
+  } catch {
+    // A form that opens empty is the old behaviour, not a failure worth a
+    // message: the person came here to say what they think, not to be told
+    // that something they never asked for did not load.
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------------ */

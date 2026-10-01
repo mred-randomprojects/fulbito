@@ -31,7 +31,9 @@ import {
 import {
   claimBallotId,
   createPoll,
+  fetchBallot,
   fetchBallotEntries,
+  fetchMyBallotId,
   fetchIdentities,
   fetchPoll,
   listMyPolls,
@@ -41,6 +43,7 @@ import {
 import {
   deleteComment,
   deleteRecap,
+  fetchOwnRatings,
   postComment,
   publishRecap,
   setIgnoredReviews,
@@ -850,6 +853,58 @@ describe("recaps", () => {
       (await getDoc(doc(as(ADMIN), "recaps", id, "identities", "stranger"))).exists(),
       false,
     );
+  });
+
+  /**
+   * The seed the page opens with, and the two doors it reads through. Both of
+   * them lead to the reader's own data and nothing else — that is the whole
+   * claim being checked here, because the page shows these numbers to whoever
+   * is looking.
+   */
+  it("lets a voter read their own encuesta answers back, and nobody else's", async () => {
+    const owner = as(OWNER);
+    const pollId = await createPoll(owner, "owner-1", {
+      title: "El plantel",
+      players: [{ id: MAXI, name: "Maxi", avatar: "" }],
+    });
+
+    // The voter answers the encuesta, anonymously, as they always did.
+    const voter = as(VOTER);
+    const ballotId = await claimBallotId(voter, pollId, "voter-1");
+    await submitBallot(voter, pollId, ballotId, { votes: { [MAXI]: { played: true, skipped: false, scale: 100, overall: 71, roleRatings: {}, attributes: {} } } }, { email: "voter@example.com", name: "V" });
+
+    // And reads their own back: marker first, then the ballot it names.
+    const mine = await fetchMyBallotId(voter, pollId, "voter-1");
+    assert.equal(mine, ballotId);
+    assert.notEqual(await fetchBallot(voter, pollId, ballotId), null);
+
+    // Somebody else holding the recap link gets neither.
+    await denied(fetchMyBallotId(as(STRANGER), pollId, "voter-1"));
+    await denied(fetchBallot(as(STRANGER), pollId, ballotId));
+    await denied(fetchBallot(as(DEVICE_A), pollId, ballotId));
+    // And a device with no vote in it claims nothing by looking.
+    assert.equal(await fetchMyBallotId(as(STRANGER), pollId, "stranger"), null);
+  });
+
+  it("keeps the owner's plantel to the owner, which is what seeds their form", async () => {
+    await setDoc(doc(as(OWNER), "users", "owner-1", "players", MAXI), {
+      id: MAXI,
+      firstName: "Maxi",
+      rating: 77,
+      ratingScale: 100,
+    });
+    assert.equal((await fetchOwnRatings(as(OWNER), "owner-1")).get(MAXI), 77);
+    // The page calls it with the viewer's own uid; the rules are what make
+    // that the only thing it can ever return.
+    await denied(fetchOwnRatings(as(VOTER), "owner-1"));
+    await denied(fetchOwnRatings(as(DEVICE_A), "owner-1"));
+  });
+
+  it("publishes the pointer to the encuesta, and refuses a recap that invents fields", async () => {
+    const ok = await publishRecap(as(OWNER), "owner-1", match, players, "poll-9");
+    assert.equal(ok, true);
+    const snap = await getDoc(doc(as(DEVICE_A), "recaps", match.id));
+    assert.equal(snap.data()?.pollId, "poll-9");
   });
 
   it("lets somebody revise their own ballot", async () => {

@@ -103,6 +103,18 @@ export interface Recap {
   a: RecapSide;
   b: RecapSide;
   videos: RecapVideo[];
+  /**
+   * The encuesta this grupo answered most recently, when there is one.
+   *
+   * The only pointer out of a recap, and it exists so that somebody opening
+   * the link can be shown **their own** answers to that encuesta as a starting
+   * point — see `lib/recapSeed.ts`, which also explains what it costs. It
+   * gives nothing away on its own: a poll is readable only by a Google
+   * account, every ballot under it is unreadable to anybody but the owner, the
+   * super admins and the ballot's own author, and the id is as random as the
+   * recap's.
+   */
+  pollId: string;
   /** The faces, reassembled from their own documents. See `cloud/recaps.ts`. */
   players: RecapPlayer[];
   createdAt: string;
@@ -280,6 +292,8 @@ export interface RecapDocument {
   a: RecapSide;
   b: RecapSide;
   videos: RecapVideo[];
+  /** See `Recap.pollId`. Absent when the owner has never sent an encuesta. */
+  pollId?: string;
   createdAt: string;
 }
 
@@ -301,9 +315,11 @@ export function recapFromMatch(
   match: PublishableMatch,
   ownerUid: string,
   now: string,
+  /** The owner's latest encuesta, when they have one. See `Recap.pollId`. */
+  pollId?: string,
 ): RecapDocument | null {
   if (match.result == null || !canPublish(match)) return null;
-  return {
+  const doc: RecapDocument = {
     ownerUid,
     title: cleanText(match.name, MAX_TITLE) ?? "Picado",
     date: match.date,
@@ -326,6 +342,11 @@ export function recapFromMatch(
     videos: match.videos.map((video) => ({ url: video.url, label: video.label })),
     createdAt: now,
   };
+  // Written only when there is one: Firestore drops an `undefined`, but the
+  // key set is what `recap.test.ts` pins, and a recap with no encuesta behind
+  // it should not carry an empty pointer to one.
+  if (pollId !== undefined && pollId !== "") doc.pollId = pollId;
+  return doc;
 }
 
 /**
@@ -446,6 +467,7 @@ export function normalizeRecap(
     a: normalizeSide(raw.a, "Claros", "light"),
     b: normalizeSide(raw.b, "Oscuros", "dark"),
     videos: normalizeVideos(raw.videos),
+    pollId: str(raw.pollId),
     players: normalizeRecapPlayers(players),
     createdAt: str(raw.createdAt),
     closed: raw.closed === true,

@@ -142,6 +142,8 @@
     "src/lib/teamPick.test.ts",
     "src/lib/recap.ts",
     "src/lib/recap.test.ts",
+    "src/lib/recapSeed.ts",
+    "src/lib/recapSeed.test.ts",
     "src/lib/recapFeedback.ts",
     "src/lib/recapFeedback.test.ts",
     "src/lib/video.ts",
