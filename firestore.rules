@@ -368,21 +368,24 @@ service cloud.firestore {
     //     what that is, and its test pins the field list, because a leak here
     //     is a private note in a group chat and there is no taking it back.
     //
-    //   - **Writing is signed, and the signature is pinned.** `isPerson()`,
-    //     so a Google account, and `email` must equal the token's. Nothing
-    //     here is anonymous and nothing here pretends to be: the page shows
-    //     every name to everybody. That is the trade an attributed thread
-    //     makes — a median absorbs one bad-faith 2 and absorbs nothing at all
-    //     about a sentence, so what keeps this civil is that the grupo can see
-    //     who typed it. `name` is whatever the browser sent: a label, never
-    //     proof. The address is the proof, and only the owner and the super
-    //     admins ever have cause to look at it.
+    //   - **Words are signed; numbers are not.** A comment wants `isPerson()`
+    //     and carries a name the whole grupo sees: a median absorbs one
+    //     bad-faith 2 and absorbs nothing at all about a sentence, so what
+    //     keeps a free-text box civil is that everybody can see who typed it.
+    //     `name` is whatever the browser sent — a label, never proof — and the
+    //     address lives in `identities`, where only the owner and the super
+    //     admins may look.
     //
-    //   - **One person, one ballot, by shape.** A review lives at
-    //     `reviews/{uid}`, so the encuesta's marker-before-ballot dance is
-    //     simply absent — that dance exists to keep a uid *off* a ballot, and
-    //     these are signed on purpose. A comment is one document each, because
-    //     people say more than one thing about a game.
+    //     A puntaje is the opposite and gets the encuesta's treatment: a
+    //     ballot with no uid and no name on it, one per account by way of a
+    //     marker only that account can read. An honest 4 is one nobody should
+    //     have to defend at the asado. See the `ballots` block below.
+    //
+    //   - **One person, one ballot, by marker.** The encuesta's
+    //     marker-before-ballot dance is here in full, for the first time:
+    //     `voters/{uid}` names one ballot id and can never be re-pointed. A
+    //     comment is one document each, because people say more than one thing
+    //     about a game.
     //
     // A comment cannot be edited, only deleted and written again. An edit
     // leaves no mark, and a thread where somebody can quietly rewrite what a
@@ -482,46 +485,69 @@ service cloud.firestore {
       }
 
       // ----------------------------------------------------------------
-      // The puntajes. One per person, and the document id is who.
+      // The puntajes. **Anonymous, exactly like an encuesta's.**
       //
-      // **Read by the owner and by whoever wrote it, and by nobody else.**
-      // That is the line this feature draws, and it is the app's own line
-      // from everywhere else: what somebody wrote about a *person* does not
-      // go out, and what they wrote about the *game* does. A comment is the
-      // argument about the second goal and is published with a name on it; a
-      // 40 and "no cruzó la mitad" is an opinion about somebody who is in
-      // the same grupo, and the person who asked for it is the only one who
-      // reads it.
+      // A ballot lives at `ballots/{ballotId}` with no uid and no name on it,
+      // and the only thing tying one to an account is `voters/{uid}`, a
+      // create-only marker that nobody but that account may read. The owner
+      // reads every ballot to work out the medians — there is no server here
+      // to do it for them — so a uid on the ballot would put "quién le puso un
+      // 4 al Gordo" one tap away, and nobody would ever answer honestly again.
       //
-      // It used to be `request.auth != null`, and the page showed everybody
-      // the medians and every line. Hiding them in the UI alone would have
-      // been the same non-fix as putting the mail on a comment and not
-      // rendering it: whoever holds the link holds a console too. So `list`
-      // is the owner's (and `useMatchRecap` is the only thing that uses it),
-      // and `get` is that plus your own — which is how somebody comes back to
-      // a ballot they half filled in.
+      // The order is the whole trick, and it is `polls`' verbatim:
       //
-      // The floor the encuesta has (`MIN_VOTERS`) is deliberately still
-      // absent: it exists so a median cannot be read back as one person's
-      // private opinion, and here the owner is *entitled* to read exactly
-      // that, because they are the one who asked. See "El tercer tiempo".
+      //   1. The voter creates `voters/{uid}` holding one random `ballotId`.
+      //      Create-only: it can never be updated or re-pointed.
+      //   2. The voter creates `ballots/{ballotId}`, and the rule requires the
+      //      id to be exactly the one their own marker names.
       //
-      // A ballot is rewritable by its own author on purpose: a puntaje typed
-      // before the video went up is one somebody is entitled to revise.
+      // Doing it the obvious way round — "you may write a ballot if you have
+      // no marker yet" — is broken, and quietly: rules are evaluated against
+      // the state *before* the write, so one batch holding two ballots and a
+      // marker passes every check.
+      //
+      // This block used to be `reviews/{uid}`, signed, and the argument for
+      // that was that a name is what keeps a free-text box civil. The
+      // free-text box moved to the comments, where it still carries one. What
+      // is left here is numbers, and numbers are answered honestly only when
+      // nobody can ask you about them afterwards.
+      //
+      // **Reading is open to whoever holds the link**, which is what lets the
+      // page show "le pusieron 3 notas, 72" without a server to add them up.
+      // The screen holds a player's number back below `MIN_VOTERS`, and that
+      // is manners rather than a wall — the same bargain la votación makes
+      // with its counts. What makes it safe is that there is no name to find.
       // ----------------------------------------------------------------
-      match /reviews/{voterId} {
-        allow get: if request.auth != null
-          && (request.auth.uid == voterId || isRecapOwner());
-        allow list: if isRecapOwner();
-        allow create, update: if signsOwnName()
-          && request.auth.uid == voterId
+      match /ballots/{ballotId} {
+        function claims(id) {
+          return request.auth != null
+            && exists(/databases/$(database)/documents/recaps/$(recapId)/voters/$(request.auth.uid))
+            && get(/databases/$(database)/documents/recaps/$(recapId)/voters/$(request.auth.uid)).data.ballotId == id;
+        }
+
+        allow read: if request.auth != null;
+        allow create, update: if claims(ballotId)
           && isOpen()
-          && request.resource.data.keys().hasOnly(['uid', 'name', 'mvp', 'players', 'at'])
+          && request.resource.data.keys().hasOnly(['players', 'mvp', 'at'])
           && (!('mvp' in request.resource.data) || request.resource.data.mvp is string)
           && request.resource.data.players is map
           && request.resource.data.at == request.time;
-        allow delete: if request.auth != null
-          && (request.auth.uid == voterId || isRecapOwner());
+        allow delete: if claims(ballotId) || isRecapOwner();
+      }
+
+      match /voters/{voterId} {
+        // The door that stays shut. Opening `list` to the owner would put a
+        // uid beside every ballot and undo the whole design above — which is
+        // also why `deleteRecap` leaves these behind: they cannot be named.
+        allow get: if request.auth != null && request.auth.uid == voterId;
+        allow list: if false;
+        allow create: if isPerson()
+          && request.auth.uid == voterId
+          && request.resource.data.keys().hasOnly(['ballotId'])
+          && request.resource.data.ballotId is string
+          && request.resource.data.ballotId.size() > 0;
+        // Never re-pointed: that is what makes one marker mean one ballot.
+        allow update, delete: if false;
       }
 
       // ----------------------------------------------------------------
@@ -546,6 +572,12 @@ service cloud.firestore {
       // many times they post, and the owner can take these down with the recap
       // because they are allowed to list them — unlike an encuesta's, where
       // the whole point is that the owner may delete what they may not read.
+      //
+      // **It is written by commenting and says nothing about the puntajes.**
+      // A ballot is anonymous and no identity is written beside one, so the
+      // owner reading this collection learns who argued in the thread — which
+      // the thread already shows them — and nothing whatsoever about who gave
+      // whom a 4.
       // ----------------------------------------------------------------
       match /identities/{voterId} {
         allow get, list: if isRecapOwner() || isSuperAdmin();

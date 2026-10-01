@@ -58,8 +58,8 @@ export type TrackEvent =
   | { name: "recap_published" }
   | { name: "recap_shared"; via: "text" | "link" }
   | { name: "recap_commented" }
+  /** One anonymous ballot of puntajes. `players`: how many it had a number for. */
   | { name: "recap_reviewed"; players: number }
-  | { name: "recap_adopted" }
   /** La votación opened. `options`: how many arrangements went out. */
   | { name: "vote_published"; options: number }
   | { name: "vote_shared"; via: "text" | "link" }

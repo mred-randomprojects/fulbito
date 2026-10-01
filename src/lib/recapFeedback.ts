@@ -1,6 +1,6 @@
 import type { PlayerId } from "../types.js";
-import { median } from "./crowd.js";
-import type { RecapReview, Thumb } from "./recap.js";
+import { median, MIN_VOTERS } from "./crowd.js";
+import type { RecapBallot, Thumb } from "./recap.js";
 
 /**
  * What the grupo, taken together, said about one night.
@@ -20,25 +20,27 @@ import type { RecapReview, Thumb } from "./recap.js";
  *    than rewritten so the two screens cannot disagree about what the middle
  *    of a pile is.
  *
- * 2. **No floor, unlike the crowd, and this is the difference.** `MIN_VOTERS`
- *    exists so that a median cannot be read back as one person's opinion of a
- *    player — a private judgement with a name on it. Here the name is already
- *    on it: every review is signed, and the page shows who said what. There
- *    is nothing to protect by hiding a number that one person's own line
- *    already states out loud, and a grupo where two people bother to answer
- *    would otherwise get a page of blanks. What is shown instead is the count,
- *    always, so "7,5 de uno solo" never reads as a consensus.
+ * 2. **The same floor as the crowd, and for the same reason.** `MIN_VOTERS`
+ *    is imported rather than re-argued: below two scores there is no number at
+ *    all — not a greyed-out one, not a provisional one — because one puntaje
+ *    read off a screen is one person's opinion of somebody, and these are
+ *    answered anonymously precisely so that it never has to be defended at the
+ *    asado. It said the opposite here until the ballots stopped being signed,
+ *    and that reasoning went with the signature. The count is shown either way,
+ *    so "7,5 de uno solo" is never mistaken for a consensus and a player with
+ *    one puntaje reads as "falta gente" rather than as a blank.
  *
  * 3. **Nothing is aggregated on the way in.** Every pass takes the raw
  *    verdicts, the same bargain `lib/stats.ts` makes with results and
  *    `lib/crowd.ts` makes with ballots: a change of mind about how to read
  *    these is a change to one function rather than to what was written down.
  *
- * 4. **Setting a review aside takes the whole review out.** Not the one
+ * 4. **Setting a ballot aside takes the whole ballot out.** Not the one
  *    puntaje that looks wrong: somebody voting in bad faith did it across the
  *    board, and picking out the numbers you disagree with is how a page like
- *    this stops being worth reading. `countedReviews` is what everything here
- *    is taken from.
+ *    this stops being worth reading. `countedBallots` is what everything here
+ *    is taken from. The owner names a ballot id, never a person — they could
+ *    not name a person if they wanted to.
  */
 
 /** Everything the grupo said about one player's night. */
@@ -46,7 +48,11 @@ export interface PlayerFeedback {
   playerId: PlayerId;
   /** How many put a number on him. */
   scores: number;
-  /** The median puntaje, or `null` when nobody scored him. Decision 2. */
+  /**
+   * The median puntaje — `null` until `MIN_VOTERS` of them exist, and `null`
+   * when nobody scored him. Decision 2: the two cases are told apart by
+   * `scores`, and a screen cannot render a number that is not here.
+   */
   median: number | null;
   low: number | null;
   high: number | null;
@@ -54,17 +60,6 @@ export interface PlayerFeedback {
   down: number;
   /** How many picked him as la figura. */
   mvp: number;
-  /** What people wrote about him, newest last, with who wrote it. */
-  lines: FeedbackLine[];
-}
-
-/** One written verdict, and who signed it. */
-export interface FeedbackLine {
-  /** The account that wrote it, so "adopted by a tap" can be traced. */
-  uid: string;
-  name: string;
-  text: string;
-  at: string;
 }
 
 /** The night's figura, once somebody has said so. */
@@ -76,20 +71,21 @@ export interface Figura {
 }
 
 /**
- * The reviews that count: everything except the ones the owner set aside.
+ * The ballots that count: everything except the ones the owner set aside.
  *
- * Decision 4. `ignored` holds uids, which is what a review is filed under.
+ * Decision 4. `ignored` holds ballot ids, which is what a ballot is filed
+ * under — and the only handle on one that anybody has.
  */
-export function countedReviews(
-  reviews: readonly RecapReview[],
+export function countedBallots(
+  ballots: readonly RecapBallot[],
   ignored: readonly string[],
-): RecapReview[] {
+): RecapBallot[] {
   const out = new Set(ignored);
-  return reviews.filter((review) => !out.has(review.uid));
+  return ballots.filter((ballot) => !out.has(ballot.id));
 }
 
-function thumbOf(review: RecapReview, id: PlayerId): Thumb | undefined {
-  return review.players[id]?.thumb;
+function thumbOf(ballot: RecapBallot, id: PlayerId): Thumb | undefined {
+  return ballot.players[id]?.thumb;
 }
 
 /**
@@ -103,42 +99,35 @@ function thumbOf(review: RecapReview, id: PlayerId): Thumb | undefined {
  */
 export function summariseFeedback(
   ids: readonly PlayerId[],
-  reviews: readonly RecapReview[],
+  ballots: readonly RecapBallot[],
 ): PlayerFeedback[] {
   return ids.map((playerId) => {
     const scores: number[] = [];
-    const lines: FeedbackLine[] = [];
     let up = 0;
     let down = 0;
     let mvp = 0;
 
-    for (const review of reviews) {
-      const verdict = review.players[playerId];
-      if (verdict !== undefined) {
-        if (verdict.score !== undefined) scores.push(verdict.score);
-        if (verdict.text !== undefined) {
-          lines.push({ uid: review.uid, name: review.name, text: verdict.text, at: review.at });
-        }
-      }
-      const thumb = thumbOf(review, playerId);
+    for (const ballot of ballots) {
+      const verdict = ballot.players[playerId];
+      if (verdict?.score !== undefined) scores.push(verdict.score);
+      const thumb = thumbOf(ballot, playerId);
       if (thumb === "up") up += 1;
       if (thumb === "down") down += 1;
-      if (review.mvp === playerId) mvp += 1;
+      if (ballot.mvp === playerId) mvp += 1;
     }
 
-    lines.sort((a, b) => a.at.localeCompare(b.at) || a.uid.localeCompare(b.uid));
-
+    // Decision 1 and 2: the middle of what came in, once there is enough of it
+    // that the number is not one person's opinion handed back.
+    const enough = scores.length >= MIN_VOTERS;
     return {
       playerId,
       scores: scores.length,
-      // Decision 1 and 2: the middle of whatever came in, and no floor.
-      median: scores.length === 0 ? null : median(scores),
-      low: scores.length === 0 ? null : Math.min(...scores),
-      high: scores.length === 0 ? null : Math.max(...scores),
+      median: enough ? median(scores) : null,
+      low: enough ? Math.min(...scores) : null,
+      high: enough ? Math.max(...scores) : null,
       up,
       down,
       mvp,
-      lines,
     };
   });
 }
@@ -175,48 +164,20 @@ export function topScored(feedback: readonly PlayerFeedback[]): PlayerFeedback |
 }
 
 /** How many people answered at all, which is the honesty line under a number. */
-export function answerCount(reviews: readonly RecapReview[]): number {
-  return reviews.length;
+export function answerCount(ballots: readonly RecapBallot[]): number {
+  return ballots.length;
 }
 
 /**
- * One person's own ballot out of the pile, so the page can show them what
- * they already said rather than an empty form.
+ * This account's own ballot out of the pile, found by the id its marker names,
+ * so the page can show somebody what they already said rather than an empty
+ * form. A ballot carries no uid, so the marker is the only way to tell which
+ * of them is yours — and nobody else can read it.
  */
-export function myReview(
-  reviews: readonly RecapReview[],
-  uid: string | null,
-): RecapReview | null {
-  if (uid === null) return null;
-  return reviews.find((review) => review.uid === uid) ?? null;
-}
-
-/**
- * The lines written about one player, as the app's own screens read them.
- *
- * This is the "adopted by a tap" side of the feature: the owner sees what the
- * grupo wrote about somebody beside their own uno x uno, and a tap copies one
- * into `Match.reviews`. The quoting is deliberate and so is the attribution —
- * what lands in your own notes says who said it, because a line you adopted
- * from El Gordo is not a line you wrote.
- */
-export function adoptable(line: FeedbackLine): string {
-  return `${line.text} — ${line.name}`;
-}
-
-/**
- * The uno x uno with one of the grupo's lines taken into it.
- *
- * Appended rather than replacing, because the owner's own sentence is not
- * worth losing to a mis-tap, and because two people saying two things about
- * the same night is the case this is for. Idempotent on purpose: the rows are
- * small, on a phone, and a double tap must not leave the same line twice.
- *
- * Returns the book's text, not the book — the caller still goes through
- * `setReview`, which is what decides that an emptied box drops its key.
- */
-export function adoptInto(current: string, line: FeedbackLine): string {
-  const adopted = adoptable(line);
-  if (current.includes(adopted)) return current;
-  return current.trim() === "" ? adopted : `${current.trimEnd()}\n${adopted}`;
+export function myBallot(
+  ballots: readonly RecapBallot[],
+  ballotId: string | null,
+): RecapBallot | null {
+  if (ballotId === null) return null;
+  return ballots.find((ballot) => ballot.id === ballotId) ?? null;
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCloudAuth } from "@/cloud/auth";
 import { loadCloud } from "@/cloud/firebase";
 import { watchRecap, type RecapSnapshot } from "@/cloud/recaps";
-import { countedReviews, summariseFeedback, type PlayerFeedback } from "@/lib/recapFeedback";
+import { countedBallots, summariseFeedback, type PlayerFeedback } from "@/lib/recapFeedback";
 import type { MatchId, PlayerId } from "@/types";
 
 /**
@@ -24,7 +24,7 @@ import type { MatchId, PlayerId } from "@/types";
  */
 export interface MatchRecap {
   snapshot: RecapSnapshot | null;
-  /** The reviews that count: the owner's word on which are set aside applied. */
+  /** The ballots that count: the owner's word on which are set aside applied. */
   feedback: PlayerFeedback[];
   byPlayer: ReadonlyMap<PlayerId, PlayerFeedback>;
   /** Whether there is a recap up for this match at all. */
@@ -51,10 +51,6 @@ export function useMatchRecap(matchId: MatchId): MatchRecap {
         stop = await watchRecap(
           db,
           matchId,
-          // The owner, which is what entitles this hook to the whole pile of
-          // puntajes: a ballot is readable by the person who asked for it and
-          // by whoever wrote it, and nobody else. See `cloud/recaps.ts`.
-          user.uid,
           (next) => {
             if (live) setSnapshot(next);
           },
@@ -78,8 +74,8 @@ export function useMatchRecap(matchId: MatchId): MatchRecap {
   const feedback = useMemo(() => {
     if (recap === null) return [];
     const ids: PlayerId[] = [...recap.a.players, ...recap.b.players];
-    return summariseFeedback(ids, countedReviews(snapshot?.reviews ?? [], recap.ignored));
-  }, [recap, snapshot?.reviews]);
+    return summariseFeedback(ids, countedBallots(snapshot?.ballots ?? [], recap.ignored));
+  }, [recap, snapshot?.ballots]);
 
   const byPlayer = useMemo(
     () => new Map(feedback.map((entry) => [entry.playerId, entry])),

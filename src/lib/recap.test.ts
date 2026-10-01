@@ -10,7 +10,7 @@ import {
   normalizeComment,
   normalizeIgnored,
   normalizeRecap,
-  normalizeReview,
+  normalizeBallot,
   normalizeVerdict,
   readableName,
   recapDiffers,
@@ -316,12 +316,21 @@ describe("normalizeVerdict", () => {
   it("keeps whichever parts were given", () => {
     assert.deepEqual(normalizeVerdict({ score: 80 }), { score: 80 });
     assert.deepEqual(normalizeVerdict({ thumb: "down" }), { thumb: "down" });
-    assert.deepEqual(normalizeVerdict({ text: " jugó bien " }), { text: "jugó bien" });
   });
 
   it("is null when every part is empty, so nothing is stored for nothing", () => {
     assert.equal(normalizeVerdict({}), null);
-    assert.equal(normalizeVerdict({ text: "  ", thumb: "sideways" }), null);
+    assert.equal(normalizeVerdict({ thumb: "sideways" }), null);
+  });
+
+  /**
+   * A ballot holds numbers. What somebody wants to *say* about a player goes
+   * in the thread, where it carries a name — so a `text` written by an older
+   * build, or by hand, is dropped on the way in rather than shown anonymously.
+   */
+  it("drops a written line, wherever it came from", () => {
+    assert.equal(normalizeVerdict({ text: "no cruzó la mitad" }), null);
+    assert.deepEqual(normalizeVerdict({ score: 70, text: "no cruzó la mitad" }), { score: 70 });
   });
 
   it("drops a score that will not parse rather than calling it a 50", () => {
@@ -335,38 +344,53 @@ describe("normalizeVerdict", () => {
   });
 });
 
-describe("normalizeReview", () => {
+describe("normalizeBallot", () => {
   const known = new Set([pid("maxi"), pid("juan")]);
 
-  it("reads a ballot back", () => {
-    const review = normalizeReview(
-      "u1",
-      { name: "Maxi", mvp: "juan", players: { maxi: { score: 70 } } },
+  it("reads a ballot back, under the id it was filed at", () => {
+    const back = normalizeBallot(
+      "b1",
+      { mvp: "juan", players: { maxi: { score: 70 } } },
       "t",
       known,
     );
-    assert.equal(review!.mvp, pid("juan"));
-    assert.deepEqual(review!.players[pid("maxi")], { score: 70 });
+    assert.equal(back!.id, "b1");
+    assert.equal(back!.mvp, pid("juan"));
+    assert.deepEqual(back!.players[pid("maxi")], { score: 70 });
   });
 
-  it("never carries an address either", () => {
-    const review = normalizeReview("u1", { email: "a@b.c", players: {} }, "t", known);
-    assert.equal(JSON.stringify(review).includes("a@b.c"), false);
+  /**
+   * The anonymity is the shape, and this is the reader's half of it: a
+   * document that turns up with a uid, a name or an address on it — written by
+   * an older build, or by somebody by hand — gives none of them to a screen.
+   */
+  it("carries no uid, no name and no address, whatever the document says", () => {
+    const back = normalizeBallot(
+      "b1",
+      { uid: "u1", name: "El Gordo", email: "a@b.c", players: {} },
+      "t",
+      known,
+    );
+    const json = JSON.stringify(back);
+    assert.equal(json.includes("u1"), false);
+    assert.equal(json.includes("El Gordo"), false);
+    assert.equal(json.includes("a@b.c"), false);
+    assert.deepEqual(Object.keys(back!).sort(), ["at", "id", "players"]);
   });
 
   it("ignores a verdict about somebody who was never on the recap", () => {
-    const review = normalizeReview("u1", { players: { stranger: { score: 90 } } }, "t", known);
-    assert.deepEqual(review!.players, {});
+    const back = normalizeBallot("b1", { players: { stranger: { score: 90 } } }, "t", known);
+    assert.deepEqual(back!.players, {});
   });
 
   it("ignores an mvp who was never on the recap", () => {
-    const review = normalizeReview("u1", { mvp: "stranger" }, "t", known);
-    assert.equal(review!.mvp, undefined);
+    const back = normalizeBallot("b1", { mvp: "stranger" }, "t", known);
+    assert.equal(back!.mvp, undefined);
   });
 
   it("drops a verdict that says nothing", () => {
-    const review = normalizeReview("u1", { players: { maxi: {} } }, "t", known);
-    assert.deepEqual(review!.players, {});
+    const back = normalizeBallot("b1", { players: { maxi: {} } }, "t", known);
+    assert.deepEqual(back!.players, {});
   });
 });
 

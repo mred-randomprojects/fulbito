@@ -1,18 +1,18 @@
 import type { Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
-import { toCurrentScale, type Player, type PlayerId } from "@/types";
+import { generateId, toCurrentScale, type Player, type PlayerId } from "@/types";
 import {
+  normalizeBallot,
   normalizeComment,
   normalizeIdentity,
   normalizeRecap,
-  normalizeReview,
   recapFromMatch,
   recapPlayers,
   type PublishableMatch,
   type Recap,
+  type RecapBallot,
   type RecapComment,
   type RecapIdentity,
-  type RecapReview,
 } from "@/lib/recap";
 
 /**
@@ -23,7 +23,8 @@ import {
  *                                         a, b, videos, createdAt, closed, ignored? }
  * recaps/{matchId}/players/{playerId}   { ownerUid, name, avatar }
  * recaps/{matchId}/comments/{commentId} { uid, name, text, at }
- * recaps/{matchId}/reviews/{uid}        { uid, name, mvp?, players, at }
+ * recaps/{matchId}/voters/{uid}         { ballotId }
+ * recaps/{matchId}/ballots/{ballotId}   { mvp?, players, at }
  * recaps/{matchId}/identities/{uid}     { email, name, at }
  * ```
  *
@@ -58,17 +59,26 @@ import {
  * a batch would turn an unpublished rule into a page nobody can write on, and
  * an account with no address on its token is still entitled to comment.
  *
- * **A review is filed at `reviews/{uid}`.** One person, one ballot, as the
- * shape rather than as a rule — which is why none of the encuesta's
- * marker-before-ballot dance is here. That dance exists only to keep a uid
- * off a ballot, and a review here is signed on purpose: see decision 3 in
- * `lib/recap.ts`.
+ * **The puntajes are anonymous, and the encuesta's dance is here too.** A
+ * ballot is filed at `ballots/{ballotId}` with no uid and no name on it; the
+ * only thing tying it to an account is `voters/{uid}`, a create-only marker
+ * that names one id and that nobody but that account may read. The order
+ * matters and is the same trick `cloud/polls.ts` plays: the marker is written
+ * first and the ballot's id has to be the one it names, because "you may write
+ * a ballot if you have no marker yet" is evaluated against the state *before*
+ * the write and a single batch would slip two past it.
+ *
+ * It used to be `reviews/{uid}`, signed, and the argument was that a name is
+ * what keeps a free-text box civil. The free-text box moved to the comments,
+ * where it still has a name on it; what is left is numbers, and numbers are
+ * answered honestly only when nobody can ask you about them afterwards.
  */
 
 const RECAPS = "recaps";
 const PLAYERS = "players";
 const COMMENTS = "comments";
-const REVIEWS = "reviews";
+const BALLOTS = "ballots";
+const VOTERS = "voters";
 const IDENTITIES = "identities";
 
 /** Firestore caps a batch at 500; leave room rather than court it. */
@@ -76,6 +86,10 @@ const BATCH_LIMIT = 400;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function str(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 /**
@@ -168,13 +182,15 @@ export async function setRecapClosed(
 }
 
 /**
- * Which reviews no longer count, as the owner's one word on the matter.
+ * Which ballots no longer count, as the owner's one word on the matter. Ids,
+ * never people: the owner can name a ballot and could not name a person if
+ * they wanted to.
  *
  * The whole list every time rather than an add or a remove — the owner is the
  * only writer and "this is the set" cannot leave two tabs disagreeing about
  * what the set is. Same call `setIgnoredBallots` makes for a poll.
  */
-export async function setIgnoredReviews(
+export async function setIgnoredBallots(
   db: Firestore,
   id: string,
   ignored: readonly string[],
@@ -187,10 +203,10 @@ export async function setIgnoredReviews(
 export async function deleteRecap(db: Firestore, id: string): Promise<void> {
   const { collection, deleteDoc, doc, getDocs, writeBatch } = await import("firebase/firestore");
   const recapRef = doc(db, RECAPS, id);
-  const [players, comments, reviews, identities] = await Promise.all([
+  const [players, comments, ballots, identities] = await Promise.all([
     getDocs(collection(recapRef, PLAYERS)),
     getDocs(collection(recapRef, COMMENTS)),
-    getDocs(collection(recapRef, REVIEWS)),
+    getDocs(collection(recapRef, BALLOTS)),
     // The owner may list these, unlike an encuesta's, so "se cae todo con
     // ella" is true of the addresses without any of `deletePoll`'s
     // gymnastics: there is nothing here the voter was promised privacy from.
@@ -199,7 +215,7 @@ export async function deleteRecap(db: Firestore, id: string): Promise<void> {
   const doomed = [
     ...players.docs.map((entry) => entry.ref),
     ...comments.docs.map((entry) => entry.ref),
-    ...reviews.docs.map((entry) => entry.ref),
+    ...ballots.docs.map((entry) => entry.ref),
     ...identities.docs.map((entry) => entry.ref),
   ];
   for (let i = 0; i < doomed.length; i += BATCH_LIMIT) {
@@ -207,6 +223,13 @@ export async function deleteRecap(db: Firestore, id: string): Promise<void> {
     for (const ref of doomed.slice(i, i + BATCH_LIMIT)) batch.delete(ref);
     await batch.commit();
   }
+  // `voters/{uid}` is deliberately left behind, and deliberately cannot be
+  // taken: the owner may not list that collection — opening it would put a uid
+  // beside every ballot and undo the anonymity the markers exist to create —
+  // so there is no way to name those documents, by design. What is left is a
+  // marker naming a ballot that no longer exists, under a recap that no longer
+  // exists, readable by nobody but the account it belongs to. Same shape as a
+  // poll's; `deletePoll` says the same thing from the other side.
   await deleteDoc(recapRef);
 }
 
@@ -261,32 +284,28 @@ export interface RecapSnapshot {
   recap: Recap | null;
   comments: RecapComment[];
   /**
-   * The ballots this viewer is allowed to see: **every one of them for the
-   * owner, and their own alone for everybody else.** Not a filter applied
-   * after the fact — the rules refuse the rest, so what is not here was never
-   * fetched. See the `reviews` block in `firestore.rules`.
+   * Every ballot, to whoever holds the link — and not one of them says who
+   * wrote it.
+   *
+   * There is no server here to work out a median, so the page does it, which
+   * means the page needs the pile. What makes that safe is that the documents
+   * are anonymous rather than that they are hidden: the id is random and the
+   * only thing tying one to an account is a marker nobody else can read. The
+   * screen still holds a player's number back until two people have given one
+   * (`MIN_VOTERS`), which is manners rather than a wall — the same bargain la
+   * votación makes with its counts.
    */
-  reviews: RecapReview[];
+  ballots: RecapBallot[];
 }
 
 /**
- * The recap, live: the document, its faces, the thread and whichever ballots
- * this viewer may read.
+ * The recap, live: the document, its faces, the thread and the ballots.
  *
- * Listeners folded into one callback, because the screen has one question —
- * what does the page say right now. Live rather than fetched because the whole
- * point is watching the grupo argue: a comment thread that needed a reload
- * would send everybody back to WhatsApp, which is the thing this replaces.
- *
- * **The ballots are the exception, and the shape of this function is that
- * exception.** A puntaje is an opinion about somebody in the same grupo, so
- * only the person who asked for it reads the pile: the collection is watched
- * for the owner, and for anybody else there is one listener on their own
- * document, which is how somebody comes back to a ballot they half filled in.
- * Whether this viewer is the owner is not known until the recap document
- * arrives, so that listener is attached when it does — asking for the
- * collection first and letting the rules refuse would put a permission error
- * on the screen of every person who opened the link.
+ * Four listeners folded into one callback, because the screen has one question
+ * — what does the page say right now. Live rather than fetched because the
+ * whole point is watching the grupo argue: a comment thread that needed a
+ * reload would send everybody back to WhatsApp, which is the thing this
+ * replaces.
  *
  * A recap that stops existing is reported as `null` once, so somebody still
  * looking at it is told rather than left with a page that quietly stops
@@ -295,8 +314,6 @@ export interface RecapSnapshot {
 export async function watchRecap(
   db: Firestore,
   id: string,
-  /** Who is looking. `null` before a session exists; nothing is then read. */
-  viewerUid: string | null,
   onChange: (snapshot: RecapSnapshot) => void,
   onError: (error: unknown) => void,
 ): Promise<() => void> {
@@ -311,9 +328,9 @@ export async function watchRecap(
     return typeof at === "string" ? at : new Date(0).toISOString();
   };
 
-  /** One ballot as it came off the wire, before `normalizeReview` sees it. */
+  /** One ballot as it came off the wire, before `normalizeBallot` sees it. */
   interface RawBallot {
-    uid: string;
+    id: string;
     data: unknown;
     at: string;
   }
@@ -321,61 +338,24 @@ export async function watchRecap(
   let meta: unknown | null | undefined;
   let faces: unknown[] | undefined;
   let comments: RecapComment[] | undefined;
-  /**
-   * This viewer's own ballot, `null` when they have not filed one — and `null`
-   * from the start when there is nobody to have filed one, so a page with no
-   * session at all still renders rather than waiting for a listener that was
-   * never attached.
-   */
-  let mine: RawBallot | null | undefined = viewerUid === null ? null : undefined;
-  /** Every ballot. Only ever set for the owner, and only once it arrives. */
-  let all: RawBallot[] | undefined;
-
-  /**
-   * The pile, for the owner alone, attached the moment their own recap
-   * document says they are the owner.
-   *
-   * Declared before the listeners on purpose: it is called from `emit`, and a
-   * `const` referenced before its line has run is a crash rather than a
-   * fallback.
-   */
-  let stopAll: (() => void) | null = null;
-  const watchAllIfOwner = (recap: Recap) => {
-    if (stopAll !== null || viewerUid === null || recap.ownerUid !== viewerUid) return;
-    stopAll = onSnapshot(
-      collection(recapRef, REVIEWS),
-      (snap) => {
-        all = snap.docs.map((entry) => {
-          const data: unknown = entry.data({ serverTimestamps: "estimate" });
-          return { uid: entry.id, data, at: timestampOf(data, "at") };
-        });
-        emit();
-      },
-      onError,
-    );
-  };
+  let ballots: RawBallot[] | undefined;
 
   const emit = () => {
     if (meta === undefined || faces === undefined) return;
-    if (comments === undefined || mine === undefined) return;
+    if (comments === undefined || ballots === undefined) return;
     const recap = meta === null ? null : normalizeRecap(meta, faces, id);
     if (recap === null) {
-      onChange({ recap: null, comments: [], reviews: [] });
+      onChange({ recap: null, comments: [], ballots: [] });
       return;
     }
-    watchAllIfOwner(recap);
-    // The owner's pile once it is here; until then — and for everybody else,
-    // forever — whatever this viewer filed themselves. Nothing is filtered
-    // out here: what is missing was refused by the rules and never fetched.
-    const raw: RawBallot[] = all ?? (mine === null ? [] : [mine]);
-    // The recap's own list is the authority over what a ballot may say —
-    // see `normalizeReview`, and the same decision in `lib/poll.ts`.
+    // The recap's own list is the authority over what a ballot may say — see
+    // `normalizeBallot`, and the same decision in `lib/poll.ts`.
     const known = new Set<PlayerId>([...recap.a.players, ...recap.b.players]);
-    const reviews = raw.flatMap((entry) => {
-      const parsed = normalizeReview(entry.uid, entry.data, entry.at, known);
-      return parsed === null ? [] : [parsed];
+    const parsed = ballots.flatMap((entry) => {
+      const ballot = normalizeBallot(entry.id, entry.data, entry.at, known);
+      return ballot === null ? [] : [ballot];
     });
-    onChange({ recap, comments, reviews });
+    onChange({ recap, comments, ballots: parsed });
   };
 
   const stopMeta = onSnapshot(
@@ -412,35 +392,23 @@ export async function watchRecap(
     },
     onError,
   );
-  /**
-   * One ballot: this viewer's own. Everybody gets this listener, the owner
-   * included — theirs is in the collection listener as well, and two readings
-   * of one document are the same document.
-   */
-  const stopMine =
-    viewerUid === null
-      ? null
-      : onSnapshot(
-          doc(recapRef, REVIEWS, viewerUid),
-          (snap) => {
-            const data: unknown = snap.exists()
-              ? snap.data({ serverTimestamps: "estimate" })
-              : null;
-            mine =
-              data === null
-                ? null
-                : { uid: snap.id, data, at: timestampOf(data, "at") };
-            emit();
-          },
-          onError,
-        );
+  const stopBallots = onSnapshot(
+    collection(recapRef, BALLOTS),
+    (snap) => {
+      ballots = snap.docs.map((entry) => {
+        const data: unknown = entry.data({ serverTimestamps: "estimate" });
+        return { id: entry.id, data, at: timestampOf(data, "at") };
+      });
+      emit();
+    },
+    onError,
+  );
 
   return () => {
     stopMeta();
     stopFaces();
     stopComments();
-    if (stopMine !== null) stopMine();
-    if (stopAll !== null) stopAll();
+    stopBallots();
   };
 }
 
@@ -526,40 +494,104 @@ export async function deleteComment(
 }
 
 /**
- * Put your puntajes in, or change them.
+ * The ballot id this account owns in this recap, claiming one if it has none.
  *
- * One document, written whole, at `reviews/{uid}`: a ballot is one act even
- * though it is made of fourteen little ones, and a person who changes their
- * mind about El Gordo at the bottom of the page is still answering once.
- * Rewriting is allowed on purpose — a puntaje typed before the video went up
- * is one somebody is entitled to revise — and the rules pin the uid and the
- * address either way.
+ * The encuesta's dance, verbatim, and the order is the whole trick: the marker
+ * is written first and the rules then require a ballot's id to be exactly the
+ * one it names. Doing it the obvious way round — "you may write a ballot if
+ * you have no marker yet" — is evaluated against the state before the write,
+ * so one batch holding two ballots and a marker would pass every check.
+ *
+ * A marker can never be re-pointed, so one account can only ever write one
+ * ballot here, and nobody but that account may read the marker. That is what
+ * makes "one person, one ballot" true *and* anonymous at the same time.
  */
-export async function setMyReview(
+export async function claimRecapBallotId(
   db: Firestore,
   id: string,
   uid: string,
-  author: Author,
-  review: Pick<RecapReview, "mvp" | "players">,
+): Promise<string> {
+  const { doc, getDoc, setDoc } = await import("firebase/firestore");
+  const markerRef = doc(db, RECAPS, id, VOTERS, uid);
+
+  const existing = await getDoc(markerRef);
+  if (existing.exists()) {
+    const data: unknown = existing.data();
+    const ballotId = str(isRecord(data) ? data.ballotId : undefined);
+    if (ballotId !== "") return ballotId;
+  }
+
+  const ballotId = generateId();
+  try {
+    await setDoc(markerRef, { ballotId });
+    return ballotId;
+  } catch (error) {
+    // Two tabs racing: whichever landed first is the one that counts.
+    const settled = await getDoc(markerRef);
+    const data: unknown = settled.data();
+    const claimed = str(isRecord(data) ? data.ballotId : undefined);
+    if (claimed !== "") return claimed;
+    throw error;
+  }
+}
+
+/**
+ * Which ballot is this account's, **without claiming one**.
+ *
+ * What the page uses to find its own answers in the pile. `claimRecapBallotId`
+ * would write a marker for somebody who only opened the link to read, which
+ * costs them nothing today and would quietly become "this person voted" the
+ * first time anything counted markers.
+ */
+export async function fetchMyRecapBallotId(
+  db: Firestore,
+  id: string,
+  uid: string,
+): Promise<string | null> {
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, RECAPS, id, VOTERS, uid));
+  if (!snap.exists()) return null;
+  const data: unknown = snap.data();
+  const ballotId = str(isRecord(data) ? data.ballotId : undefined);
+  return ballotId === "" ? null : ballotId;
+}
+
+/**
+ * Put your puntajes in, or change them.
+ *
+ * One document, written whole, at `ballots/{ballotId}`: a ballot is one act
+ * even though it is made of fourteen little ones, and a person who changes
+ * their mind about El Gordo at the bottom of the page is still answering once.
+ * Rewriting is allowed on purpose — a puntaje typed before the video went up
+ * is one somebody is entitled to revise.
+ *
+ * **No uid and no name go on it**, and no identity is written beside it. The
+ * owner reads every one of these to work out the medians, so a name here would
+ * put "quién le puso un 4 al Gordo" one tap away. A comment is the opposite
+ * and carries both — see `postComment`.
+ */
+export async function submitRecapBallot(
+  db: Firestore,
+  id: string,
+  ballotId: string,
+  ballot: Pick<RecapBallot, "mvp" | "players">,
 ): Promise<void> {
   const { doc, serverTimestamp, setDoc } = await import("firebase/firestore");
   const players: Record<string, unknown> = {};
-  for (const [playerId, verdict] of Object.entries(review.players)) {
+  for (const [playerId, verdict] of Object.entries(ballot.players)) {
     if (verdict !== undefined) players[playerId] = { ...verdict };
   }
-  const payload: Record<string, unknown> = {
-    uid,
-    name: author.name,
-    players,
-    at: serverTimestamp(),
-  };
-  if (review.mvp !== undefined) payload.mvp = review.mvp;
-  await setDoc(doc(db, RECAPS, id, REVIEWS, uid), payload);
-  void writeIdentity(db, id, uid, author);
+  const payload: Record<string, unknown> = { players, at: serverTimestamp() };
+  if (ballot.mvp !== undefined) payload.mvp = ballot.mvp;
+  await setDoc(doc(db, RECAPS, id, BALLOTS, ballotId), payload);
 }
 
 /** Take a whole ballot back down — your own, or anybody's if it is your match. */
-export async function deleteReview(db: Firestore, id: string, uid: string): Promise<void> {
+export async function deleteRecapBallot(
+  db: Firestore,
+  id: string,
+  ballotId: string,
+): Promise<void> {
   const { deleteDoc, doc } = await import("firebase/firestore");
-  await deleteDoc(doc(db, RECAPS, id, REVIEWS, uid));
+  await deleteDoc(doc(db, RECAPS, id, BALLOTS, ballotId));
 }

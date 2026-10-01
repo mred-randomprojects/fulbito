@@ -71,17 +71,19 @@ describe("seedNotice", () => {
   });
 
   /**
-   * The load-bearing sentence. Somebody answered the encuesta believing
-   * nobody would know it was them, and a pre-filled form they send unchanged
-   * hands those numbers to the organiser with their name on it. The page has
-   * to say so *before* the send, and this test is what keeps the warning from
-   * being tidied away into something friendlier.
+   * This used to be a warning: the encuesta was anonymous and a recap ballot
+   * was signed, so a pre-filled form sent unchanged published what somebody
+   * had said anonymously, with their name on it. The ballots are anonymous
+   * now, so the bridge costs nothing and the sentence says so instead — and
+   * the test still pins it, because "esto también es anónimo" is a promise and
+   * the day it stops being true this has to go red.
    */
-  it("warns, in the encuesta case, that this one is not anonymous", () => {
+  it("says the encuesta case is anonymous on both sides", () => {
     const notice = seedNotice("poll");
     assert.notEqual(notice, null);
-    assert.match(notice!, /anónima/);
-    assert.match(notice!, /con tu nombre/);
+    assert.match(notice!, /encuesta/);
+    assert.match(notice!, /anónimo/);
+    assert.doesNotMatch(notice!, /con tu nombre/);
   });
 
   it("says where the owner's numbers came from", () => {

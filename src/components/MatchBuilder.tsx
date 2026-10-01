@@ -1143,7 +1143,6 @@ export function MatchBuilder({
         reviews={match.reviews}
         onReviewChange={writeReview}
         guest={card == null ? null : recap.byPlayer.get(card.target.player.id) ?? null}
-        onAdopt={(id, review) => writeReview(id, review)}
         onMove={() => {
           if (card == null) return;
           setSelection(card.at);

@@ -170,24 +170,64 @@ describe("a puntaje is secret: the server", () => {
   const rules = read("firestore.rules");
 
   /**
-   * One person's ballot about how the others played. Readable by the owner —
-   * who asked for it — and by its own author, and by nobody else with the
-   * link. `allow read` would cover `list` as well, which is the shape the
-   * original leak had.
+   * El tercer tiempo's puntajes. **Anonymous, not hidden** — and the test
+   * changed shape when the feature did, which is worth stating rather than
+   * quietly rewriting.
+   *
+   * The first version of this file pinned "only the owner may read a ballot",
+   * because the ballots were signed. They are not any more: a ballot carries
+   * no uid and no name, the account that wrote it is named only by a marker
+   * nobody may enumerate, and the page reads the pile to show "le pusieron 3
+   * notas, 72" because there is no server to do that arithmetic. So what has
+   * to be true is different, and narrower: a ballot may be read by anybody,
+   * and must never be able to say *whose* it is.
    */
-  it("keeps el tercer tiempo's ballots off the link", () => {
-    const block = rulesBody(rules, "match /reviews/{voterId}");
-    for (const statement of readLines(block)) {
+  it("keeps every name off el tercer tiempo's ballots", () => {
+    const block = rulesBody(rules, "match /ballots/{ballotId}");
+    // Two blocks are called that — a poll's and a recap's. The recap's is the
+    // one that lets anybody read, so pick it by that and fail loudly if the
+    // shape ever changes under this test.
+    const recapBallots = rules
+      .split("match /recaps/{recapId}")[1]
+      .split("match /ballots/{ballotId}")[1];
+    assert.ok(recapBallots !== undefined, "the recap ballots block is gone — was it renamed?");
+    const body = recapBallots.slice(0, recapBallots.indexOf("match /voters"));
+
+    for (const statement of body.split(";").map((part) => part.trim())) {
+      if (!/^allow (create|update|write)/.test(statement)) continue;
+      // Whatever a ballot may hold, it may not hold somebody's identity.
+      for (const field of ["'uid'", "'name'", "'email'", "'author'"]) {
+        assert.ok(
+          !statement.includes(field),
+          `a recap ballot may carry ${field} again: ${statement}`,
+        );
+      }
       assert.match(
         statement,
-        /isRecapOwner\(\)/,
-        `a read of a puntaje that does not ask who the owner is: ${statement}`,
+        /claims\(/,
+        `a ballot that nobody's marker has to claim: ${statement}`,
       );
-      assert.doesNotMatch(
-        statement,
-        /^allow (read|get|list)[^:]*: if request\.auth != null\s*$/,
-        `any session may read the puntajes again: ${statement}`,
-      );
+    }
+    assert.ok(block.length > 0, "the ballots block came back empty");
+  });
+
+  /**
+   * The other half, and the one that does the work: the markers that tie an
+   * account to a ballot id. Open `list` to the owner and every anonymous
+   * number has a name beside it again, in one query.
+   */
+  it("never lets anybody enumerate who voted", () => {
+    for (const section of rules.split("match /voters/{voterId}").slice(1)) {
+      const body = section.slice(0, section.indexOf("\n      }"));
+      assert.match(body, /allow list: if false/, `voters became listable:\n${body}`);
+      for (const statement of readLines(body)) {
+        if (/^allow list/.test(statement)) continue;
+        assert.match(
+          statement,
+          /request\.auth\.uid == voterId/,
+          `a marker readable by somebody other than its own account: ${statement}`,
+        );
+      }
     }
   });
 
@@ -321,11 +361,30 @@ describe("a puntaje is secret: the pages anybody can open", () => {
   ];
 
   /**
-   * `lib/recapFeedback` is the module the leak came through, so it gets the
-   * narrower rule: one binding, by name. `myReview` is your own ballot read
-   * back so you can change it — the one thing on these pages that is yours.
+   * `lib/recapFeedback` used to be banned from these pages outright, when el
+   * tercer tiempo's ballots were signed and pooling them on a public page
+   * would have meant publishing attributed opinions. They are anonymous now
+   * and the page is *meant* to pool them — "le pusieron 3 notas, 72" is the
+   * reason anybody opens the link twice — so the rule moved rather than went:
+   * what that module hands out may not carry a person.
+   *
+   * It is checked at the source: nothing in `recapFeedback` may mention a
+   * name, a uid or an author, so a future `lines`-style field cannot come back
+   * and be rendered by the two pages below without this going red first.
    */
-  const FEEDBACK_ALLOWED = ["myReview"];
+  const FEEDBACK_ALLOWED = ["myBallot", "countedBallots", "summariseFeedback", "figura", "topScored", "answerCount", "PlayerFeedback"];
+
+  it("lib/recapFeedback hands out numbers, never a person", () => {
+    const source = code("src/lib/recapFeedback.ts");
+    for (const word of [/\bname\b/, /\buid\b/, /\bauthor\b/, /FeedbackLine/]) {
+      assert.doesNotMatch(
+        source,
+        word,
+        `lib/recapFeedback mentions ${word} again. Everything it returns is ` +
+          `rendered on a page anybody can open; read the header of this file first.`,
+      );
+    }
+  });
 
   for (const page of pages) {
     it(`${page} imports nothing that adds up other people's opinions`, () => {

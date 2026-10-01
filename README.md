@@ -173,23 +173,23 @@ any other app, full screen and with no signal needed.
   grupo as its own page: the scoreline, the two formations with the faces, and
   the video. Anybody with the link reads it without an account; anybody who
   signs in with Google puts a nota de 0 a 100 on each player, un pulgar para
-  arriba o para abajo, vota la figura, escribe cómo jugó cada uno y comenta el
-  partido. **Las notas las ves sólo vos**, y no es que estén escondidas en
-  pantalla: la página no las pide y las reglas del servidor no las dan — cada
-  uno lee la suya, vos leés todas, nadie más lee ninguna. Así nadie puntúa
-  mirando lo que puso el resto, y nadie se entera de que el Gordo le puso un 4.
-  Lo único que se lee entre todos son los comentarios, que son sobre el partido
-  y van con el nombre al lado, que es lo que mantiene la cosa civilizada.
+  arriba o para abajo, vota la figura y comenta el partido. **Las notas son
+  anónimas, como la encuesta**: se guardan sueltas, sin nombre y sin cuenta
+  atada, nadie — ni vos — puede ver cuál es la de quién, y lo que se muestra es
+  el promedio del grupo a partir de dos notas. Así el 4 honesto no hay que
+  bancárselo en el asado. Lo que sí va firmado son los comentarios, que son
+  sobre el partido y los lee cualquiera con el link: la línea es esa, un número
+  sobre una persona se da sin nombre y una frase sobre una persona se dice con
+  el nombre adelante.
   El formulario no arranca vacío: a vos te arranca con los niveles que ya
   tenés cargados, y al que contestó la última encuesta le arranca con lo que
   había puesto ahí, para que ajuste después de verlos jugar. Siempre los
-  números propios de cada uno, nunca los de otro — y en el caso de la encuesta
-  la página avisa, antes de mandar, que aquello era anónimo y esto va con el
-  nombre al lado.
-  Lo que escriben vuelve a tu app debajo de tu propio uno x uno, y se suma con
-  un toque si te gusta: nunca le mueve el puntaje a nadie. Vos cerrás el hilo
-  cuando ya está, o lo das de baja del todo, y si alguien vota de mala fe le
-  saltás la planilla entera sin borrarla. Lo que escribiste para vos — las
+  números propios de cada uno, nunca los de otro.
+  El promedio del grupo te vuelve a la app, abajo de tu propio uno x uno cuando
+  tocás al jugador en la cancha: nunca le mueve el puntaje a nadie. Vos cerrás
+  el hilo cuando ya está, o lo das de baja del todo, y si alguien vota de mala
+  fe le sacás esa planilla de la cuenta sin borrarla — por número de planilla,
+  que es lo único que se sabe de ella. Lo que escribiste para vos — las
   notas, los puntajes, la plata, el uno x uno — no sale nunca: lo garantizan un
   test que fija los campos que se publican y las reglas del servidor, las dos
   cosas. El único dato que el link no lleva es el mail de nadie: queda guardado

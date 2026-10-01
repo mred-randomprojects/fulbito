@@ -1063,7 +1063,8 @@ recaps/{matchId}                      { ownerUid, title, date, goalsA, goalsB,
                                         closed?, ignored? }
 recaps/{matchId}/players/{playerId}   { ownerUid, name, avatar }
 recaps/{matchId}/comments/{commentId} { uid, name, text, at }
-recaps/{matchId}/reviews/{uid}        { uid, name, mvp?, players, at }
+recaps/{matchId}/voters/{uid}         { ballotId }
+recaps/{matchId}/ballots/{ballotId}   { mvp?, players, at }
 recaps/{matchId}/identities/{uid}     { email, name, at }
 ```
 
@@ -1081,26 +1082,37 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   document's path, and `closed`/`ignored` are the owner's words about the
   *thread* rather than facts about the game, so a republish to fix a scoreline
   cannot reopen a thread somebody shut.
-- **Reading is free; writing is signed.** The page mints an anonymous session
-  on open like la lista, so the link works for whoever it reached. Commenting or
-  puntuando wants a Google account (`isPerson()`), and on a comment the name is
-  shown to everybody: a median absorbs one bad-faith 2 and absorbs *nothing*
-  about a sentence, so what keeps a free-text box civil is that the grupo can
-  see who typed it. `name` is whatever the browser sent — a label, never proof.
-- **What people write about a *person* is the owner's, and only the owner's.**
-  A comment is about the game and is published. A ballot is not: the notas, the
-  thumbs, the figura and the line about how each one played are readable by the
-  recap's owner — the person who asked — and by whoever wrote them, and by
-  nobody else. `reviews` used to be `allow read: if request.auth != null` and
-  the page showed everybody the medians and every line; it is now `list` for the
-  owner and `get` for the owner or the author. Hiding them on screen alone would
-  have been the same non-fix as putting a mail on a comment and not rendering
-  it, so `watchRecap` takes the viewer's uid and *asks for less*: the collection
-  for the owner, one document — your own — for everybody else, attached only
-  once the recap says which of the two you are. It is the app's own line, from
-  the other side: what somebody wrote about a person does not leave the app, and
-  now it does not travel between the people who played either. The page says so
-  in as many words, above the rows and at the foot.
+- **Reading is free; words are signed; numbers are not.** The page mints an
+  anonymous session on open like la lista, so the link works for whoever it
+  reached. Writing anything wants a Google account (`isPerson()`), and there
+  the two halves part company. A **comment** carries a name the whole grupo
+  sees: a median absorbs one bad-faith 2 and absorbs *nothing* about a
+  sentence, so what keeps a free-text box civil is that everybody can see who
+  typed it. A **puntaje** carries nothing: ballots live at `ballots/{ballotId}`
+  with no uid and no name, one per account by way of `voters/{uid}` — a
+  create-only marker nobody else may read, and nobody at all may list. It is
+  the encuesta's marker-before-ballot dance, verbatim, for the encuesta's
+  reason: an honest 4 is one nobody should have to defend at the asado.
+- **That is a reversal, and it is worth saying why twice.** This feature
+  shipped signed, and the argument was that attribution is what makes a
+  free-text box safe. It was right about the box and wrong about the numbers,
+  and the fix was to split them: the per-player line moved to the thread, where
+  it still has a name, and the numbers moved to anonymous ballots. An anonymous
+  sentence about a named person is the one combination with nothing to
+  recommend it — it cannot be averaged, it cannot be answered — so the app does
+  not have one.
+- **The pile is public; a single number is not.** Anybody with the link reads
+  every ballot, because there is no server here to work out a median and the
+  page does it. `summariseFeedback` holds a player's number back below
+  `MIN_VOTERS` — two, imported from `lib/crowd.ts` rather than re-argued — so a
+  page with one answer on it says "falta una nota más" instead of handing back
+  one person's opinion. That floor is manners, enforced in the screen; what
+  makes the arrangement *safe* is that there is no name to find, which is
+  enforced by the rules. The same bargain la votación makes with its counts.
+- **The owner moderates ballots, never people.** `ignored` holds ballot ids,
+  which is all anybody can name here: setting one aside takes the whole ballot
+  out, and the panel lists them as "Planilla 1, 2, 3…" because that is
+  genuinely all it knows about them.
 - **The address is the one thing the link does not carry.** Everything else
   under a recap is readable by whoever holds it, so a mail on a comment would be
   a mail published to the whole grupo. It lives in `identities/{uid}`, readable
@@ -1112,14 +1124,14 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   comment, because an account is one person however many times they post — and
   because the owner may list these, unlike an encuesta's, "se cae todo con ella"
   is true of the addresses without any of `deletePoll`'s gymnastics.
-- **One person, one ballot, by shape.** A review is filed at `reviews/{uid}`, so
-  none of the encuesta's marker-before-ballot dance appears here: that dance
-  exists to keep a uid *off* a ballot, and these are signed on purpose.
-  Rewritable by its own author, because a puntaje typed before the video went up
-  is one somebody is entitled to revise. A comment is one document each, and
-  **cannot be edited** — an edit leaves no mark, and a thread where somebody can
-  quietly rewrite what a reply was replying to is worse than one where a
-  deletion is visible by its absence.
+- **One account, one ballot, by marker.** `voters/{uid}` names one random
+  ballot id and can never be re-pointed, so an account can write exactly one
+  ballot and the ballot itself needs no uid to prove it. Rewritable by its own
+  author, because a puntaje typed before the video went up is one somebody is
+  entitled to revise. A comment is one document each, and **cannot be edited** —
+  an edit leaves no mark, and a thread where somebody can quietly rewrite what a
+  reply was replying to is worse than one where a deletion is visible by its
+  absence.
 - **The form opens pre-filled, with your own numbers and nobody else's.**
   Nobody arrives at that page with an opinion of nothing: the owner has a
   rating on every player already, and whoever answered the last encuesta said
@@ -1149,24 +1161,24 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   text, and one vote for la figura per person. All optional, all on the same
   row, and an empty verdict is no verdict — the key goes, the same call
   `setReview` makes.
-- **Median, like the crowd, but no floor — and it is read on one screen only.**
-  `lib/recapFeedback.ts` imports `median` from `lib/crowd.ts` so the two
-  screens cannot disagree about what the middle of a pile is. It deliberately
-  does *not* import `MIN_VOTERS`: that floor exists so a median cannot be read
-  back as one person's private opinion of a player, and the person reading this
-  one is the owner, who is *entitled* to exactly that — they asked, and every
-  line comes with its author's name for them. The count is shown beside it,
-  always, so "7,5 de uno solo" never reads as a consensus. None of this is on
-  the page: `RecapPage` imports `myReview` out of that module and nothing else,
-  because the ballots it would average are ballots it is not given.
-- **What comes back is read beside your own line, and adopted by a tap.** On
-  the cancha, the card a tap on a player opens now carries "lo que dijo el
-  grupo" *under* your own box — under, so a wall of other people's opinions does
-  not anchor what you were about to write, the same reason an encuesta shows the
-  voter no ratings. A tap appends one line to the uno x uno with the name
-  attached, because a line you adopted from El Gordo is not a line you wrote,
-  and `adoptInto` is idempotent so a double tap on a phone costs nothing. It
-  never touches a rating — see "Rating people from their results".
+- **Median and floor, both out of `lib/crowd.ts`.** `lib/recapFeedback.ts`
+  imports `median` so the two screens cannot disagree about what the middle of
+  a pile is, and now imports `MIN_VOTERS` as well. It used to argue the
+  opposite — no floor, because every number had a name beside it — and that
+  reasoning went with the signature. The count is shown either way, so "7,5 de
+  uno solo" is never mistaken for a consensus. Nothing that module returns
+  carries a name, a uid or a line of text, and `secrecy.test.ts` greps it to
+  keep that true: everything it hands out is rendered on a page anybody can
+  open.
+- **What comes back is read beside your own line.** On the cancha, the card a
+  tap on a player opens carries "lo que dijo el grupo" *under* your own box —
+  under, so other people's opinions do not anchor what you were about to write,
+  the same reason an encuesta shows the voter no ratings. Numbers only, and no
+  names: the promedio, the thumbs and the figura votes. The "adopted by a tap"
+  path went with the per-player text field it copied from — there is nothing
+  signed left to adopt, and an anonymous line in your own uno x uno would be a
+  sentence you could not weigh. It never touches a rating — see "Rating people
+  from their results".
 - **Two words for the owner, and they are different words.** *Cerrar* stops new
   comments and new ballots and leaves everything readable, which is "that's
   enough for tonight". *Dar de baja* takes the whole thing down and breaks the
@@ -1695,19 +1707,20 @@ something.
   Neither ever touches a rating: an opinion of one night is not a downgrade,
   the same line "Rating people from their results" draws below.
   **El tercer tiempo does not change this, and the direction is the whole
-  point.** What the grupo writes on a published match comes *in* — it is shown
-  under your own box on the player's card and taken into it by a tap, with the
-  name of whoever said it attached — and nothing of yours goes *out*:
-  `recapFromMatch` is the only door, its key set is pinned by a test, and
-  `firestore.rules` refuses any field that is not on the list a second time.
-  So `Match.reviews`, `Match.notes`, `forecastNotes`, the payments and every
-  rating stay where they are. **And what comes in does not go back out to the
-  rest of them.** A puntaje and a "no cruzó la mitad" written on the page are
-  readable by the owner and by their own author, by the rules — not by the other
-  people who played, and not by the page, which never asks for them. The only
-  thing everybody reads is the comment thread, which is about the game. So the
-  same sentence holds on both sides of the wall: what somebody wrote about a
-  *person* is read by the person who asked for it, and nobody else.
+  point.** What the grupo says about a published match comes *in* — the
+  promedio, the thumbs and the figura votes, under your own box on the player's
+  card — and nothing of yours goes *out*: `recapFromMatch` is the only door,
+  its key set is pinned by a test, and `firestore.rules` refuses any field that
+  is not on the list a second time. So `Match.reviews`, `Match.notes`,
+  `forecastNotes`, the payments and every rating stay where they are. **And
+  what comes in carries nobody's name.** A puntaje is an anonymous ballot: the
+  pile is public because the page has to average it, a single number is held
+  back below two, and there is no uid on a ballot and no way to enumerate the
+  markers. What the grupo writes *in words* is the opposite and always was —
+  the comment thread, read by everybody, signed by everybody. The line is the
+  same one the app draws everywhere else, now drawn on both sides of the wall:
+  **a number about a person is answered without a name, and a sentence about a
+  person is said with one.**
   **`Match.videos` is the one deliberate exception.** The recording is the
   one thing on a match that was made *for* the grupo — the link is the
   message everybody was going to ask for anyway — so `ShareDialog` puts one

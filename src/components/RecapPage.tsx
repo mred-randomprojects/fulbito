@@ -19,11 +19,13 @@ import { StaticAvatar } from "@/components/PlayerAvatar";
 import { useCloudAuth } from "@/cloud/auth";
 import { loadCloud } from "@/cloud/firebase";
 import {
+  claimRecapBallotId,
   deleteComment,
   ensureAnyUid,
+  fetchMyRecapBallotId,
   fetchOwnRatings,
   postComment,
-  setMyReview,
+  submitRecapBallot,
   watchRecap,
   type RecapSnapshot,
 } from "@/cloud/recaps";
@@ -34,7 +36,6 @@ import { isCancelledSignIn } from "@/lib/authErrors";
 import { formatMatchDate } from "@/lib/dates";
 import {
   MAX_COMMENT,
-  MAX_VERDICT,
   VERDICT_MAX,
   VERDICT_MIN,
   cleanText,
@@ -46,10 +47,13 @@ import {
   type Recap,
   type RecapPlayer,
 } from "@/lib/recap";
-// `myReview` and nothing else out of `recapFeedback`: the medians, the figura
-// and the lines are read on the owner's own app, off ballots this page is not
-// given. See the section header below.
-import { myReview } from "@/lib/recapFeedback";
+import {
+  countedBallots,
+  figura,
+  myBallot,
+  summariseFeedback,
+  type PlayerFeedback,
+} from "@/lib/recapFeedback";
 import { KITS, type PlayerId } from "@/types";
 import { track } from "@/lib/track";
 import { useTracking } from "@/useTracking";
@@ -96,6 +100,12 @@ export function RecapPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   /** Which uid the draft was seeded for. See the effect that fills it. */
   const [seededFor, setSeededFor] = useState<string | null>(null);
+  /**
+   * The id of this account's ballot, out of its own marker. A ballot carries
+   * no uid, so this is the only handle anybody has on their own answers — and
+   * nobody else can read the marker that names it.
+   */
+  const [myBallotId, setMyBallotId] = useState<string | null>(null);
   /** Where the numbers in the form came from, for the line above the rows. */
   const [source, setSource] = useState<SeedSource>("none");
   const [open, setOpen] = useState<PlayerId | null>(null);
@@ -127,12 +137,20 @@ export function RecapPage() {
         const who = await ensureAnyUid(auth);
         if (!live) return;
         setUid(who);
+        // The ballot this account already owns here, if any — the only way to
+        // find your own answers in a pile of documents that carry no names.
+        // It only reads: claiming happens when somebody actually sends.
+        void fetchMyRecapBallotId(db, matchId, who)
+          .then((found) => {
+            if (live) setMyBallotId(found);
+          })
+          .catch(() => {
+            // No marker, no session, no permission: an empty form, which is
+            // what this page did before any of this existed.
+          });
         stop = await watchRecap(
           db,
           matchId,
-          // Whoever this device is, which is exactly one ballot's worth of
-          // read access: their own. The pile belongs to the person who asked.
-          who,
           (next) => {
             if (!live) return;
             setSnapshot(next);
@@ -202,7 +220,27 @@ export function RecapPage() {
    * same grupo, so the person who asked for it is the one who reads it. The
    * debate about the game stays out loud, below.
    */
-  const stored = useMemo(() => myReview(snapshot?.reviews ?? [], uid), [snapshot?.reviews, uid]);
+  const ballots = useMemo(
+    () => countedBallots(snapshot?.ballots ?? [], recap?.ignored ?? []),
+    [snapshot?.ballots, recap?.ignored],
+  );
+  const stored = useMemo(() => myBallot(ballots, myBallotId), [ballots, myBallotId]);
+  /**
+   * What the grupo said, pooled. Anonymous all the way down: these are
+   * documents with no name on them, and `summariseFeedback` holds a player's
+   * number back until two people have given one, so a page with one answer on
+   * it never reads as somebody's private opinion handed around.
+   */
+  const ids = useMemo<PlayerId[]>(
+    () => (recap === null ? [] : [...recap.a.players, ...recap.b.players]),
+    [recap],
+  );
+  const feedback = useMemo(() => summariseFeedback(ids, ballots), [ids, ballots]);
+  const byPlayer = useMemo(
+    () => new Map(feedback.map((entry) => [entry.playerId, entry])),
+    [feedback],
+  );
+  const best = useMemo(() => figura(feedback), [feedback]);
   const faces = useMemo(
     () => new Map((recap?.players ?? []).map((player) => [player.id, player])),
     [recap?.players],
@@ -308,13 +346,24 @@ export function RecapPage() {
     }
   };
 
+  /**
+   * Send the puntajes, anonymously.
+   *
+   * The id is claimed here rather than when the page opened: a marker written
+   * for everybody who merely read the page would turn "did this account vote?"
+   * into a lie the first time anything asked. From here on it is the same id
+   * for ever — a marker cannot be re-pointed — so changing your mind rewrites
+   * one document and never adds a second.
+   */
   const sendReview = async () => {
     if (draft === null || uid === null || author === null || matchId === undefined) return;
     setBusy(true);
     setError(null);
     try {
       const { db } = await loadCloud();
-      await setMyReview(db, matchId, uid, author, draft);
+      const ballotId = myBallotId ?? (await claimRecapBallotId(db, matchId, uid));
+      setMyBallotId(ballotId);
+      await submitRecapBallot(db, matchId, ballotId, draft);
       setSaved(true);
       track({ name: "recap_reviewed", players: Object.keys(draft.players).length });
     } catch {
@@ -351,7 +400,7 @@ export function RecapPage() {
     // An empty verdict is no verdict: the key goes, the same call
     // `setReview` makes in `lib/reviews.ts`.
     const players = { ...draft.players };
-    if (merged.score === undefined && merged.thumb === undefined && merged.text === undefined) {
+    if (merged.score === undefined && merged.thumb === undefined) {
       delete players[id];
     } else {
       players[id] = merged;
@@ -402,6 +451,23 @@ export function RecapPage() {
     <Shell>
       <Scoreboard recap={recap} when={when} />
 
+      {best !== null && (
+        <p className="mb-4 flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
+          <Star className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
+          <span>
+            <span className="font-medium">
+              {best.tied ? "Empatada la figura" : "La figura"}
+            </span>
+            {": "}
+            {faces.get(best.playerId)?.name ?? "alguien"}
+            <span className="text-muted-foreground">
+              {" "}
+              · {best.votes} {best.votes === 1 ? "voto" : "votos"}
+            </span>
+          </span>
+        </p>
+      )}
+
       {recap.videos.length > 0 && (
         <div className="mb-5 space-y-1.5">
           {recap.videos.map((video) => (
@@ -431,15 +497,14 @@ export function RecapPage() {
           <span className="text-foreground">
             Tocá a cada uno y ponele la nota
           </span>{" "}
-          — de 0 a 100, un pulgar para arriba o para abajo, cómo jugó en una
-          línea, y la estrella al que fue la figura. El casillero de la derecha
-          es tu nota: mientras diga «—» todavía no le pusiste.{" "}
-          <span className="text-foreground">
-            Esto lo ve nada más que el que armó el partido
-          </span>{" "}
-          — ni las notas de los demás ni las tuyas se muestran acá, así nadie
-          puntúa mirando lo que puso el resto. Si querés decir algo para todos,
-          es abajo.
+          — de 0 a 100, un pulgar para arriba o para abajo, y la estrella al que
+          fue la figura. El casillero de la derecha es tu nota: mientras diga
+          «—» todavía no le pusiste.{" "}
+          <span className="text-foreground">Nadie sabe qué puso cada uno</span>{" "}
+          — las notas son anónimas, como la encuesta: se muestra el promedio del
+          grupo recién cuando hay dos, y ni el que armó el partido puede ver de
+          quién es cada planilla. Si querés decir algo con tu nombre, es abajo en
+          los comentarios.
         </p>
 
         {!recap.closed && author === null && (
@@ -480,6 +545,7 @@ export function RecapPage() {
           <Side
             side={recap.a}
             faces={faces}
+            byPlayer={byPlayer}
             draft={draft}
             open={open}
             onOpen={setOpen}
@@ -491,6 +557,7 @@ export function RecapPage() {
           <Side
             side={recap.b}
             faces={faces}
+            byPlayer={byPlayer}
             draft={draft}
             open={open}
             onOpen={setOpen}
@@ -624,13 +691,15 @@ export function RecapPage() {
       {error !== null && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
       <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-        Las notas, la figura y lo que escribís de cada uno van con tu nombre y
-        las ve <strong className="font-medium text-foreground">solamente</strong>{" "}
-        el que armó el partido: no se muestran acá ni las tuyas ni las de nadie.
-        Los comentarios de abajo son otra cosa — ésos los lee cualquiera con el
-        link, también con tu nombre. Tu mail queda guardado y no se muestra: lo
-        ven el que armó el partido y los que mantienen la app. Podés borrar lo
-        tuyo cuando quieras, y cambiar tus puntajes las veces que quieras.
+        Las notas y la figura van{" "}
+        <strong className="font-medium text-foreground">sin tu nombre</strong>: se
+        guardan sueltas, nadie — ni el que armó el partido — puede ver cuál es la
+        tuya, y lo que se muestra es el promedio del grupo, recién a partir de
+        dos notas. Una por cuenta, y la podés cambiar las veces que quieras. Los
+        comentarios son al revés: ésos los lee cualquiera con el link y van con
+        tu nombre, que es lo que los mantiene civilizados. Tu mail queda guardado
+        por si comentás, y no se muestra: lo ven el que armó el partido y los que
+        mantienen la app.
       </p>
     </Shell>
   );
@@ -744,6 +813,7 @@ function SignIn({ onEnter }: { onEnter: () => void }) {
 function Side({
   side,
   faces,
+  byPlayer,
   draft,
   open,
   onOpen,
@@ -754,6 +824,7 @@ function Side({
 }: {
   side: Recap["a"];
   faces: ReadonlyMap<PlayerId, RecapPlayer>;
+  byPlayer: ReadonlyMap<PlayerId, PlayerFeedback>;
   draft: Draft | null;
   open: PlayerId | null;
   onOpen: (id: PlayerId | null) => void;
@@ -774,6 +845,7 @@ function Side({
             key={id}
             player={faces.get(id) ?? { id, name: "Alguien", avatar: "" }}
             kitRing={kit.ring}
+            pooled={byPlayer.get(id) ?? null}
             verdict={draft?.players[id] ?? null}
             isMvp={draft?.mvp === id}
             expanded={open === id}
@@ -792,6 +864,7 @@ function Side({
 function PlayerRow({
   player,
   kitRing,
+  pooled,
   verdict,
   isMvp,
   expanded,
@@ -803,6 +876,8 @@ function PlayerRow({
 }: {
   player: RecapPlayer;
   kitRing: string;
+  /** What everybody said, pooled — never one person's answer. */
+  pooled: PlayerFeedback | null;
   verdict: PlayerVerdict | null;
   isMvp: boolean;
   expanded: boolean;
@@ -813,11 +888,10 @@ function PlayerRow({
   /** Why it is not writable, when it is not. See the note in the body. */
   closed: boolean;
 }) {
-  // How much this person has said about him, for the line under the name:
-  // a nota, a thumb, a line of text. Nothing else on the row counts anything.
-  const said = [verdict?.score, verdict?.thumb, verdict?.text].filter(
-    (part) => part !== undefined,
-  ).length;
+  // How much this person has said about him, for the line under the name: a
+  // nota and a thumb, which is all a ballot holds. What somebody wants to say
+  // in words goes in the thread, where it has a name on it.
+  const said = [verdict?.score, verdict?.thumb].filter((part) => part !== undefined).length;
   return (
     <li className="rounded-xl border border-border bg-card">
       <button
@@ -836,11 +910,26 @@ function PlayerRow({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-base font-medium">{player.name}</span>
           <span className="block text-xs text-muted-foreground">
-            {said === 0
-              ? writable
-                ? "Tocá para puntuarlo"
-                : "Sin nota tuya"
-              : `${said} ${said === 1 ? "cosa dicha" : "cosas dichas"}`}
+            {/* The grupo's number, once two people have given one — below that
+                `median` is null and nothing is shown, because one puntaje read
+                off a screen is one person's opinion of somebody. Never who
+                gave it: these documents carry no names. */}
+            {pooled !== null && pooled.median !== null ? (
+              <>
+                El grupo: {Number.isInteger(pooled.median) ? pooled.median : pooled.median.toFixed(1)}
+                <span className="opacity-70">
+                  {" "}
+                  · {pooled.scores} {pooled.scores === 1 ? "nota" : "notas"}
+                </span>
+                {pooled.mvp > 0 && <span className="text-amber-400"> · ⭐ {pooled.mvp}</span>}
+              </>
+            ) : pooled !== null && pooled.scores > 0 ? (
+              <>Falta una nota más para mostrar el promedio</>
+            ) : said === 0 ? (
+              writable ? "Tocá para puntuarlo" : "Sin nota tuya"
+            ) : (
+              `${said} ${said === 1 ? "cosa dicha" : "cosas dichas"}`
+            )}
           </span>
         </span>
 
@@ -966,19 +1055,16 @@ function PlayerRow({
                 )}
               </div>
 
-              {/* Cut rather than trimmed: `normalizeVerdict` caps this on the
-                  way back anyway, and trimming as somebody types makes a space
-                  impossible to type — the same call `lib/reviews.ts` makes
-                  about the uno x uno. */}
-              <GrowingTextarea
-                value={verdict?.text ?? ""}
-                onChange={(text) =>
-                  onVerdict({ text: text === "" ? undefined : text.slice(0, MAX_VERDICT) })
-                }
-                placeholder={`¿Cómo jugó ${player.name}?`}
-                ariaLabel={`Cómo jugó ${player.name}`}
-                className="rounded-lg border border-border bg-background px-2.5 py-1.5"
-              />
+              {/* There is no box for words here any more. A number about
+                  somebody is answered anonymously, so that an honest 4 is one
+                  nobody has to defend at the asado; a sentence about somebody
+                  belongs in the thread at the foot of the page, with a name on
+                  it. An anonymous line about a named person is the one
+                  combination with nothing to recommend it. */}
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                ¿Querés decir algo de {player.name}? Es abajo, en los
+                comentarios — eso va con tu nombre.
+              </p>
             </>
           )}
 

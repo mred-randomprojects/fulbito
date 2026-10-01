@@ -37,18 +37,20 @@ import {
   fetchIdentities,
   fetchPoll,
   listMyPolls,
-  setIgnoredBallots,
+  setIgnoredBallots as setIgnoredPollBallots,
   submitBallot,
 } from "./polls";
 import {
+  claimRecapBallotId,
   deleteComment,
   deleteRecap,
+  fetchMyRecapBallotId,
   fetchOwnRatings,
   postComment,
   publishRecap,
-  setIgnoredReviews,
-  setMyReview,
+  setIgnoredBallots,
   setRecapClosed,
+  submitRecapBallot,
   writeIdentity,
 } from "./recaps";
 import {
@@ -498,9 +500,9 @@ describe("polls", () => {
   it("lets the owner, and only the owner, say which ballots do not count", async () => {
     const pollId = await createPoll(as(OWNER), "owner-1", draft);
     const ballotId = await claimBallotId(as(VOTER), pollId, "voter-1");
-    await setIgnoredBallots(as(OWNER), pollId, [ballotId]);
+    await setIgnoredPollBallots(as(OWNER), pollId, [ballotId]);
     assert.deepEqual((await fetchPoll(as(OWNER), pollId))?.ignored, [ballotId]);
-    await denied(setIgnoredBallots(as(VOTER), pollId, []));
+    await denied(setIgnoredPollBallots(as(VOTER), pollId, []));
     await denied(setIgnoredBallots(as(ADMIN), pollId, []));
   });
 
@@ -717,61 +719,94 @@ describe("recaps", () => {
     await deleteComment(as(OWNER), id, theirs);
   });
 
-  it("takes one ballot per person, filed under their own uid", async () => {
+  /**
+   * One account, one ballot — enforced by the marker rather than by the
+   * document id, which is what lets the ballot carry no uid at all.
+   */
+  it("takes one ballot per account, under a random id its marker names", async () => {
     const id = await publish();
-    await setMyReview(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, {
+    const voter = as(VOTER);
+    const ballotId = await claimRecapBallotId(voter, id, "voter-1");
+    await submitRecapBallot(voter, id, ballotId, {
       mvp: MAXI,
-      players: { [MAXI]: { score: 80, thumb: "up", text: "jugó bien" } },
+      players: { [MAXI]: { score: 80, thumb: "up" } },
     });
-    // Read by the person who asked for it. Who else can is the next test.
-    const snap = await getDoc(doc(as(OWNER), "recaps", id, "reviews", "stranger"));
-    assert.equal(snap.data()?.mvp, MAXI);
+
+    // Claiming twice hands back the same id: the marker cannot be re-pointed.
+    assert.equal(await claimRecapBallotId(voter, id, "voter-1"), ballotId);
+    assert.equal(await fetchMyRecapBallotId(voter, id, "voter-1"), ballotId);
+    assert.equal((await getDocs(collection(as(OWNER), "recaps", id, "ballots"))).size, 1);
   });
 
   /**
-   * The promise the page prints: a nota and a "no cruzó la mitad" are an
-   * opinion about somebody in the same grupo, so the owner reads them and
-   * nobody else does. Hiding them on screen alone would be worth nothing —
-   * whoever holds the link holds a console — so this is the half that counts.
+   * The promise the page prints. A puntaje is read by everybody — there is no
+   * server to work out a median, so the page does it — and what makes that
+   * safe is that there is no name to find: not on the document, and not
+   * through the markers, which nobody may enumerate.
    */
-  it("keeps the puntajes to the owner and to whoever wrote them", async () => {
+  it("publishes the numbers to whoever holds the link, and the names to nobody", async () => {
     const id = await publish();
-    const author = { email: "stranger@example.com", name: "S" };
-    await setMyReview(as(STRANGER), id, "stranger", author, {
-      players: { [MAXI]: { score: 40, text: "no cruzó la mitad" } },
-    });
+    const ballotId = await claimRecapBallotId(as(VOTER), id, "voter-1");
+    await submitRecapBallot(as(VOTER), id, ballotId, { players: { [MAXI]: { score: 40 } } });
 
-    // Its author, coming back to a ballot they half filled in.
-    assert.equal(
-      (await getDoc(doc(as(STRANGER), "recaps", id, "reviews", "stranger"))).exists(),
-      true,
-    );
-    // The owner, who is the one who asked.
-    assert.equal((await getDocs(collection(as(OWNER), "recaps", id, "reviews"))).size, 1);
+    // Anybody with the link reads the pile, which is what the averages are.
+    const seen = await getDocs(collection(as(DEVICE_A), "recaps", id, "ballots"));
+    assert.equal(seen.size, 1);
+    const stored = seen.docs[0].data();
+    assert.deepEqual(Object.keys(stored).sort(), ["at", "players"]);
+    assert.equal(JSON.stringify(stored).includes("voter"), false);
 
-    // Everybody else with the link: not one document, and not the pile.
-    await denied(getDoc(doc(as(DEVICE_A), "recaps", id, "reviews", "stranger")));
-    await denied(getDoc(doc(as(VOTER), "recaps", id, "reviews", "stranger")));
-    await denied(getDocs(collection(as(DEVICE_A), "recaps", id, "reviews")));
-    await denied(getDocs(collection(as(VOTER), "recaps", id, "reviews")));
-    // Not even somebody who filed one of their own.
-    await setMyReview(as(VOTER), id, "voter-1", { email: "voter@example.com", name: "V" }, {
-      players: { [JUAN]: { score: 90 } },
-    });
-    await denied(getDocs(collection(as(VOTER), "recaps", id, "reviews")));
-    await denied(getDoc(doc(as(VOTER), "recaps", id, "reviews", "stranger")));
+    // And nobody — not the owner, not a super admin, not the site owner —
+    // can walk the markers to find out whose it was.
+    await denied(getDocs(collection(as(OWNER), "recaps", id, "voters")));
+    await denied(getDocs(collection(as(ADMIN), "recaps", id, "voters")));
+    await denied(getDoc(doc(as(OWNER), "recaps", id, "voters", "voter-1")));
+    // Its own account may read its own marker, which is how the page finds
+    // which of the ballots is yours.
+    assert.equal((await getDoc(doc(as(VOTER), "recaps", id, "voters", "voter-1"))).exists(), true);
   });
 
-  it("refuses a ballot filed under somebody else's uid", async () => {
+  it("refuses a ballot whose id no marker of yours names", async () => {
     const id = await publish();
+    await claimRecapBallotId(as(VOTER), id, "voter-1");
+    // A second ballot, with an id this account never claimed.
+    await denied(submitRecapBallot(as(VOTER), id, "made-up", { players: {} }));
+    // And one claimed by somebody else.
+    const theirs = await claimRecapBallotId(as(STRANGER), id, "stranger");
+    await denied(submitRecapBallot(as(VOTER), id, theirs, { players: {} }));
+  });
+
+  it("refuses a ballot that signs itself, and one stamped by the phone", async () => {
+    const id = await publish();
+    const ballotId = await claimRecapBallotId(as(VOTER), id, "voter-1");
     await denied(
-      setDoc(doc(as(STRANGER), "recaps", id, "reviews", "voter-1"), {
-        uid: "stranger",
-        name: "S",
+      setDoc(doc(as(VOTER), "recaps", id, "ballots", ballotId), {
+        uid: "voter-1",
+        name: "V",
         players: {},
         at: serverTimestamp(),
       }),
     );
+    await denied(
+      setDoc(doc(as(VOTER), "recaps", id, "ballots", ballotId), {
+        players: {},
+        at: "2020-01-01T00:00:00.000Z",
+      }),
+    );
+  });
+
+  it("never lets a marker be re-pointed at another ballot", async () => {
+    const id = await publish();
+    const ballotId = await claimRecapBallotId(as(VOTER), id, "voter-1");
+    await denied(
+      setDoc(doc(as(VOTER), "recaps", id, "voters", "voter-1"), { ballotId: "another" }),
+    );
+    assert.equal(await fetchMyRecapBallotId(as(VOTER), id, "voter-1"), ballotId);
+  });
+
+  it("wants a Google account to vote, not just a device", async () => {
+    const id = await publish();
+    await denied(claimRecapBallotId(as(DEVICE_A), id, "anon-a"));
   });
 
   /* -------------------------------------------------------------- */
@@ -781,18 +816,14 @@ describe("recaps", () => {
   it("keeps the address off every document everybody can read", async () => {
     const id = await publish();
     await postComment(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, "hola");
-    await setMyReview(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, {
-      players: { [MAXI]: { score: 80 } },
-    });
+    const ballotId = await claimRecapBallotId(as(STRANGER), id, "stranger");
+    await submitRecapBallot(as(STRANGER), id, ballotId, { players: { [MAXI]: { score: 80 } } });
     await writeIdentity(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" });
     const comments = await getDocs(collection(as(DEVICE_A), "recaps", id, "comments"));
-    // Read as the owner, because nobody else may: the ballots are not on the
-    // list of things the link carries any more. The address must not be on
-    // them either — the owner is shown it from `identities`, once.
-    const reviews = await getDocs(collection(as(OWNER), "recaps", id, "reviews"));
+    const ballots = await getDocs(collection(as(DEVICE_A), "recaps", id, "ballots"));
     const seen = JSON.stringify([
       ...comments.docs.map((d) => d.data()),
-      ...reviews.docs.map((d) => d.data()),
+      ...ballots.docs.map((d) => d.data()),
     ]);
     assert.equal(seen.includes("stranger@example.com"), false);
     // And the place it *is* kept is unreadable to everybody else.
@@ -909,10 +940,10 @@ describe("recaps", () => {
 
   it("lets somebody revise their own ballot", async () => {
     const id = await publish();
-    const author = { email: "stranger@example.com", name: "S" };
-    await setMyReview(as(STRANGER), id, "stranger", author, { players: { [MAXI]: { score: 40 } } });
-    await setMyReview(as(STRANGER), id, "stranger", author, { players: { [MAXI]: { score: 90 } } });
-    const snap = await getDoc(doc(as(OWNER), "recaps", id, "reviews", "stranger"));
+    const ballotId = await claimRecapBallotId(as(STRANGER), id, "stranger");
+    await submitRecapBallot(as(STRANGER), id, ballotId, { players: { [MAXI]: { score: 40 } } });
+    await submitRecapBallot(as(STRANGER), id, ballotId, { players: { [MAXI]: { score: 90 } } });
+    const snap = await getDoc(doc(as(OWNER), "recaps", id, "ballots", ballotId));
     assert.equal(snap.data()?.players.maxi.score, 90);
   });
 
@@ -920,11 +951,8 @@ describe("recaps", () => {
     const id = await publish();
     await setRecapClosed(as(OWNER), id, true);
     await denied(postComment(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, "tarde"));
-    await denied(
-      setMyReview(as(STRANGER), id, "stranger", { email: "stranger@example.com", name: "S" }, {
-        players: { [MAXI]: { score: 80 } },
-      }),
-    );
+    const ballotId = await claimRecapBallotId(as(STRANGER), id, "stranger");
+    await denied(submitRecapBallot(as(STRANGER), id, ballotId, { players: { [MAXI]: { score: 80 } } }));
     // Everything already there is still readable, which is the point.
     assert.equal((await getDoc(doc(as(DEVICE_A), "recaps", id))).exists(), true);
   });
@@ -932,9 +960,11 @@ describe("recaps", () => {
   it("lets only the owner shut the thread or set a ballot aside", async () => {
     const id = await publish();
     await denied(setRecapClosed(as(STRANGER), id, true));
-    await denied(setIgnoredReviews(as(STRANGER), id, ["stranger"]));
-    await setIgnoredReviews(as(OWNER), id, ["stranger"]);
-    assert.deepEqual((await getDoc(doc(as(OWNER), "recaps", id))).data()?.ignored, ["stranger"]);
+    // Ballot ids, which is all the owner can name — they could not name a
+    // person here if they wanted to.
+    await denied(setIgnoredBallots(as(STRANGER), id, ["b1"]));
+    await setIgnoredBallots(as(OWNER), id, ["b1"]);
+    assert.deepEqual((await getDoc(doc(as(OWNER), "recaps", id))).data()?.ignored, ["b1"]);
   });
 
   it("lets only the owner take the recap down", async () => {

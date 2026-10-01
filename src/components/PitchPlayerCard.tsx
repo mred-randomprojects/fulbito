@@ -11,8 +11,7 @@ import {
 import { GrowingTextarea } from "./GrowingTextarea";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { hasReview, reviewOf, type ReviewBook } from "@/lib/reviews";
-import { adoptInto, type PlayerFeedback } from "@/lib/recapFeedback";
-import { track } from "@/lib/track";
+import type { PlayerFeedback } from "@/lib/recapFeedback";
 import {
   KITS,
   ROLE_LABELS,
@@ -47,13 +46,10 @@ interface Props {
   onClose: () => void;
   /**
    * What the grupo said about this one in el tercer tiempo, or `null` when
-   * there is no recap up for the match. Read-only here: the numbers are shown
-   * and the lines can be taken into the box, and nothing on this card ever
-   * writes back to the recap.
+   * there is no recap up for the match. Numbers only, and read-only: nothing
+   * on this card ever writes back to the recap.
    */
   guest?: PlayerFeedback | null;
-  /** A guest line taken into the uno x uno. Same writer as the box itself. */
-  onAdopt?: (id: PlayerId, review: string) => void;
 }
 
 const PLACEHOLDER = "¿Cómo anduvo?";
@@ -90,7 +86,6 @@ export function PitchPlayerCard({
   onViewProfile,
   onClose,
   guest = null,
-  onAdopt,
 }: Props) {
   // The last player shown, kept through the close animation so the card
   // fades out with a face on it rather than snapping to an empty box. That is
@@ -159,19 +154,31 @@ export function PitchPlayerCard({
                 Below your own box on purpose: what you thought is the thing
                 you came here to write, and a wall of other people's opinions
                 above it would anchor it — the same reason an encuesta shows
-                the voter no ratings. A tap takes a line into the box, with
-                the name on it, because a line you adopted is not one you
-                wrote. It never touches his rating: see "Rating people from
-                their results" in PROJECT.md. */}
-            {guest !== null && (guest.scores > 0 || guest.lines.length > 0 || guest.mvp > 0) && (
+                the voter no ratings.
+
+                Numbers only, and no names: the puntajes are answered
+                anonymously now, and what somebody wants to *say* about him
+                they say in the thread, where it has a name on it. So there is
+                nothing to adopt into the box any more — that tap, and the line
+                it copied with its author attached, went with the per-player
+                text field. It never touches his rating either: see "Rating
+                people from their results" in PROJECT.md. */}
+            {guest !== null && (guest.scores > 0 || guest.mvp > 0 || guest.up > 0 || guest.down > 0) && (
               <section className="rounded-xl border border-border bg-background/40 px-3 py-2.5">
-                <p className="mb-1.5 flex flex-wrap items-baseline gap-x-2 text-xs">
+                <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
                   <span className="font-medium">Lo que dijo el grupo</span>
-                  {guest.median !== null && (
+                  {guest.median !== null ? (
                     <span className="text-muted-foreground">
                       {Number.isInteger(guest.median) ? guest.median : guest.median.toFixed(1)} de
                       promedio · {guest.scores} {guest.scores === 1 ? "nota" : "notas"}
                     </span>
+                  ) : (
+                    guest.scores > 0 && (
+                      <span className="text-muted-foreground">
+                        {guest.scores} {guest.scores === 1 ? "nota" : "notas"} — falta gente para
+                        promediar
+                      </span>
+                    )
                   )}
                   {guest.mvp > 0 && (
                     <span className="text-amber-400">
@@ -186,35 +193,6 @@ export function PitchPlayerCard({
                     </span>
                   )}
                 </p>
-                {guest.lines.length > 0 && (
-                  <ul className="space-y-1">
-                    {guest.lines.map((line) => (
-                      <li key={`${line.uid}-${line.at}`}>
-                        <button
-                          type="button"
-                          className="w-full rounded-lg px-1.5 py-1 text-left text-xs leading-relaxed hover:bg-muted/60 disabled:cursor-default disabled:hover:bg-transparent"
-                          disabled={onAdopt === undefined}
-                          onClick={() => {
-                            if (onAdopt === undefined) return;
-                            const next = adoptInto(review, line);
-                            if (next === review) return;
-                            onAdopt(shown.player.id, next);
-                            track({ name: "recap_adopted" });
-                          }}
-                          aria-label={`Sumar lo que dijo ${line.name} al uno x uno`}
-                        >
-                          <span className="font-medium">{line.name}: </span>
-                          <span className="text-muted-foreground">{line.text}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {guest.lines.length > 0 && onAdopt !== undefined && (
-                  <p className="mt-1 px-1.5 text-[11px] text-muted-foreground">
-                    Tocá una para sumarla arriba.
-                  </p>
-                )}
               </section>
             )}
 

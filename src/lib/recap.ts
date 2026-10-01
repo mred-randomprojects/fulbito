@@ -124,9 +124,10 @@ export interface Recap {
    */
   closed: boolean;
   /**
-   * Review documents the owner set aside: still stored, no longer counted.
-   * Keyed by uid, the same way the documents are. Same bargain as a poll's
-   * `ignored` — out rather than deleted, because a deleted review is one the
+   * Ballots the owner set aside: still stored, no longer counted. Ballot ids,
+   * the same way the documents are keyed — and the owner can only ever name a
+   * ballot, never a person, which is the point. Same bargain as a poll's
+   * `ignored`: out rather than deleted, because a deleted ballot is one the
    * same account writes again tomorrow.
    */
   ignored: string[];
@@ -172,20 +173,42 @@ export interface RecapIdentity {
 /** Bien or mal — the quick pass, for somebody not writing paragraphs. */
 export type Thumb = "up" | "down";
 
-/** What one person said about one player's night. Every part optional. */
+/**
+ * What one person said about one player's night. Both parts optional.
+ *
+ * **There is no text here, and that is the line this feature draws.** A number
+ * about a person is answered anonymously, because an honest 4 is one nobody
+ * can be asked about at the asado; a sentence about a person is said out loud
+ * in the thread with a name on it, because an anonymous sentence about a named
+ * person is the one combination that has nothing to recommend it — it cannot
+ * be averaged, it cannot be answered, and it is the reason the first version
+ * of this feature was signed. So: numbers anonymous and pooled, words public
+ * and attributed. See `RecapBallot` and the comments collection.
+ */
 export interface PlayerVerdict {
   /** 0..100 on the app's own scale, or absent. */
   score?: number;
   thumb?: Thumb;
-  /** How they went, in words. */
-  text?: string;
 }
 
-/** One person's whole ballot about the night. Filed at `reviews/{uid}`. */
-export interface RecapReview {
-  uid: string;
-  /** The label, same as a comment's. The address is in `identities/{uid}`. */
-  name: string;
+/**
+ * One person's whole ballot about the night. **Anonymous, by shape.**
+ *
+ * Filed at `ballots/{ballotId}` with no uid and no name on it, exactly like an
+ * encuesta's: the id is random, and the only thing tying it to an account is a
+ * marker at `voters/{uid}` that nobody but that account may read. The owner
+ * reads every ballot to work out the medians — there is no server here to do
+ * it for them — so a uid on the ballot would put "quién le puso 4 al Gordo"
+ * one tap away, and nobody would ever answer honestly again.
+ *
+ * It used to be `reviews/{uid}`, signed, and the argument for that was that a
+ * name is what keeps a free-text box civil. That argument died with the
+ * free-text box: what is left is numbers, and numbers want the encuesta's
+ * bargain instead.
+ */
+export interface RecapBallot {
+  /** The random id it was filed under. Not a person, and not traceable to one. */
+  id: string;
   /** La figura del partido, or absent when they did not pick one. */
   mvp?: PlayerId;
   /** Keyed by who it is about. A player not on the recap contributes nothing. */
@@ -195,8 +218,6 @@ export interface RecapReview {
 
 /** The longest comment worth storing; the rules enforce the same number. */
 export const MAX_COMMENT = 600;
-/** The longest line about one player. Shorter: it is one line about one night. */
-export const MAX_VERDICT = 200;
 /** The longest title, which is the match's name. */
 export const MAX_TITLE = 80;
 
@@ -530,45 +551,42 @@ export function normalizeVerdict(raw: unknown): PlayerVerdict | null {
   }
   const thumb = normalizeThumb(raw.thumb);
   if (thumb !== undefined) verdict.thumb = thumb;
-  const text = cleanText(str(raw.text), MAX_VERDICT);
-  if (text !== null) verdict.text = text;
-  return verdict.score === undefined && verdict.thumb === undefined && verdict.text === undefined
-    ? null
-    : verdict;
+  // A `text` written by an older build is dropped on the way in rather than
+  // carried: the per-player line moved to the thread, where it has a name.
+  return verdict.score === undefined && verdict.thumb === undefined ? null : verdict;
 }
 
 /**
- * One person's ballot off the wire.
+ * One ballot off the wire.
  *
  * The recap's own list is the authority, not the ballot's keys — the same
  * decision `lib/poll.ts` makes, and for the same reason: a document written
  * by hand, or one left over from a recap that was republished with a
  * different lineup, cannot move a single number about somebody who was never
  * on it. An mvp for a stranger is dropped for the same reason.
+ *
+ * Anything that looks like a name or a uid on the document is ignored rather
+ * than read: this collection is anonymous, and a reader that starts believing
+ * a field like that is a reader that will one day show it.
  */
-export function normalizeReview(
-  uid: string,
+export function normalizeBallot(
+  id: string,
   raw: unknown,
   at: string,
   known: ReadonlySet<PlayerId>,
-): RecapReview | null {
+): RecapBallot | null {
   if (!isRecord(raw)) return null;
   const players: Partial<Record<PlayerId, PlayerVerdict>> = {};
   const rawPlayers = isRecord(raw.players) ? raw.players : {};
-  for (const [id, value] of Object.entries(rawPlayers)) {
-    if (!known.has(id as PlayerId)) continue;
+  for (const [playerId, value] of Object.entries(rawPlayers)) {
+    if (!known.has(playerId as PlayerId)) continue;
     const verdict = normalizeVerdict(value);
-    if (verdict !== null) players[id as PlayerId] = verdict;
+    if (verdict !== null) players[playerId as PlayerId] = verdict;
   }
-  const review: RecapReview = {
-    uid,
-    name: str(raw.name) || "Alguien",
-    players,
-    at,
-  };
+  const ballot: RecapBallot = { id, players, at };
   const mvp = str(raw.mvp);
-  if (mvp !== "" && known.has(mvp as PlayerId)) review.mvp = mvp as PlayerId;
-  return review;
+  if (mvp !== "" && known.has(mvp as PlayerId)) ballot.mvp = mvp as PlayerId;
+  return ballot;
 }
 
 /** An identity off the wire. Only the owner and the super admins see these. */
@@ -583,9 +601,9 @@ export function normalizeIdentity(uid: string, raw: unknown): RecapIdentity {
 }
 
 /** Whether a ballot says anything at all. An empty one is not worth storing. */
-export function hasVerdicts(review: Pick<RecapReview, "mvp" | "players">): boolean {
-  if (review.mvp !== undefined) return true;
-  return Object.values(review.players).some((verdict) => verdict !== undefined);
+export function hasVerdicts(ballot: Pick<RecapBallot, "mvp" | "players">): boolean {
+  if (ballot.mvp !== undefined) return true;
+  return Object.values(ballot.players).some((verdict) => verdict !== undefined);
 }
 
 /* ------------------------------------------------------------------ */

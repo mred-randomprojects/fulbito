@@ -19,7 +19,7 @@ import {
   deleteRecap,
   fetchIdentities,
   publishRecap,
-  setIgnoredReviews,
+  setIgnoredBallots,
   setRecapClosed,
 } from "@/cloud/recaps";
 import { listMyPolls } from "@/cloud/polls";
@@ -84,10 +84,10 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
 
   const recap = watched.snapshot?.recap ?? null;
   const comments = commentOrder(watched.snapshot?.comments ?? []);
-  const reviews = watched.snapshot?.reviews ?? [];
+  const ballots = watched.snapshot?.ballots ?? [];
   const best = figura(watched.feedback);
   const link = `${window.location.origin}${window.location.pathname}#/partido/${match.id}`;
-  const voices = comments.length + reviews.length;
+  const voices = comments.length + ballots.length;
 
   useEffect(() => {
     if (!available || user === null || voices === 0) return;
@@ -184,16 +184,16 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
     }
   };
 
-  const ignore = async (uid: string, out: boolean) => {
+  const ignore = async (ballotId: string, out: boolean) => {
     if (!guard() || recap === null) return;
     const next = out
-      ? [...recap.ignored, uid]
-      : recap.ignored.filter((entry) => entry !== uid);
+      ? [...recap.ignored, ballotId]
+      : recap.ignored.filter((entry) => entry !== ballotId);
     setBusy(true);
     setError(null);
     try {
       const { db } = await loadCloud();
-      await setIgnoredReviews(db, match.id, next);
+      await setIgnoredBallots(db, match.id, next);
     } catch {
       setError("No se pudo cambiar. Probá de nuevo.");
     } finally {
@@ -286,7 +286,7 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
   /* Up and running                                                    */
   /* ---------------------------------------------------------------- */
 
-  const answered = reviews.length;
+  const answered = ballots.length;
   const stale = recapDiffers(match, recap);
 
   return (
@@ -370,43 +370,40 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
         </div>
       )}
 
-      {/* Who said what, and the one thing to do about somebody in bad faith.
-          Unlike an encuesta's ballots this is not gated on being a super
-          admin: nothing here was ever anonymous, and the page already shows
-          every name to everybody. */}
-      {reviews.length > 0 && (
+      {/* The ballots, which say nothing about who sent them — and cannot, by
+          shape: there is no uid and no name on one, and the markers that tie
+          an account to a ballot id are unreadable even to you. What is left to
+          do about somebody voting in bad faith is the encuesta's answer: take
+          that ballot out of the count, by id, without deleting it. */}
+      {ballots.length > 0 && (
         <ul className="mb-3 space-y-1">
-          {reviews.map((review) => {
-            const out = recap.ignored.includes(review.uid);
-            const scored = Object.values(review.players).filter(
+          {ballots.map((ballot, index) => {
+            const out = recap.ignored.includes(ballot.id);
+            const scored = Object.values(ballot.players).filter(
               (verdict) => verdict?.score !== undefined,
             ).length;
             return (
               <li
-                key={review.uid}
+                key={ballot.id}
                 className={cn(
                   "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
                   out ? "border-dashed border-border opacity-60" : "border-border bg-card",
                 )}
               >
                 <span className={cn("min-w-0 flex-1 truncate", out && "line-through")}>
-                  <span className="font-medium">{review.name}</span>
+                  <span className="font-medium">Planilla {index + 1}</span>
                   <span className="text-muted-foreground">
                     {" · "}
                     {scored === 0 ? "sin notas" : `${scored} ${scored === 1 ? "nota" : "notas"}`}
+                    {ballot.mvp !== undefined && " · votó figura"}
                   </span>
-                  {identities.get(review.uid) !== undefined && (
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {identities.get(review.uid)}
-                    </span>
-                  )}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-6 shrink-0 px-1.5 text-muted-foreground"
                   disabled={busy}
-                  onClick={() => void ignore(review.uid, !out)}
+                  onClick={() => void ignore(ballot.id, !out)}
                 >
                   {out ? "Contar" : "No contar"}
                 </Button>

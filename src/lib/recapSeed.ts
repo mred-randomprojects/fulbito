@@ -22,15 +22,14 @@ import type { PlayerVerdict } from "./recap.js";
  *    ballot somebody already sent: `stored` wins, always, or coming back to
  *    change one puntaje would silently reset the other thirteen.
  *
- * 2. **Where it came from has to be said out loud.** `SeedSource` exists so
- *    the page can print the sentence, and the sentence matters most in the
- *    `poll` case: an encuesta is answered anonymously, and a recap ballot is
- *    signed and read by the person who organised the match. Sending a
- *    pre-filled form without changing it therefore hands them, with your name
- *    on it, what you had said anonymously. That is a real cost, taken
- *    deliberately — the alternative was fourteen numbers nobody retypes — and
- *    what keeps it honest is that the page says so before you send, rather
- *    than after. See "El tercer tiempo" in `PROJECT.md`.
+ * 2. **Where it came from is still said out loud, and it no longer costs
+ *    anybody anything.** It used to: a recap ballot was signed, so sending a
+ *    form pre-filled from an encuesta handed the organiser, with your name on
+ *    it, what you had said anonymously — and the notice had to warn about
+ *    exactly that. The puntajes are anonymous now (`RecapBallot`), so the two
+ *    sides of the bridge are the same temperament and the warning is gone. The
+ *    sentence stays, because somebody seeing numbers they did not type on this
+ *    page deserves to know where they came from.
  */
 
 /** Where a pre-filled form got its numbers. */
@@ -88,9 +87,8 @@ export function seedNotice(source: SeedSource): string | null {
     case "poll":
       return (
         "Arrancamos con lo que habías puesto en la encuesta, para que ajustes " +
-        "lo que haga falta después de verlos jugar. Ojo: la encuesta era " +
-        "anónima y esto no — cuando mandes, el que armó el partido ve estos " +
-        "números con tu nombre al lado."
+        "lo que haga falta después de verlos jugar. Esto también es anónimo: " +
+        "nadie va a saber cuál de las notas es la tuya."
       );
     case "none":
       return null;
