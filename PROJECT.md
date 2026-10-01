@@ -315,7 +315,7 @@ gate, including tooltips and charts.
 | `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
 | `lib/reviews.ts` | What counts as a line of the uno x uno, and one player's history of them |
 | `lib/recap.ts` | El tercer tiempo: what a finished match publishes and what it never does, plus the comments and ballots that come back |
-| `lib/recapSeed.ts` | What a recap's uno x uno opens pre-filled with — the reader's own ratings or their own encuesta answers — and what the page has to say about where they came from |
+| `lib/recapSeed.ts` | What a recap's uno x uno opens pre-filled with — the reader's own ratings, off this browser or off their own cloud copy, or their own encuesta answers — when it is allowed to fill at all, and what the page has to say about where the numbers came from |
 | `lib/recapFeedback.ts` | What the grupo's puntajes add up to: a median per player, the thumbs, la figura, and taking a line into the uno x uno |
 | `useMatchRecap.ts` | The recap of the match that is open, watched once and handed to the panel and the player's card |
 | `lib/video.ts` | What an address pasted onto a match is — YouTube, Vimeo, Drive, a file, a link, or nothing — what a player needs to show it, the same link twice, and the lines the chat gets |
@@ -1138,24 +1138,53 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   what they thought a week ago. Starting from fourteen empty boxes is how a
   page gets answered by three people. So `lib/recapSeed.ts` seeds the scores —
   and only the scores, because a thumb, a line and the figura are about tonight
-  and have nothing to copy from — from exactly one of two places, both of them
-  the reader's own: the owner's own plantel (`fetchOwnRatings`, their uid, the
-  one time a page outside the wall reads a roster and it can only ever read the
-  reader's), or this account's own answers to the encuesta the recap points at
-  (`pollId` → `voters/{uid}` → their own ballot, all three readable by that
-  account under the rules that were already there). A ballot already sent for
-  this match beats both: coming back to change one puntaje must not reset the
-  other thirteen.
-  **The encuesta case has a real cost and the page says it out loud.** Those
-  answers were given anonymously; a recap ballot is signed and read by the
-  organiser. Somebody who sends a pre-filled form unchanged therefore hands
-  over, with their name on it, what they had said anonymously — so the notice
-  above the rows says exactly that before they send, and `recapSeed.test.ts`
-  pins the sentence. It was taken deliberately, with the trade on the table:
-  the alternative was fourteen numbers nobody retypes. For this grupo the delta
-  is small (the owner is also a super admin, who may already attribute a ballot
-  through `identities`); for any other owner of this app it is not, which is
-  why the warning is not optional.
+  and have nothing to copy from — from exactly one of three places, every one
+  of them the reader's own, tried in this order by `loadSeed`:
+
+  1. **The owner's plantel in this browser's own copy of the app**
+     (`ratingsFromAppData`, off `localStorage` under `STORAGE_KEY`). First
+     because `localStorage` is the copy this app works from and the cloud is a
+     second home; because it costs no round trip and works with no signal; and
+     because the cloud copy **does not exist** unless that account turned sync
+     on. Signing in to publish a recap turns nothing on — `lib/syncConsent.ts`
+     is deliberate about that — so an organiser who never enabled sync opened
+     their own link to fourteen dashes, which is the bug this door was added to
+     fix. It widens nothing: it is the same numbers the plantel screen already
+     shows in the same browser, to the same pair of eyes. It is behind
+     `uid === ownerUid` all the same, because `localStorage` is per browser and
+     not per person — a grupo member signing in on the tablet the organiser's
+     copy lives on would otherwise be seeded off somebody else's plantel under a
+     notice calling it theirs, with their own encuesta answers sitting unread in
+     door 3.
+  2. **The owner's own plantel out of the cloud** (`fetchOwnRatings`, their
+     uid, the one time a page outside the wall reads a roster and it can only
+     ever read the reader's), for the phone that has never had the app open.
+  3. **This account's own answers to the encuesta the recap points at**
+     (`pollId` → `voters/{uid}` → their own ballot, all three readable by that
+     account under the rules that were already there).
+
+  A ballot already sent for this match beats all three: coming back to change
+  one puntaje must not reset the other thirteen. **It has to wait for that
+  answer, and the waiting is the whole of `ballotKnown`.** A puntaje carries no
+  uid, so the only handle on your own answers is the marker at `voters/{uid}` —
+  one `getDoc`, fired when the page opens. Firestore serves a reload out of its
+  persistent cache, so the recap *and every ballot on it* arrive before that
+  lookup does: seeding in the gap opened a returning voter's form on a seed
+  instead of on the fourteen numbers they had sent, and never corrected itself,
+  because seeding happens once per uid. The answer is pinned to the uid it was
+  asked about for the same kind of reason — the page mints an anonymous session
+  on open and replaces it on sign-in, and "nothing filed" under a throwaway uid
+  says nothing about the account that just arrived.
+
+  **The encuesta case used to have a real cost, and it is gone rather than
+  forgotten.** Those answers were given anonymously, and a recap ballot was
+  signed, so sending a pre-filled form unchanged handed the organiser — with
+  your name on it — what you had said anonymously; the notice above the rows had
+  to warn about exactly that. The puntajes are anonymous ballots now, so both
+  sides of the bridge are the same temperament and the warning is gone. The
+  sentence stays, and `recapSeed.test.ts` still pins it, because somebody
+  seeing numbers they did not type deserves to know where they came from — and
+  because the day a ballot carries a name again, that test has to go red.
 - **Four ways to say how somebody played**, because they answer different
   moods: a thumb (the quick pass down the team), a 0–100 puntaje, a line of
   text, and one vote for la figura per person. All optional, all on the same

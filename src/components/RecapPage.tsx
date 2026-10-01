@@ -31,7 +31,14 @@ import {
 } from "@/cloud/recaps";
 import { fetchBallot, fetchMyBallotId } from "@/cloud/polls";
 import { voteRating } from "@/lib/poll";
-import { hasSeed, seedNotice, seedScores, type SeedSource } from "@/lib/recapSeed";
+import {
+  ballotKnown,
+  hasSeed,
+  ratingsFromAppData,
+  seedNotice,
+  seedScores,
+  type SeedSource,
+} from "@/lib/recapSeed";
 import { isCancelledSignIn } from "@/lib/authErrors";
 import { formatMatchDate } from "@/lib/dates";
 import {
@@ -59,6 +66,7 @@ import { track } from "@/lib/track";
 import { useTracking } from "@/useTracking";
 import { cn } from "@/lib/utils";
 import { COPY_REFUSED } from "@/share";
+import { STORAGE_KEY } from "@/storage";
 import { useCopy } from "@/useCopy";
 
 /**
@@ -101,11 +109,17 @@ export function RecapPage() {
   /** Which uid the draft was seeded for. See the effect that fills it. */
   const [seededFor, setSeededFor] = useState<string | null>(null);
   /**
-   * The id of this account's ballot, out of its own marker. A ballot carries
-   * no uid, so this is the only handle anybody has on their own answers — and
-   * nobody else can read the marker that names it.
+   * The answer to "has this account already sent a ballot here?", and which uid
+   * it is an answer about.
+   *
+   * A ballot carries no uid, so its marker is the only handle anybody has on
+   * their own answers — and nobody else can read it. The uid travels with the
+   * answer because the page's session changes under it: see `ballotKnown` in
+   * `lib/recapSeed.ts` for why an answer about the anonymous session is not an
+   * answer about the account that just signed in, and why the form waits for
+   * one before it opens.
    */
-  const [myBallotId, setMyBallotId] = useState<string | null>(null);
+  const [marker, setMarker] = useState<{ uid: string; ballotId: string | null } | null>(null);
   /** Where the numbers in the form came from, for the line above the rows. */
   const [source, setSource] = useState<SeedSource>("none");
   const [open, setOpen] = useState<PlayerId | null>(null);
@@ -142,11 +156,15 @@ export function RecapPage() {
         // It only reads: claiming happens when somebody actually sends.
         void fetchMyRecapBallotId(db, matchId, who)
           .then((found) => {
-            if (live) setMyBallotId(found);
+            if (live) setMarker({ uid: who, ballotId: found });
           })
           .catch(() => {
-            // No marker, no session, no permission: an empty form, which is
-            // what this page did before any of this existed.
+            // No marker, no session, no permission: nothing filed under this
+            // account, which is an empty form — what this page did before any
+            // of this existed. Recorded as an answer either way, because the
+            // seeding below waits for one and a lookup that failed must not
+            // hold the form shut for ever.
+            if (live) setMarker({ uid: who, ballotId: null });
           });
         stop = await watchRecap(
           db,
@@ -224,6 +242,12 @@ export function RecapPage() {
     () => countedBallots(snapshot?.ballots ?? [], recap?.ignored ?? []),
     [snapshot?.ballots, recap?.ignored],
   );
+  /**
+   * Which ballot is this account's, *once that is known*. `null` covers both
+   * "it has none" and "nobody has asked yet", which is why nothing may seed off
+   * it until `ballotKnown` says the question has been answered for this uid.
+   */
+  const myBallotId = ballotKnown(marker, uid) ? marker?.ballotId ?? null : null;
   const stored = useMemo(() => myBallot(ballots, myBallotId), [ballots, myBallotId]);
   /**
    * What the grupo said, pooled. Anonymous all the way down: these are
@@ -252,22 +276,37 @@ export function RecapPage() {
    * In order: a ballot this account already sent for this match wins outright
    * — coming back to change one puntaje must not reset the other thirteen.
    * Failing that it is seeded, and the only thing anybody is ever seeded with
-   * is **their own** numbers: the owner's own plantel on the owner's own
-   * screen, or this account's own answers to the encuesta the recap points at.
-   * `lib/recapSeed.ts` has the rule and, for the encuesta case, what it costs
-   * — the page says that out loud above the rows, which is the point of
-   * keeping the sentence in a tested module.
+   * is **their own** numbers: the plantel in this browser's own copy of the
+   * app, the same roster off the cloud when the reader owns the recap, or this
+   * account's own answers to the encuesta the recap points at. `loadSeed` at
+   * the bottom of this file has the three doors in order and why; the page says
+   * out loud above the rows which one it came through, which is the point of
+   * keeping that sentence in a tested module.
    *
-   * **Waits for a snapshot.** `setUid` runs before `watchRecap` resolves, so
-   * seeding on "there is a uid" seeded an empty form off a page that had not
-   * heard back yet, and then never re-seeded, because the guard was "is the
-   * draft still null" — the ballot landed a moment later and was dropped. Once
-   * per uid rather than once, so signing in over the anonymous session re-reads
-   * as the account that is now writing; never twice for the same uid, or a
-   * keystroke would be overwritten by the echo of the write before it.
+   * **Waits for two answers, and both waits were paid for in bugs.** `setUid`
+   * runs before `watchRecap` resolves, so seeding on "there is a uid" seeded an
+   * empty form off a page that had not heard back yet, and then never
+   * re-seeded, because the guard was "is the draft still null" — the ballot
+   * landed a moment later and was dropped. The second is the marker that names
+   * this account's own ballot: Firestore answers a reload out of its persistent
+   * cache, so the snapshot and every ballot on it arrive *before* that lookup
+   * does, and seeding in that gap opened a returning voter's form on a seed
+   * instead of on the fourteen numbers they had already sent. `ballotKnown` in
+   * `lib/recapSeed.ts` carries that argument.
+   *
+   * Once per uid rather than once, so signing in over the anonymous session
+   * re-reads as the account that is now writing; never twice for the same uid,
+   * or a keystroke would be overwritten by the echo of the write before it.
    */
   useEffect(() => {
     if (uid === null || snapshot === null || recap === null || seededFor === uid) return;
+
+    // A form to type in as soon as there is a page to type it on, even though
+    // what it opens *with* has to wait: a row with no draft behind it takes a
+    // tap and does nothing, which is worse than a row full of dashes.
+    setDraft((current) => current ?? { players: {} });
+    if (!ballotKnown(marker, uid)) return;
+
     // Claimed up front: everything below is async, and a second pass would
     // fetch the same things again and race its own result into the form.
     setSeededFor(uid);
@@ -278,7 +317,6 @@ export function RecapPage() {
       return;
     }
 
-    setDraft({ players: {} });
     const ids: PlayerId[] = [...recap.a.players, ...recap.b.players];
     let live = true;
 
@@ -296,7 +334,7 @@ export function RecapPage() {
     return () => {
       live = false;
     };
-  }, [uid, snapshot, recap, stored, seededFor]);
+  }, [uid, snapshot, recap, stored, seededFor, marker]);
 
   /* ---------------------------------------------------------------- */
   /* Doing                                                             */
@@ -362,7 +400,7 @@ export function RecapPage() {
     try {
       const { db } = await loadCloud();
       const ballotId = myBallotId ?? (await claimRecapBallotId(db, matchId, uid));
-      setMyBallotId(ballotId);
+      setMarker({ uid, ballotId });
       await submitRecapBallot(db, matchId, ballotId, draft);
       setSaved(true);
       track({ name: "recap_reviewed", players: Object.keys(draft.players).length });
@@ -706,25 +744,56 @@ export function RecapPage() {
 }
 
 
+/** This browser's own copy of the app, or nothing when it cannot be read. */
+function ownAppData(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    // Storage switched off, or a private window that refuses it. There is
+    // simply nothing to start from, which the caller already handles.
+    return null;
+  }
+}
+
 /**
- * The numbers a form opens with, fetched for whoever is looking.
+ * The numbers a form opens with, for whoever is looking.
  *
- * Two doors, and both of them lead to the reader's own data:
+ * Three doors, in this order, and every one of them leads to the reader's own
+ * data:
  *
- * - **The owner** reads their own plantel out of their own cloud copy. The
- *   rules give an account its own documents and nobody else's, so this can
- *   never show somebody else's ratings; and a recap opened by anybody else
- *   does not take this branch at all.
+ * - **The owner's plantel in this browser's own copy of the app**, read
+ *   straight out of `localStorage` — see `ratingsFromAppData`. First because
+ *   that is the copy the app actually works from, because it needs no network
+ *   and no permission, and because the cloud one *does not exist* for an
+ *   organiser who never turned sync on: signing in to publish a recap turns
+ *   nothing on, so the door below opened on an empty collection and the person
+ *   who published the page got fourteen dashes on it. That was the bug.
+ * - **The owner's plantel out of the cloud** (`fetchOwnRatings`), for the phone
+ *   that has never had the app open on it. The rules give an account its own
+ *   documents and nobody else's, so this can never show somebody else's
+ *   ratings.
  * - **Anybody else** reads their own answers to the encuesta the recap points
  *   at: the marker at `voters/{uid}` names their ballot and the rules let that
  *   account — and only the owner, the super admins and it — read that ballot.
  *   `fetchMyBallotId` is used rather than `claimBallotId` on purpose: claiming
  *   would spend somebody's single vote on a poll they never opened.
  *
+ * **Both of the first two are behind `uid === ownerUid`, and the local one is
+ * behind it for a reason worth writing down.** `localStorage` is per browser,
+ * not per person: a grupo member signing in on a tablet where the organiser's
+ * copy of the app lives is a real arrangement, and seeding *them* off it would
+ * put the organiser's numbers in their form under a notice that calls it "tu
+ * plantel" — not a leak, since the plantel screen is one tap away in that same
+ * browser, but the wrong numbers wearing the wrong label, and their own
+ * encuesta answers are sitting right there in the third door. The account that
+ * is looking has to be the account the recap belongs to. An unsigned owner
+ * therefore gets nothing until they sign in, which they have to do to send
+ * anything anyway.
+ *
  * Any failure is a form that opens empty, which is what the page did before
- * and is never worth an error on screen. An anonymous session reads nothing:
- * it has no plantel and no encuesta, and `voters/{uid}` under a throwaway uid
- * is a document that does not exist.
+ * and is never worth an error on screen. An anonymous session reads nothing at
+ * all: no plantel, and `voters/{uid}` under a throwaway uid is a document that
+ * does not exist.
  */
 async function loadSeed(
   uid: string,
@@ -732,6 +801,14 @@ async function loadSeed(
   pollId: string,
   ids: readonly PlayerId[],
 ): Promise<{ scores: Partial<Record<PlayerId, PlayerVerdict>>; source: SeedSource } | null> {
+  // Before any `await`, so the owner's own form fills without waiting on
+  // Firebase at all — and fills on a train, where the rest of this returns
+  // nothing.
+  if (uid === ownerUid) {
+    const own = seedScores(ids, ratingsFromAppData(ownAppData()));
+    if (hasSeed(own)) return { scores: own, source: "roster" };
+  }
+
   try {
     const { db } = await loadCloud();
 
@@ -798,10 +875,18 @@ function Scoreboard({ recap, when }: { recap: Recap; when: string }) {
 function SignIn({ onEnter }: { onEnter: () => void }) {
   return (
     <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+      {/* This used to say the organiser knows whose each planilla is. That was
+          true when the puntajes were signed and has been false since they
+          became anonymous ballots — and it was the opposite of a leak, which is
+          its own problem: somebody who believes their 4 has their name on it
+          does not type a 4. The two halves are named separately now, because
+          they really are different: the numbers are anonymous, the comments are
+          not. */}
       <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
-        Para puntuar o comentar hace falta entrar con Google, así el que armó el
-        partido sabe de quién es cada planilla y nadie puntúa dos veces. Leer no
-        hace falta nada.
+        Para puntuar o comentar hace falta entrar con Google, así nadie puntúa
+        dos veces. Las notas son anónimas — ni el que armó el partido sabe cuál
+        es la tuya. Lo que escribís en los comentarios sí va con tu nombre.
+        Leer no hace falta nada.
       </p>
       <Button className="w-full" onClick={onEnter}>
         Entrar con Google

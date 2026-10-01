@@ -1,4 +1,4 @@
-import { clampRating, type PlayerId } from "../types.js";
+import { clampRating, toCurrentScale, type PlayerId } from "../types.js";
 import type { PlayerVerdict } from "./recap.js";
 
 /**
@@ -11,8 +11,9 @@ import type { PlayerVerdict } from "./recap.js";
  * from zero means typing fourteen numbers that mostly repeat what you already
  * said, which is how a page gets answered by three people and abandoned by
  * eleven. So the form opens pre-filled, and the only thing that is ever
- * pre-filled is **your own** numbers: the owner's own ratings on the owner's
- * own screen, or your own encuesta answers under your own account.
+ * pre-filled is **your own** numbers: the plantel in this browser's own copy of
+ * the app, the same roster off the cloud when the reader is the recap's owner,
+ * or your own encuesta answers under your own account.
  *
  * Two things this module is careful about, and they are the whole of it.
  *
@@ -38,7 +39,11 @@ export type SeedSource =
   | "none"
   /** A ballot this account already sent for this match. Not a seed at all. */
   | "mine"
-  /** The owner's own plantel, on the owner's own screen. */
+  /**
+   * The owner's own plantel, on the owner's own screen: this browser's own copy
+   * of the app first, the owner's cloud roster second. See `ratingsFromAppData`
+   * for why the local one goes first.
+   */
   | "roster"
   /** This account's own answers to an encuesta. */
   | "poll";
@@ -93,4 +98,91 @@ export function seedNotice(source: SeedSource): string | null {
     case "none":
       return null;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Where the numbers come from                                         */
+/* ------------------------------------------------------------------ */
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The ratings in **this browser's own copy of the app**, by player id.
+ *
+ * The owner's seed used to come off the cloud (`fetchOwnRatings`), and for the
+ * owner that was the wrong copy to read. `localStorage` is the copy this app
+ * actually works from — the cloud is a second home, never the source of truth
+ * — and the cloud one only exists at all if that account turned sync on.
+ * Signing in to publish a recap turns nothing on (`lib/syncConsent.ts` is
+ * explicit that it must not), so an organiser who never enabled sync had
+ * `users/{uid}/players` empty, got no seed, and opened their own link to
+ * fourteen dashes. That is the bug this function exists to fix; the cloud read
+ * stays as the second door, for the owner on a phone that has never had the
+ * app open.
+ *
+ * It also costs nothing: no round trip, no permission, and it works on a train.
+ *
+ * **It widens nothing.** What comes back is whatever is already in this
+ * browser's own `fulbito-data` — the same numbers the plantel screen shows on
+ * this device, to the same pair of eyes. Its one caller reads it only when the
+ * account looking at the page is the one the recap belongs to, because
+ * `localStorage` is per browser and not per person: see the note on `loadSeed`
+ * in `RecapPage` for the tablet this guard is about.
+ *
+ * Takes the raw string rather than reading `localStorage` itself so it stays a
+ * module a DOM-free test can run, and so the one definition of the key stays in
+ * `storage.ts`. Parsed by hand rather than through `normalizeAppData`: the only
+ * question being asked is what number to start a puntaje at, and the loader in
+ * `storage.ts` writes a recovery key back out when it meets a corrupt payload,
+ * which is not a side effect a page outside the wall should have. Anything
+ * unreadable is no ratings at all, never a throw.
+ */
+export function ratingsFromAppData(raw: string | null): Map<PlayerId, number> {
+  const out = new Map<PlayerId, number>();
+  if (raw === null || raw === "") return out;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return out;
+  }
+  if (!isRecord(parsed) || !Array.isArray(parsed.players)) return out;
+  for (const entry of parsed.players) {
+    if (!isRecord(entry)) continue;
+    const id: unknown = entry.id;
+    const rating: unknown = entry.rating;
+    if (typeof id !== "string" || id === "") continue;
+    if (typeof rating !== "number" || !Number.isFinite(rating)) continue;
+    // A ficha written before the scale changed carries no `ratingScale` and
+    // means 1–10, so a 7 there is a 70 here. Same read `fetchOwnRatings` does.
+    const scale = typeof entry.ratingScale === "number" ? entry.ratingScale : undefined;
+    out.set(id as PlayerId, toCurrentScale(rating, scale));
+  }
+  return out;
+}
+
+/**
+ * Whether the page knows yet whether this account has already sent a ballot.
+ *
+ * A puntaje carries no uid, so the only handle anybody has on their own answers
+ * is the marker at `voters/{uid}` — one `getDoc`, fired when the page opens. The
+ * form must not open until that has come back, and the "yes, but" is the reason
+ * this is a function with a test rather than an `&&` in a component:
+ *
+ * - **Waiting is the point.** Firestore serves the recap from its persistent
+ *   cache on a reload, so the snapshot (ballots included) lands *before* the
+ *   marker does. Seeding on "no marker yet" therefore opened a returning
+ *   voter's form on a seed — or on nothing — and then never corrected itself,
+ *   because seeding happens once per uid. They had sent fourteen numbers and
+ *   the page showed them dashes.
+ * - **A marker read under one session says nothing about another.** The page
+ *   mints an anonymous uid on open and replaces it the moment somebody signs
+ *   in with Google. "Nothing filed" is true of the throwaway session and tells
+ *   you nothing about the account that just arrived, so the answer is pinned to
+ *   the uid it was asked about and is simply not an answer for any other.
+ */
+export function ballotKnown(marker: { uid: string } | null, uid: string | null): boolean {
+  return marker !== null && uid !== null && marker.uid === uid;
 }

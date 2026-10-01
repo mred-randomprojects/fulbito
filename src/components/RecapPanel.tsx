@@ -260,13 +260,22 @@ export function RecapPanel({ match, players, recap: watched }: Props) {
     return (
       <Section>
         <Heading />
+        {/* Kept in step with what the page actually does, which this had
+            fallen behind on twice over: the puntajes are anonymous ballots now,
+            so "las ves sólo vos" was never going to be the promise — you see
+            the planillas and not whose they are — and the page shows the
+            grupo's promedio once two people have given a nota, which this used
+            to promise it never did. A cartel that is wrong about a puntaje is
+            the one kind of wrong this app cannot afford. */}
         <p className="mb-2 text-sm leading-relaxed text-muted-foreground">
           Se manda un link al grupo con el resultado y las dos formaciones. El
           que lo abre ve cómo salió; si entra con Google puede ponerle nota a
-          cada uno, votar la figura y comentar. Las notas y lo que escriben de
-          cada jugador las ves sólo vos, acá — en la página no se muestran, ni
-          las de uno ni el promedio; los comentarios sí los lee todo el grupo.
-          Tus notas, la plata y todo lo que escribiste para vos no salen.
+          cada uno, votar la figura y comentar. Las notas son anónimas: vas a
+          ver cuántas planillas llegaron acá y el promedio de cada jugador
+          tocándolo en la cancha, pero no de quién es cada nota — ni vos. En la
+          página también se muestra el promedio del grupo, recién cuando hay dos
+          notas. Los comentarios los lee todo el grupo, con nombre. Tus notas,
+          la plata y todo lo que escribiste para vos no salen.
         </p>
         <Button className="w-full" disabled={busy} onClick={() => void publish()}>
           {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
