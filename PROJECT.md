@@ -315,7 +315,7 @@ gate, including tooltips and charts.
 | `lib/matchNotes.ts` | Whether a match has a note on it, and what a list row shows of it |
 | `lib/reviews.ts` | What counts as a line of the uno x uno, and one player's history of them |
 | `lib/recap.ts` | El tercer tiempo: what a finished match publishes and what it never does, plus the comments and ballots that come back |
-| `lib/recapSeed.ts` | What a recap's uno x uno opens pre-filled with — the reader's own ratings, off this browser or off their own cloud copy, or their own encuesta answers — when it is allowed to fill at all, and what the page has to say about where the numbers came from |
+| `lib/recapSeed.ts` | What a recap's uno x uno opens pre-filled with — the reader's own ratings, off the copy this browser already holds or off their own cloud island, or their own encuesta answers — when it is allowed to fill at all, and what the page has to say about where the numbers came from |
 | `lib/recapFeedback.ts` | What the grupo's puntajes add up to: a median per player, the thumbs, la figura, and taking a line into the uno x uno |
 | `useMatchRecap.ts` | The recap of the match that is open, watched once and handed to the panel and the player's card |
 | `lib/video.ts` | What an address pasted onto a match is — YouTube, Vimeo, Drive, a file, a link, or nothing — what a player needs to show it, the same link twice, and the lines the chat gets |
@@ -766,6 +766,40 @@ edited one — reload stale tabs before a torneo night.
 
 Signing in is optional, and everything about the design follows from that.
 
+**A uid is not a person, and this project has the receipts.** Every island,
+every `ownerUid` and every one-vote-per-account marker in this app hangs off
+`request.auth.uid`, which is stable for exactly as long as the auth account
+behind it is — not as long as the Google address is. Rebuild the Firebase
+project, rotate the web config, delete a user out of the console, and the next
+sign-in with the same address mints a **new** uid. The organiser of this app's
+own grupo has six of them under one address, dated April to September 2026, one
+per web-app config the browser has ever seen (`firebase:authUser:<apiKey>` is
+the key those sessions are stored under, so each config is a fresh session and
+a fresh sign-in). The live one is not the one that published the partido of
+29/9.
+
+What that costs, so nobody is surprised by it twice:
+
+- The cloud copy is split across up to six islands, and a device syncing under
+  one of them is not syncing with a device under another.
+- Only the uid in `ownerUid` can close, re-publish or take down a recap, read
+  its `identities`, or set a ballot aside. The others are refused by the rules,
+  correctly.
+- `voters/{uid}` means one ballot *per account*, so one person with six
+  accounts is six ballots, and a ballot sent under an old uid cannot be found
+  again under the new one.
+- Anything keyed off the **address** rather than the uid is unaffected, which
+  is why "Ver como" and the super-admin reads kept working throughout:
+  `isSiteOwner()` and `isSuperAdmin()` compare `request.auth.token.email`.
+
+Two things follow for anybody changing code here. **Never use a uid as a stand
+in for "this person" where a cheaper, local signal exists** — `readOwnCopy` in
+`lib/recapSeed.ts` is the worked example: it asks whether this browser holds
+the match instead of whether this account published it, and it is right where
+the uid test was wrong. And **merging the islands is a data migration**: it
+rewrites stored documents under a different key, so it stops and asks and takes
+a backup first, per `AGENTS.md`.
+
 The cloud copy is **one document per record** — `users/{uid}/players/{id}`,
 `users/{uid}/matches/{id}`, `users/{uid}/teams/{id}`, and
 `users/{uid}/meta/tombstones` — not the single
@@ -1141,24 +1175,41 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   and have nothing to copy from — from exactly one of three places, every one
   of them the reader's own, tried in this order by `loadSeed`:
 
-  1. **The owner's plantel in this browser's own copy of the app**
-     (`ratingsFromAppData`, off `localStorage` under `STORAGE_KEY`). First
-     because `localStorage` is the copy this app works from and the cloud is a
-     second home; because it costs no round trip and works with no signal; and
-     because the cloud copy **does not exist** unless that account turned sync
-     on. Signing in to publish a recap turns nothing on — `lib/syncConsent.ts`
-     is deliberate about that — so an organiser who never enabled sync opened
-     their own link to fourteen dashes, which is the bug this door was added to
-     fix. It widens nothing: it is the same numbers the plantel screen already
-     shows in the same browser, to the same pair of eyes. It is behind
-     `uid === ownerUid` all the same, because `localStorage` is per browser and
-     not per person — a grupo member signing in on the tablet the organiser's
-     copy lives on would otherwise be seeded off somebody else's plantel under a
-     notice calling it theirs, with their own encuesta answers sitting unread in
-     door 3.
+  1. **The plantel in the copy of the app this browser already holds**
+     (`readOwnCopy`, off `localStorage` under `STORAGE_KEY`). First because
+     `localStorage` is the copy this app works from and the cloud is a second
+     home; because it costs no round trip and works with no signal; and because
+     it is the only door that does not depend on a uid.
+
+     **It is opened by the match, not by the account, and that is the whole
+     lesson of this bug.** The obvious test — "is the account looking at this
+     page the one that published it?" — shipped first and failed on the one
+     reader it was certain to have numbers for. A Firebase uid is stable only
+     for as long as the auth account behind it is; this project's own organiser
+     had collected six of them under one Google address across a year of
+     rebuilding the backend, and the session that was live was not the session
+     that had published the recap. So the question asked is **does this browser
+     hold the very match this link is about?** Match ids come out of
+     `crypto.randomUUID`, so the only browser that can answer yes is one the
+     organiser set that game up in, and no sign-in, sign-out or new uid changes
+     the answer.
+
+     It widens nothing, which is why it may be that loose: everything it returns
+     is already in `localStorage` on that device, so the plantel screen shows the
+     same numbers in the same browser to the same pair of eyes, with no sign-in
+     and no permission. Nothing is fetched and nothing leaves. The one cost is a
+     label — somebody borrowing the organiser's phone reads "los niveles que
+     tenés cargados en tu plantel" over numbers that are not theirs, on a device
+     where they could have opened the plantel themselves.
   2. **The owner's own plantel out of the cloud** (`fetchOwnRatings`, their
      uid, the one time a page outside the wall reads a roster and it can only
-     ever read the reader's), for the phone that has never had the app open.
+     ever read the reader's), for the phone that has never had the app open. It
+     *is* behind `uid === ownerUid`, because an island is keyed by uid and there
+     is no other way to ask — and when the uid has moved on it correctly comes
+     back with nothing. It also needs sync to have been turned on at all:
+     signing in to publish a recap turns nothing on (`lib/syncConsent.ts` is
+     deliberate about that), so for an organiser who never enabled it this
+     collection is simply empty.
   3. **This account's own answers to the encuesta the recap points at**
      (`pollId` → `voters/{uid}` → their own ballot, all three readable by that
      account under the rules that were already there).

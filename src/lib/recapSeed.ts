@@ -11,9 +11,10 @@ import type { PlayerVerdict } from "./recap.js";
  * from zero means typing fourteen numbers that mostly repeat what you already
  * said, which is how a page gets answered by three people and abandoned by
  * eleven. So the form opens pre-filled, and the only thing that is ever
- * pre-filled is **your own** numbers: the plantel in this browser's own copy of
- * the app, the same roster off the cloud when the reader is the recap's owner,
- * or your own encuesta answers under your own account.
+ * pre-filled is **your own** numbers: the plantel in the copy of the app this
+ * browser already holds — asked for by the match, not by the account, see
+ * `readOwnCopy` — the same roster off the cloud when the reader's uid owns the
+ * recap, or your own encuesta answers under your own account.
  *
  * Two things this module is careful about, and they are the whole of it.
  *
@@ -40,9 +41,9 @@ export type SeedSource =
   /** A ballot this account already sent for this match. Not a seed at all. */
   | "mine"
   /**
-   * The owner's own plantel, on the owner's own screen: this browser's own copy
-   * of the app first, the owner's cloud roster second. See `ratingsFromAppData`
-   * for why the local one goes first.
+   * The owner's own plantel, on the owner's own screen: the copy this browser
+   * already holds first, the owner's cloud roster second. See `readOwnCopy` for
+   * why the local one goes first and why it is not gated on a uid.
    */
   | "roster"
   /** This account's own answers to an encuesta. */
@@ -109,27 +110,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * The ratings in **this browser's own copy of the app**, by player id.
+ * What this browser's own copy of the app knows about a match: whether it holds
+ * it at all, and the ratings on the plantel it would start a puntaje from.
  *
- * The owner's seed used to come off the cloud (`fetchOwnRatings`), and for the
- * owner that was the wrong copy to read. `localStorage` is the copy this app
- * actually works from — the cloud is a second home, never the source of truth
- * — and the cloud one only exists at all if that account turned sync on.
- * Signing in to publish a recap turns nothing on (`lib/syncConsent.ts` is
- * explicit that it must not), so an organiser who never enabled sync had
- * `users/{uid}/players` empty, got no seed, and opened their own link to
- * fourteen dashes. That is the bug this function exists to fix; the cloud read
- * stays as the second door, for the owner on a phone that has never had the
- * app open.
+ * **This is the identity test for the pre-filled form, and it is deliberately
+ * not the uid.** The obvious test — "is the account looking at this page the
+ * one that published it?" — is the one that was tried and that broke. A Firebase
+ * uid is stable only for as long as the auth account behind it is, and in this
+ * project one person's Google address has collected six of them across a year
+ * of rebuilding the backend; the live session was simply not the session that
+ * had published the recap, so the organiser opened their own link to fourteen
+ * dashes with the whole plantel sitting in the same browser. The cloud roster
+ * cannot be read any other way — an island is keyed by uid and that is what
+ * makes it safe — but the copy on this device needs no permission at all, so it
+ * does not have to ask that question. It asks a better one: **does this browser
+ * hold the very match this link is about?** Match ids come out of
+ * `crypto.randomUUID`, so the only browser that can answer yes is one the
+ * organiser set that game up in.
  *
- * It also costs nothing: no round trip, no permission, and it works on a train.
- *
- * **It widens nothing.** What comes back is whatever is already in this
- * browser's own `fulbito-data` — the same numbers the plantel screen shows on
- * this device, to the same pair of eyes. Its one caller reads it only when the
- * account looking at the page is the one the recap belongs to, because
- * `localStorage` is per browser and not per person: see the note on `loadSeed`
- * in `RecapPage` for the tablet this guard is about.
+ * **It widens nothing, and that is why it may be this loose.** Everything it
+ * returns is already in `localStorage` on this device, which means the plantel
+ * screen of the app shows the same numbers in the same browser to the same pair
+ * of eyes, with no sign-in and no permission. Nothing is fetched, nothing
+ * leaves, and a browser that does not hold the match gets an empty map. The one
+ * cost is a label: somebody else borrowing the organiser's phone sees "los
+ * niveles que tenés cargados en tu plantel" over numbers that are not theirs —
+ * on a device where they could have opened the plantel themselves.
  *
  * Takes the raw string rather than reading `localStorage` itself so it stays a
  * module a DOM-free test can run, and so the one definition of the key stays in
@@ -137,18 +143,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * question being asked is what number to start a puntaje at, and the loader in
  * `storage.ts` writes a recovery key back out when it meets a corrupt payload,
  * which is not a side effect a page outside the wall should have. Anything
- * unreadable is no ratings at all, never a throw.
+ * unreadable is "this browser knows nothing", never a throw.
  */
-export function ratingsFromAppData(raw: string | null): Map<PlayerId, number> {
-  const out = new Map<PlayerId, number>();
-  if (raw === null || raw === "") return out;
+export interface OwnCopy {
+  /** Whether this browser's own data holds the match the recap is about. */
+  knowsMatch: boolean;
+  /** The plantel's ratings, by player id. Empty unless `knowsMatch`. */
+  ratings: Map<PlayerId, number>;
+}
+
+export function readOwnCopy(raw: string | null, matchId: string): OwnCopy {
+  const nothing: OwnCopy = { knowsMatch: false, ratings: new Map() };
+  if (raw === null || raw === "" || matchId === "") return nothing;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return out;
+    return nothing;
   }
-  if (!isRecord(parsed) || !Array.isArray(parsed.players)) return out;
+  if (!isRecord(parsed) || !Array.isArray(parsed.matches)) return nothing;
+  const knowsMatch = parsed.matches.some(
+    (match) => isRecord(match) && match.id === matchId,
+  );
+  // Before the plantel is walked at all: a visitor who runs their own grupo on
+  // this device is a few megabytes of avatars, and there is nothing in them for
+  // a match they have never heard of.
+  if (!knowsMatch || !Array.isArray(parsed.players)) return nothing;
+
+  const ratings = new Map<PlayerId, number>();
   for (const entry of parsed.players) {
     if (!isRecord(entry)) continue;
     const id: unknown = entry.id;
@@ -158,9 +180,9 @@ export function ratingsFromAppData(raw: string | null): Map<PlayerId, number> {
     // A ficha written before the scale changed carries no `ratingScale` and
     // means 1–10, so a 7 there is a 70 here. Same read `fetchOwnRatings` does.
     const scale = typeof entry.ratingScale === "number" ? entry.ratingScale : undefined;
-    out.set(id as PlayerId, toCurrentScale(rating, scale));
+    ratings.set(id as PlayerId, toCurrentScale(rating, scale));
   }
-  return out;
+  return { knowsMatch, ratings };
 }
 
 /**

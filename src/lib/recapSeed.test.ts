@@ -4,7 +4,7 @@ import { RATING_MAX, RATING_MIN, type PlayerId } from "../types.js";
 import {
   ballotKnown,
   hasSeed,
-  ratingsFromAppData,
+  readOwnCopy,
   seedNotice,
   seedScores,
 } from "./recapSeed.js";
@@ -101,37 +101,60 @@ describe("seedNotice", () => {
   });
 });
 
-describe("ratingsFromAppData", () => {
+describe("readOwnCopy", () => {
+  const MATCH = "match-3291";
+
   /** What `storage.ts` keeps under `fulbito-data`, cut down to what this reads. */
-  function appData(players: unknown[]): string {
-    return JSON.stringify({ players, matches: [], teams: [] });
+  function appData(players: unknown[], matchIds: string[] = [MATCH]): string {
+    return JSON.stringify({
+      players,
+      matches: matchIds.map((id) => ({ id, name: "Fecha 3", squad: [] })),
+      teams: [],
+    });
   }
 
-  it("reads the plantel in this browser's own copy", () => {
-    const ratings = ratingsFromAppData(
+  it("reads the plantel when this browser holds the match", () => {
+    const own = readOwnCopy(
       appData([
         { id: "maxi", name: "Maxi", rating: 72, ratingScale: 100 },
         { id: "juan", name: "Juan", rating: 61, ratingScale: 100 },
       ]),
+      MATCH,
     );
-    assert.deepEqual([...ratings], [
+    assert.equal(own.knowsMatch, true);
+    assert.deepEqual([...own.ratings], [
       [MAXI, 72],
       [JUAN, 61],
     ]);
   });
 
   /**
-   * The whole point of reading the local copy: it is there for an organiser who
-   * never turned sync on, which is the case that opened the page to fourteen
-   * dashes for the person who published it.
+   * The whole reason this is asked by match and not by uid. A Firebase uid is
+   * stable only for as long as the auth account behind it is, and the organiser
+   * whose link this is had six of them: the session that was live was not the
+   * one that published the recap, so every uid-shaped test shut the door on the
+   * one person the page was certain to have numbers for. The match is in this
+   * browser or it is not, and no sign-in can change the answer.
    */
-  it("gets the owner a seed with no cloud involved at all", () => {
+  it("needs no session, and no uid to match anything", () => {
     const seeded = seedScores(
       [MAXI, JUAN],
-      ratingsFromAppData(appData([{ id: "maxi", rating: 72, ratingScale: 100 }])),
+      readOwnCopy(appData([{ id: "maxi", rating: 72, ratingScale: 100 }]), MATCH).ratings,
     );
     assert.equal(hasSeed(seeded), true);
     assert.deepEqual(seeded, { maxi: { score: 72 } });
+  });
+
+  /**
+   * A visitor who runs their own grupo on this device holds their own matches
+   * and not this one, so nothing of theirs is read at all — not even walked:
+   * their plantel is a few megabytes of avatars with nothing in it for a game
+   * they were never at.
+   */
+  it("hands back nothing at all for a browser that does not hold the match", () => {
+    const own = readOwnCopy(appData([{ id: "maxi", rating: 72 }], ["otro-partido"]), MATCH);
+    assert.equal(own.knowsMatch, false);
+    assert.equal(own.ratings.size, 0);
   });
 
   /**
@@ -139,12 +162,11 @@ describe("ratingsFromAppData", () => {
    * 1–10. Without the conversion the form would open with everybody on a 7.
    */
   it("brings an old 1-10 ficha up to the current scale", () => {
-    const ratings = ratingsFromAppData(appData([{ id: "maxi", rating: 7 }]));
-    assert.equal(ratings.get(MAXI), 70);
+    assert.equal(readOwnCopy(appData([{ id: "maxi", rating: 7 }]), MATCH).ratings.get(MAXI), 70);
   });
 
   it("skips anybody with no usable number rather than inventing one", () => {
-    const ratings = ratingsFromAppData(
+    const own = readOwnCopy(
       appData([
         { id: "maxi", rating: "72" },
         { id: "juan", rating: Number.NaN },
@@ -152,26 +174,37 @@ describe("ratingsFromAppData", () => {
         { id: "gordo", rating: 90, ratingScale: 100 },
         "not a player",
       ]),
+      MATCH,
     );
-    assert.deepEqual([...ratings.keys()], [GORDO]);
+    assert.deepEqual([...own.ratings.keys()], [GORDO]);
   });
 
-  /** Nothing readable is no ratings, never a throw: this runs on a page anybody opens. */
+  /** Nothing readable is nothing known, never a throw: this page is opened by anybody. */
   it("comes back empty rather than throwing on anything unreadable", () => {
-    for (const raw of [null, "", "{", "null", "[]", '{"players":{}}', '{"players":[null]}']) {
-      assert.deepEqual([...ratingsFromAppData(raw)], [], `on ${JSON.stringify(raw)}`);
+    for (const raw of [null, "", "{", "null", "[]", '{"matches":{}}', '{"matches":[null]}']) {
+      const own = readOwnCopy(raw, MATCH);
+      assert.equal(own.knowsMatch, false, `on ${JSON.stringify(raw)}`);
+      assert.equal(own.ratings.size, 0, `on ${JSON.stringify(raw)}`);
     }
+    // And a match id nobody passed is not a match everybody holds.
+    assert.equal(readOwnCopy(appData([{ id: "maxi", rating: 72 }], [""]), "").knowsMatch, false);
   });
 
   /**
-   * The second line of defence, under the `uid === ownerUid` gate the caller
-   * puts in front of this: a plantel that is not this recap's is not a seed for
-   * this recap, whoever is looking. The recap's own list of players is the
-   * authority, the same call `normalizeReview` and `lib/poll.ts` make.
+   * The second line of defence: the recap's own list of players is the
+   * authority over what a ballot may say, the same call `normalizeReview` and
+   * `lib/poll.ts` make, so a plantel that has moved on cannot seed a puntaje
+   * for somebody who was not on the pitch.
    */
-  it("gives a visitor with their own plantel nothing of this recap's", () => {
-    const theirs = ratingsFromAppData(appData([{ id: "someone-else", rating: 80, ratingScale: 100 }]));
-    assert.equal(hasSeed(seedScores([MAXI, JUAN], theirs)), false);
+  it("only ever seeds the people the recap itself lists", () => {
+    const own = readOwnCopy(
+      appData([
+        { id: "maxi", rating: 72, ratingScale: 100 },
+        { id: "gordo", rating: 90, ratingScale: 100 },
+      ]),
+      MATCH,
+    );
+    assert.deepEqual(Object.keys(seedScores([MAXI], own.ratings)), ["maxi"]);
   });
 });
 

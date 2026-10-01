@@ -34,7 +34,7 @@ import { voteRating } from "@/lib/poll";
 import {
   ballotKnown,
   hasSeed,
-  ratingsFromAppData,
+  readOwnCopy,
   seedNotice,
   seedScores,
   type SeedSource,
@@ -276,12 +276,12 @@ export function RecapPage() {
    * In order: a ballot this account already sent for this match wins outright
    * — coming back to change one puntaje must not reset the other thirteen.
    * Failing that it is seeded, and the only thing anybody is ever seeded with
-   * is **their own** numbers: the plantel in this browser's own copy of the
-   * app, the same roster off the cloud when the reader owns the recap, or this
-   * account's own answers to the encuesta the recap points at. `loadSeed` at
-   * the bottom of this file has the three doors in order and why; the page says
-   * out loud above the rows which one it came through, which is the point of
-   * keeping that sentence in a tested module.
+   * is **their own** numbers: the plantel in the copy of the app this browser
+   * already holds, the same roster off the cloud when the reader's uid owns the
+   * recap, or this account's own answers to the encuesta the recap points at.
+   * `loadSeed` at the bottom of this file has the three doors in order and why;
+   * the page says out loud above the rows which one it came through, which is
+   * the point of keeping that sentence in a tested module.
    *
    * **Waits for two answers, and both waits were paid for in bugs.** `setUid`
    * runs before `watchRecap` resolves, so seeding on "there is a uid" seeded an
@@ -321,7 +321,7 @@ export function RecapPage() {
     let live = true;
 
     void (async () => {
-      const seeded = await loadSeed(uid, recap.ownerUid, recap.pollId, ids);
+      const seeded = await loadSeed(uid, recap, ids);
       // Nothing is overwritten on arrival: somebody who started typing while
       // this was in flight has said something, and a seed never beats that.
       if (!live || seeded === null) return;
@@ -761,67 +761,59 @@ function ownAppData(): string | null {
  * Three doors, in this order, and every one of them leads to the reader's own
  * data:
  *
- * - **The owner's plantel in this browser's own copy of the app**, read
- *   straight out of `localStorage` — see `ratingsFromAppData`. First because
- *   that is the copy the app actually works from, because it needs no network
- *   and no permission, and because the cloud one *does not exist* for an
- *   organiser who never turned sync on: signing in to publish a recap turns
- *   nothing on, so the door below opened on an empty collection and the person
- *   who published the page got fourteen dashes on it. That was the bug.
+ * - **The plantel in the copy of the app this browser already holds**, read
+ *   straight out of `localStorage`, and opened by *the match* rather than by
+ *   the account — `readOwnCopy` carries that argument in full. First because it
+ *   is the copy the app actually works from, because it needs no network and no
+ *   permission, and because it is the only one of the three that survives the
+ *   reader's uid changing underneath them, which is the thing that was actually
+ *   wrong: the organiser's live session was not the session that had published
+ *   the recap, so the two uid-shaped doors below both shut on the one person
+ *   the page was certain to have numbers for.
  * - **The owner's plantel out of the cloud** (`fetchOwnRatings`), for the phone
- *   that has never had the app open on it. The rules give an account its own
- *   documents and nobody else's, so this can never show somebody else's
- *   ratings.
+ *   that has never had the app open on it. Behind `uid === ownerUid` because an
+ *   island is keyed by uid and there is no other way to ask: the rules give an
+ *   account its own documents and nobody else's, so this can never show
+ *   somebody else's ratings — and when the uid has moved on, it correctly shows
+ *   nothing.
  * - **Anybody else** reads their own answers to the encuesta the recap points
  *   at: the marker at `voters/{uid}` names their ballot and the rules let that
  *   account — and only the owner, the super admins and it — read that ballot.
  *   `fetchMyBallotId` is used rather than `claimBallotId` on purpose: claiming
  *   would spend somebody's single vote on a poll they never opened.
  *
- * **Both of the first two are behind `uid === ownerUid`, and the local one is
- * behind it for a reason worth writing down.** `localStorage` is per browser,
- * not per person: a grupo member signing in on a tablet where the organiser's
- * copy of the app lives is a real arrangement, and seeding *them* off it would
- * put the organiser's numbers in their form under a notice that calls it "tu
- * plantel" — not a leak, since the plantel screen is one tap away in that same
- * browser, but the wrong numbers wearing the wrong label, and their own
- * encuesta answers are sitting right there in the third door. The account that
- * is looking has to be the account the recap belongs to. An unsigned owner
- * therefore gets nothing until they sign in, which they have to do to send
- * anything anyway.
- *
  * Any failure is a form that opens empty, which is what the page did before
- * and is never worth an error on screen. An anonymous session reads nothing at
- * all: no plantel, and `voters/{uid}` under a throwaway uid is a document that
- * does not exist.
+ * and is never worth an error on screen. A device with no app data and no
+ * session reads nothing at all, and `voters/{uid}` under a throwaway uid is a
+ * document that does not exist.
  */
 async function loadSeed(
   uid: string,
-  ownerUid: string,
-  pollId: string,
+  recap: Recap,
   ids: readonly PlayerId[],
 ): Promise<{ scores: Partial<Record<PlayerId, PlayerVerdict>>; source: SeedSource } | null> {
-  // Before any `await`, so the owner's own form fills without waiting on
+  // Before any `await`, so the organiser's own form fills without waiting on
   // Firebase at all — and fills on a train, where the rest of this returns
   // nothing.
-  if (uid === ownerUid) {
-    const own = seedScores(ids, ratingsFromAppData(ownAppData()));
-    if (hasSeed(own)) return { scores: own, source: "roster" };
+  const own = readOwnCopy(ownAppData(), recap.id);
+  if (own.knowsMatch) {
+    const scores = seedScores(ids, own.ratings);
+    if (hasSeed(scores)) return { scores, source: "roster" };
   }
 
   try {
     const { db } = await loadCloud();
 
-    if (uid === ownerUid) {
+    if (uid === recap.ownerUid) {
       const ratings = await fetchOwnRatings(db, uid);
       const scores = seedScores(ids, ratings);
       return hasSeed(scores) ? { scores, source: "roster" } : null;
     }
 
-    if (pollId === "") return null;
-    const ballotId = await fetchMyBallotId(db, pollId, uid);
+    if (recap.pollId === "") return null;
+    const ballotId = await fetchMyBallotId(db, recap.pollId, uid);
     if (ballotId === null) return null;
-    const ballot = await fetchBallot(db, pollId, ballotId);
+    const ballot = await fetchBallot(db, recap.pollId, ballotId);
     if (ballot === null) return null;
 
     const ratings = new Map<PlayerId, number>();
