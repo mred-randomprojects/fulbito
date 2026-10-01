@@ -780,6 +780,10 @@ store. Two consequences, one practical and one that matters:
   one account per address ("Link accounts that use the same email" is on). This
   was misread once, during the tercer tiempo seed bug, as a uid that had changed
   under its owner; it had not.
+- **Quota:** `localStorage`'s ~5 MB is per origin, so it is shared with every
+  sibling. `fulbito-data` and its full `fulbito-data-backup` copy hold the whole
+  plantel, photos included, twice — Fulbito is the likeliest app to fill it, and
+  a `StorageQuotaError` here may be another app's bytes, not ours.
 - **Secrecy:** every app on this origin can read `fulbito-data` — every rating
   in the plantel — and Fulbito's Firebase session out of IndexedDB. Today that
   is all the same author's code, so no extra *person* can read a puntaje; but a
