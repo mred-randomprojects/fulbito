@@ -1232,6 +1232,15 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   sentence stays, and `recapSeed.test.ts` still pins it, because somebody
   seeing numbers they did not type deserves to know where they came from — and
   because the day a ballot carries a name again, that test has to go red.
+- **Every promise is said once, where it applies.** The page used to explain
+  the anonymity three times and show the sign-in box three times, and read like
+  terms and conditions. Now there are four sentences and each sits where it is
+  true: "son anónimas" over the rows, "va con tu nombre" over the thread, the
+  address beside the comment button — the only act that stores one — and the
+  promedio's floor on the row that is waiting for it. Shortening the page further
+  must keep all four. Dropping one is not a tidy-up: somebody writing a harsh
+  line about a teammate because they thought the thread was private is exactly
+  the failure the second one prevents.
 - **Four ways to say how somebody played**, because they answer different
   moods: a thumb (the quick pass down the team), a 0–100 puntaje, a line of
   text, and one vote for la figura per person. All optional, all on the same

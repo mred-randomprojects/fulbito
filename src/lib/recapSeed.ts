@@ -87,15 +87,11 @@ export function hasSeed(scores: Partial<Record<PlayerId, PlayerVerdict>>): boole
 export function seedNotice(source: SeedSource): string | null {
   switch (source) {
     case "mine":
-      return "Estos son los puntajes que mandaste. Cambiá lo que quieras y volvé a mandar.";
+      return "Estas son las notas que mandaste. Cambiá lo que quieras.";
     case "roster":
-      return "Arrancamos con los niveles que tenés cargados en tu plantel. Ajustá según cómo jugó hoy.";
+      return "Arrancamos con los niveles de tu plantel. Ajustalos según cómo jugaron hoy.";
     case "poll":
-      return (
-        "Arrancamos con lo que habías puesto en la encuesta, para que ajustes " +
-        "lo que haga falta después de verlos jugar. Esto también es anónimo: " +
-        "nadie va a saber cuál de las notas es la tuya."
-      );
+      return "Arrancamos con lo que pusiste en la encuesta. Ajustá lo que haga falta: también es anónimo.";
     case "none":
       return null;
   }

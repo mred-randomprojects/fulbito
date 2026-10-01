@@ -537,18 +537,14 @@ export function RecapPage() {
 
       <section className="mb-6">
         <h2 className="mb-1 text-xl font-semibold tracking-tight">El uno x uno</h2>
+        {/* One line, and the promise in it is the one that makes the numbers
+            honest. Everything this paragraph used to explain is said where it
+            happens instead: the promedio's floor on the row that is waiting for
+            it, the name on a comment beside the comment box. */}
         <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-          <span className="text-foreground">
-            Tocá a cada uno y ponele la nota
-          </span>{" "}
-          — de 0 a 100, un pulgar para arriba o para abajo, y la estrella al que
-          fue la figura. El casillero de la derecha es tu nota: mientras diga
-          «—» todavía no le pusiste.{" "}
-          <span className="text-foreground">Nadie sabe qué puso cada uno</span>{" "}
-          — las notas son anónimas, como la encuesta: se muestra el promedio del
-          grupo recién cuando hay dos, y ni el que armó el partido puede ver de
-          quién es cada planilla. Si querés decir algo con tu nombre, es abajo en
-          los comentarios.
+          Tocá a cada uno y ponele nota.{" "}
+          <span className="text-foreground">Son anónimas</span>: nadie sabe qué
+          puso cada uno, ni el que armó el partido.
         </p>
 
         {!recap.closed && author === null && (
@@ -558,19 +554,12 @@ export function RecapPage() {
         )}
 
         {/* Where the numbers in the form came from, said before anybody sends
-            them. In the encuesta case this is the sentence that keeps a
-            promise honest — those answers were given anonymously, and what
-            goes from here goes with a name on it. `lib/recapSeed.ts` owns the
-            wording and a test pins it. */}
+            them. `lib/recapSeed.ts` owns the wording and a test pins it. It
+            used to be amber in the encuesta case, as a warning that anonymous
+            answers were about to go out signed; ballots are anonymous now, so
+            it is one quiet line whatever the source. */}
         {seedNotice(source) !== null && (
-          <p
-            className={cn(
-              "mb-3 rounded-lg border px-3 py-2 text-xs leading-relaxed",
-              source === "poll"
-                ? "border-amber-500/40 bg-amber-500/5 text-amber-200"
-                : "border-border bg-muted/40 text-muted-foreground",
-            )}
-          >
+          <p className="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {seedNotice(source)}
           </p>
         )}
@@ -612,10 +601,6 @@ export function RecapPage() {
           />
         </div>
 
-        {!recap.closed && author === null && (
-          <SignIn onEnter={() => void enter()} />
-        )}
-
         {/* Sticky, and that is the fix rather than a flourish.
             It used to sit at the very bottom of fourteen rows, so on a phone
             you scored four people, never scrolled past the last one, and left
@@ -654,8 +639,8 @@ export function RecapPage() {
       <section className="mb-6">
         <h2 className="mb-1 text-lg font-semibold tracking-tight">El debate</h2>
         <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-          Lo que digas acá lo lee cualquiera que tenga el link, con tu nombre
-          al lado. Portate bien, o no.
+          Esto sí va con tu nombre y lo lee cualquiera con el link. Portate bien,
+          o no.
         </p>
 
         <ul className="mb-3 space-y-2">
@@ -717,6 +702,15 @@ export function RecapPage() {
               )}
               Decir lo mío
             </Button>
+            {/* The promise about the address, beside the only act that stores
+                one — `postComment` writes `identities/{uid}`; signing in and
+                scoring do not. `identities` is readable by the recap's owner
+                and the super admins, and the panel shows the owner what is
+                there; this sentence is what makes that honest. */}
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Si comentás, tu mail queda guardado y no se muestra: lo ven sólo el
+              que armó el partido y los que mantienen la app.
+            </p>
           </div>
         )}
       </section>
@@ -734,17 +728,6 @@ export function RecapPage() {
 
       {error !== null && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-      <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-        Las notas y la figura van{" "}
-        <strong className="font-medium text-foreground">sin tu nombre</strong>: se
-        guardan sueltas, nadie — ni el que armó el partido — puede ver cuál es la
-        tuya, y lo que se muestra es el promedio del grupo, recién a partir de
-        dos notas. Una por cuenta, y la podés cambiar las veces que quieras. Los
-        comentarios son al revés: ésos los lee cualquiera con el link y van con
-        tu nombre, que es lo que los mantiene civilizados. Tu mail queda guardado
-        por si comentás, y no se muestra: lo ven el que armó el partido y los que
-        mantienen la app.
-      </p>
     </Shell>
   );
 }
@@ -770,18 +753,14 @@ function ownAppData(): string | null {
  * - **The plantel in the copy of the app this browser already holds**, read
  *   straight out of `localStorage`, and opened by *the match* rather than by
  *   the account — `readOwnCopy` carries that argument in full. First because it
- *   is the copy the app actually works from, because it needs no network and no
- *   permission, and because it is the only one of the three that survives the
- *   reader's uid changing underneath them, which is the thing that was actually
- *   wrong: the organiser's live session was not the session that had published
- *   the recap, so the two uid-shaped doors below both shut on the one person
- *   the page was certain to have numbers for.
+ *   is the copy the app actually works from, and because it needs no network,
+ *   no permission and no session: the organiser gets their numbers before they
+ *   have even signed in.
  * - **The owner's plantel out of the cloud** (`fetchOwnRatings`), for the phone
  *   that has never had the app open on it. Behind `uid === ownerUid` because an
  *   island is keyed by uid and there is no other way to ask: the rules give an
  *   account its own documents and nobody else's, so this can never show
- *   somebody else's ratings — and when the uid has moved on, it correctly shows
- *   nothing.
+ *   somebody else's ratings.
  * - **Anybody else** reads their own answers to the encuesta the recap points
  *   at: the marker at `voters/{uid}` names their ballot and the rules let that
  *   account — and only the owner, the super admins and it — read that ballot.
@@ -880,11 +859,11 @@ function SignIn({ onEnter }: { onEnter: () => void }) {
           does not type a 4. The two halves are named separately now, because
           they really are different: the numbers are anonymous, the comments are
           not. */}
+      {/* One line now: both halves of that promise are said right where they
+          apply — "son anónimas" over the rows, "va con tu nombre" over the
+          thread — so this box only has to say what the button is for. */}
       <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
-        Para puntuar o comentar hace falta entrar con Google, así nadie puntúa
-        dos veces. Las notas son anónimas — ni el que armó el partido sabe cuál
-        es la tuya. Lo que escribís en los comentarios sí va con tu nombre.
-        Leer no hace falta nada.
+        Entrá con Google para puntuar y comentar. Para mirar no hace falta.
       </p>
       <Button className="w-full" onClick={onEnter}>
         Entrar con Google
@@ -1007,11 +986,19 @@ function PlayerRow({
                 {pooled.mvp > 0 && <span className="text-amber-400"> · ⭐ {pooled.mvp}</span>}
               </>
             ) : pooled !== null && pooled.scores > 0 ? (
-              <>Falta una nota más para mostrar el promedio</>
-            ) : said === 0 ? (
-              writable ? "Tocá para puntuarlo" : "Sin nota tuya"
+              <>Falta una nota más para el promedio</>
+            ) : verdict?.thumb === "up" ? (
+              "👍 Jugó bien"
+            ) : verdict?.thumb === "down" ? (
+              "👎 Jugó mal"
+            ) : said === 0 && writable ? (
+              "Tocá para puntuarlo"
             ) : (
-              `${said} ${said === 1 ? "cosa dicha" : "cosas dichas"}`
+              // A blank line rather than no line: the rows sit side by side on
+              // a laptop and have to stay the same height. "Sin nota tuya" and
+              // "1 cosa dicha" used to go here, under a box that already says
+              // the same thing with a number.
+              "\u00a0"
             )}
           </span>
         </span>
@@ -1145,8 +1132,8 @@ function PlayerRow({
                   it. An anonymous line about a named person is the one
                   combination with nothing to recommend it. */}
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                ¿Querés decir algo de {player.name}? Es abajo, en los
-                comentarios — eso va con tu nombre.
+                ¿Algo para decir de {player.name}? Abajo en los comentarios, con
+                tu nombre.
               </p>
             </>
           )}
