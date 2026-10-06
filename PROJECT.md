@@ -308,6 +308,7 @@ gate, including tooltips and charts.
 | `lib/keepers.ts` | Who can actually go in goal, how many of Repartir's teams ended up without one, and who is being played outfield anyway |
 | `lib/squad.ts` | Anotar and desanotar, and everything a player is let go of on the way out — the pin, the payment, the slot |
 | `lib/squadSearch.ts` | Who the squad list's search finds and in what order, and what Enter in it does; `useSquadSearch.ts` holds the box above a picker that gets remounted |
+| `lib/pasteList.ts` | The numbered list from the grupo pasted into that search box: the names in it, and who in the plantel each one most likely is, or that they are new |
 | `lib/stats.ts` | Each player's won/drawn/lost record, read back off the matches |
 | `lib/court.ts` | What the cancha costs each of them, and how much is still out |
 | `lib/matchTabs.ts` | Which of a match's five tabs is worth a count or a warning dot |
@@ -456,6 +457,24 @@ second-best match. The same remount as the filter would drop the cursor on
 exactly the second name, so on the match screen `useSquadSearch` holds the
 text *and* whether the box had focus, and the new picker takes it back in a
 layout effect. `lib/squadSearch.ts` has the ordering and the Enter decision.
+
+Pasting the grupo's list into that same box — two lines or more, on the
+match screen and Repartir — opens `PasteListDialog` instead: one row per
+name, each already set to a player, to "cargar a alguien nuevo" or, when two
+people fit about equally ("Juli": Julián or Julieta), to nobody until the
+organiser picks. Confirming creates the new ones with `blankPlayer` (the same
+starting point as the form) and anota everybody. The similarity rule is in
+`lib/pasteList.ts`: numbers, bullets, emojis and WhatsApp's invisible word
+joiners stripped; when two or more lines are numbered the unnumbered ones
+(header, "Van 8 de 10", the link) are dropped; everything after "amigo",
+"invitado" and kin is ignored for matching, because "Tito amigo zahiro" is
+Tito, not Zahiro. A name is matched against each player's nickname, first
+name, full name and — at a 0.1 discount — surname alone, word by word:
+exact 1, a short form of three letters or more 0.9 ("Facu"), an initial 0.8
+("G."), one typo on five letters or more 0.8 ("Sebba"), nothing on four
+letters (Maxi is not Mati); each pasted word left over costs 0.05. Over 0.7
+it is offered; 0.95 with nobody within 0.04 is sure; within 0.04 is a tie.
+The dialog shows names only, never a number.
 
 ### Getting to a player from wherever they are
 

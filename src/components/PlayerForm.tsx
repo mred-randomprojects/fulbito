@@ -63,12 +63,11 @@ import {
 import {
   ATTRIBUTES,
   ATTRIBUTE_LABELS,
-  RATING_SCALE,
   ROLES,
   ROLE_LABELS,
   clampRating,
+  blankPlayer,
   hasName,
-  newPlayerId,
   playerDisplayName,
   type AttributeKey,
   type Foot,
@@ -94,25 +93,6 @@ interface Props {
   /** A first name to start a new player off with, when somebody typed one already. */
   seedName?: string;
   onDelete?: (player: Player) => void;
-}
-
-function blankPlayer(seedName = ""): Player {
-  return {
-    id: newPlayerId(),
-    firstName: seedName,
-    lastName: "",
-    nickname: "",
-    avatar: "",
-    ratingScale: RATING_SCALE,
-    rating: 60,
-    roleRatings: {},
-    attributes: {},
-    avoid: [],
-    together: [],
-    tags: [],
-    notes: "",
-    updatedAt: new Date().toISOString(),
-  };
 }
 
 /**

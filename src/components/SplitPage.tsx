@@ -1119,6 +1119,14 @@ export function SplitPage({
             tagFilter={squadFilter}
             onAddPlayer={form.create}
             onViewPlayer={form.view}
+            onPasteList={({ create, anotar }) => {
+              for (const player of create) onSavePlayer(player);
+              const ids = [...anotar, ...create.map((player) => player.id)];
+              reshape(
+                [...setup.squad, ...ids.filter((id) => !setup.squad.includes(id))],
+                setup.teams,
+              );
+            }}
           />
         </div>
       </div>

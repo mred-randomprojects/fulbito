@@ -1,15 +1,25 @@
 import { ScoresVisible } from "./ScorePrivacy";
-import { useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from "react";
 import { Check, CornerDownLeft, Lock, Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { TagFilter } from "./TagFilter";
+import { PasteListDialog } from "./PasteListDialog";
 import { useLongPress } from "@/useLongPress";
 import { matchesTags } from "@/lib/tags";
 import type { TagFilterState } from "@/useTagFilter";
 import { useSquadSearch, type SquadSearchState } from "@/useSquadSearch";
 import { enterAction, foldForSearch, orderForSearch } from "@/lib/squadSearch";
+import { looksLikeList, matchPastedName, parseList, type PastedName } from "@/lib/pasteList";
 import { playerDisplayName, type Player, type PlayerId } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +111,12 @@ interface Props {
    * than as something absent.
    */
   showLocks?: boolean;
+  /**
+   * The numbered list from the grupo, pasted into the search box and settled
+   * name by name: the players to anotar, and the new ones to create first.
+   * Without it a paste is just text in the box. See `lib/pasteList.ts`.
+   */
+  onPasteList?: (result: { create: Player[]; anotar: PlayerId[] }) => void;
 }
 
 /**
@@ -125,6 +141,7 @@ export function SquadPicker({
   onAddPlayer,
   onViewPlayer,
   showLocks = true,
+  onPasteList,
 }: Props) {
   const ownSearch = useSquadSearch();
   const { query, setQuery, refocus } = search ?? ownSearch;
@@ -167,6 +184,19 @@ export function SquadPicker({
     const action = enterAction(query, visible, (id) => squadSet.has(id));
     return action.kind === "anotar" ? action.id : null;
   })();
+
+  const [pasted, setPasted] = useState<PastedName<PlayerId>[] | null>(null);
+
+  // More than one line is the list from the grupo, not somebody searching.
+  const onSearchPaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    if (onPasteList == null) return;
+    const text = e.clipboardData.getData("text/plain");
+    if (!looksLikeList(text)) return;
+    const names = parseList(text);
+    if (names.length === 0) return;
+    e.preventDefault();
+    setPasted(names.map((name) => matchPastedName(name, players)));
+  };
 
   const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
     // Enter that confirms an accent or a predictive-text word is the
@@ -231,7 +261,12 @@ export function SquadPicker({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onSearchKey}
-            placeholder="Escribí un nombre y dale Enter"
+            onPaste={onSearchPaste}
+            placeholder={
+              onPasteList == null
+                ? "Escribí un nombre y dale Enter"
+                : "Escribí un nombre, o pegá la lista del grupo"
+            }
             aria-label="Buscar en el plantel"
             autoComplete="off"
             autoCorrect="off"
@@ -297,6 +332,16 @@ export function SquadPicker({
           Cargar a alguien nuevo
         </Button>
       </div>
+
+      {onPasteList != null && (
+        <PasteListDialog
+          rows={pasted}
+          players={players}
+          squad={squad}
+          onClose={() => setPasted(null)}
+          onApply={onPasteList}
+        />
+      )}
     </div>
   );
 }

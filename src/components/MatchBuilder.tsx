@@ -250,6 +250,15 @@ export function MatchBuilder({
     [match.squad, setSquadMembership],
   );
 
+  /** The list from the grupo: create whoever is new, then anota the lot. */
+  const pasteList = useCallback(
+    ({ create, anotar }: { create: Player[]; anotar: PlayerId[] }) => {
+      for (const player of create) onSavePlayer(player);
+      setSquadMembership([...anotar, ...create.map((player) => player.id)], true);
+    },
+    [onSavePlayer, setSquadMembership],
+  );
+
   const cycleLock = useCallback(
     (id: PlayerId) => {
       const current = match.pins[id];
@@ -839,6 +848,7 @@ export function MatchBuilder({
               search={squadSearch}
               onAddPlayer={form.create}
               onViewPlayer={form.view}
+              onPasteList={pasteList}
             />
           </div>
         </div>
@@ -1088,6 +1098,7 @@ export function MatchBuilder({
                   search={squadSearch}
                   onAddPlayer={form.create}
                   onViewPlayer={form.view}
+                  onPasteList={pasteList}
                 />
               </div>
             )}

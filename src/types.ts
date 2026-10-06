@@ -473,6 +473,30 @@ export function newPlayerId(): PlayerId {
   return generateId() as PlayerId;
 }
 
+/**
+ * Somebody who does not exist yet: a name, the form's starting 60, nothing
+ * else. What "Jugador nuevo" opens on, and what a pasted list's new names
+ * become.
+ */
+export function blankPlayer(seedName = ""): Player {
+  return {
+    id: newPlayerId(),
+    firstName: seedName,
+    lastName: "",
+    nickname: "",
+    avatar: "",
+    ratingScale: RATING_SCALE,
+    rating: 60,
+    roleRatings: {},
+    attributes: {},
+    avoid: [],
+    together: [],
+    tags: [],
+    notes: "",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function newMatchId(): MatchId {
   return generateId() as MatchId;
 }

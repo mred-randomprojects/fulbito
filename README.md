@@ -258,6 +258,11 @@ any other app, full screen and with no signal needed.
   "juan ↵ gordo ↵ tincho ↵", without touching the mouse. Accents do not
   matter, the start of a name beats the middle of one, and Enter never takes
   anybody out.
+- **Pasting the list from the grupo.** Paste the numbered "1.Chino 2.Ale…"
+  message into that same box and every name comes back matched to somebody in
+  the plantel — "Facu" to Facundo, "G.borri" to Gonzalo Borri, "Sebba" to Seba
+  — or marked as new. The doubtful ones are highlighted to check; one tap
+  creates the new players and anota everybody.
 - **Groups, for a plantel bigger than one game.** Tag a player with the crews
   they belong to — the laburo, the barrio, the ones who only turn up in
   summer — and the chips above the roster and above the squad list narrow it to
