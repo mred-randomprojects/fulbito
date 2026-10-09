@@ -253,10 +253,16 @@ enters the app without going through `normalizeAppData` — a hand-edited
 
 Structured storage lives in `src/storage.ts`: one primary key, a rolling backup
 written before each save, and a corrupt-blob stash that loading falls back
-through. Avatar migration is deliberately staged. `src/avatarStorage.ts`
-currently writes every photo as a binary `Blob` to IndexedDB and reads it back
-to verify the bytes, while leaving the complete data URL in the primary local
-copy, rolling backup, exports and Firestore. The "Tus datos" screen reports the
+through. The roll into the backup only takes a primary that still parses:
+right after loading has fallen back past a corrupt one, copying it over would
+replace the only good copy with the bad one, and a full origin failing the
+next write would then leave nothing to load. `storage.test.ts` pins that,
+with the storage handed in as a plain object.
+
+Avatar migration is deliberately staged. `src/avatarStorage.ts` currently
+writes every photo as a binary `Blob` to IndexedDB and reads it back to verify
+the bytes, while leaving the complete data URL in the primary local copy,
+rolling backup, exports and Firestore. The "Tus datos" screen reports the
 verified count. IndexedDB must not become the only local avatar copy until that
 shadow path has been exercised in real browsers; this phase deletes nothing.
 
