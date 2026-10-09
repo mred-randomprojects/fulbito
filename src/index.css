@@ -4,6 +4,9 @@
 
 @layer base {
   :root {
+    /* Dark-only app: native controls (date pickers, selects, scrollbars,
+       autofill) are drawn dark too instead of in the browser's light default. */
+    color-scheme: dark;
     --background: 155 30% 5%;
     --foreground: 150 12% 95%;
     --card: 158 22% 8%;
