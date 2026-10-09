@@ -408,7 +408,9 @@ Pushing to `main` builds and publishes to GitHub Pages via
 `.github/workflows/deploy.yml`. There is nothing to configure — the build takes
 no secrets.
 
-`./deploy.sh` builds, pushes, and watches the run to completion.
+`./deploy.sh` runs the checks and the build, pushes, and watches the run to
+completion. It never overwrites commits pushed from elsewhere that this clone
+has not pulled.
 
 ## Not built yet
 

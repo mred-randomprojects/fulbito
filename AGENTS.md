@@ -85,8 +85,11 @@ Everything else ships on the three commands above.
 
 ## Shipping
 
-Push to `main` and GitHub Actions deploys to GitHub Pages. `./deploy.sh` does
-the build, push and watch in one go.
+Push to `main` and GitHub Actions deploys to GitHub Pages. An agent ships with
+a plain `git push origin main`, never a force push. By hand, `./deploy.sh` runs
+`npm run check` and the build, pushes, and follows the run to the end; it
+refuses to run off `main`, and it never overwrites commits pushed from
+elsewhere that this clone has not pulled.
 
 ## Voice
 
