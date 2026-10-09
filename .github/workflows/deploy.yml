@@ -19,19 +19,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Test
-        run: npm test
+      # Typecheck, lint and unit tests: the `check` script in package.json,
+      # the same gate deploy.sh runs before it pushes.
+      - name: Check
+        run: npm run check
 
       # The Firestore rules, against the emulator. They are the only thing
       # enforcing who may read what; this is the only place a wrong edit is
@@ -43,7 +45,7 @@ jobs:
           java-version: 21
 
       - name: Cache the emulator jar
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}-v1
@@ -71,11 +73,15 @@ jobs:
           VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
           VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
 
+      # One curl tells whether live == main.
+      - name: Stamp the deploy
+        run: echo "{\"commit\":\"${GITHUB_SHA::7}\",\"deployedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > dist/version.json
+
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -91,7 +97,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       # The rules go live with the app, if this repo has been given a way to
       # publish them. Without the secret they are still pasted by hand, as

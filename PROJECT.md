@@ -1984,14 +1984,17 @@ something.
 `npm run build` (typecheck included), `npm test`, `npm run lint`. That is the
 whole loop and it takes seconds. Do not verify by driving a browser — pay for
 the missing coverage with unit tests over `src/lib/` instead. `AGENTS.md` spells
-out why, and what to do when the change is a visual one.
+out why, and what to do when the change is a visual one. `npm run check` is the
+typecheck, the lint and the unit tests in one command, and it is the gate CI
+runs (`deploy.yml` and `checks.yml`, on the Node in `.nvmrc`) before the rules
+tests and the build.
 
 `npm run test:rules` is the one exception to "seconds": it starts the
 Firestore emulator and runs `src/cloud/rules.test.ts` — the app's own
 `cloud/lists.ts` and `cloud/polls.ts` on one side, a stranger's raw writes on
 the other, against the real `firestore.rules`. Every test there is a promise
 a page makes: the owner of an encuesta cannot read the mails, a device cannot
-rename somebody else's name on la lista. It needs Java and Node 20, so CI runs
+rename somebody else's name on la lista. It needs Java and Node 20+, so CI runs
 it on every push before the build, and a rules edit that breaks a promise
 never deploys. With a service account secret, CI also publishes the rules
 after the site (`FIREBASE_SETUP.md`, step 6); without one they are pasted by

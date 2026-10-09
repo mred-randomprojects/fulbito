@@ -7,9 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "check": "tsc -b && eslint . && npm test",
     "test": "tsc -p tsconfig.test.json && node --test .tmp/test-dist/src/*.test.js .tmp/test-dist/src/lib/*.test.js",
     "preview": "vite preview",
-    "test:rules": "npx --yes firebase-tools@15 emulators:exec --only firestore --project demo-fulbito \"TSX_TSCONFIG_PATH=tsconfig.app.json node --import tsx --test src/cloud/rules.test.ts\""
+    "test:rules": "npx --yes firebase-tools@15.33.0 emulators:exec --only firestore --project demo-fulbito \"TSX_TSCONFIG_PATH=tsconfig.app.json node --import tsx --test src/cloud/rules.test.ts\""
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",

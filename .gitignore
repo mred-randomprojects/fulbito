@@ -18,3 +18,13 @@ dist
 *firebase-adminsdk*.json
 service-account*.json
 serviceAccount*.json
+
+# TypeScript build info, and credential files under other names.
+*.tsbuildinfo
+*service-account*.json
+*serviceAccount*.json
+*.pem
+*.p12
+
+# Claude Code per-machine settings
+.claude/settings.local.json

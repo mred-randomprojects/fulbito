@@ -1,7 +1,6 @@
 name: Checks
 
-# The same verification the deploy runs, for a branch that is not going to
-# deploy: pushes anywhere but main, and pull requests.
+# The deploy's checks (typecheck, lint, unit and rules tests, build) for branches that do not deploy.
 on:
   push:
     branches-ignore: [main]
@@ -12,22 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Test
-        run: npm test
-
-      - name: Lint
-        run: npm run lint
+      - name: Check
+        run: npm run check
 
       - name: Setup Java (Firestore emulator)
         uses: actions/setup-java@v5
@@ -36,7 +32,7 @@ jobs:
           java-version: 21
 
       - name: Cache the emulator jar
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}-v1

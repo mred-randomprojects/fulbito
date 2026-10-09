@@ -342,6 +342,7 @@ even in the bundle.
 npm run build   # typecheck + production build
 npm test        # rating, balancing, fixtures, saved teams, records, the cancha, sync, …
 npm run lint
+npm run check   # typecheck + lint + tests in one go: the gate the deploy runs
 ```
 
 ## Data
