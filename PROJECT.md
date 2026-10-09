@@ -28,8 +28,8 @@ can still stand on half a pitch to look at or come into one match in a tap.
 And when it is over, the match can go back to the grupo as its own
 page: the scoreline, the two formations and the video, where anybody with the
 link reads it and anybody who signs in with Google puts a nota on each player,
-votes la figura, says how each of them went and argues about the second goal —
-and what they write comes back next to your own uno x uno, to take or leave.
+votes la figura and argues about the second goal — and the notas come back
+next to your own uno x uno, to take or leave.
 Once the sides are up, six models guess how
 it goes — who wins, with how many goals, as a
 probability for every scoreline — and once the result is in, the same screen
@@ -1177,9 +1177,10 @@ recaps/{matchId}/identities/{uid}     { email, name, at }
   which is all anybody can name here: setting one aside takes the whole ballot
   out, and the panel lists them as "Planilla 1, 2, 3…" because that is
   genuinely all it knows about them.
-- **The address is the one thing the link does not carry.** Everything else
-  under a recap is readable by whoever holds it, so a mail on a comment would be
-  a mail published to the whole grupo. It lives in `identities/{uid}`, readable
+- **The address never travels with the link.** The recap, its faces and its
+  comments are readable by whoever holds it (the ballots and the markers are
+  not; see above), so a mail on a comment would be a mail published to the
+  whole grupo. It lives in `identities/{uid}`, readable
   by the recap's owner and the super admins and nobody else — including the
   other people who played — and pinned to the Google token, so it is evidence
   rather than a claim. The owner is *shown* it in the panel: an address stored

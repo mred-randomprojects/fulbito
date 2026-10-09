@@ -48,12 +48,15 @@ import {
  * cross Firestore's 1 MiB cap. Each carries `ownerUid` so writing twenty in a
  * batch costs no rule reads at all.
  *
- * **No address is on anything everybody can read.** Comments and ballots
- * carry a uid and a display name; the Google address goes to
- * `identities/{uid}`, which only the recap's owner and the super admins may
- * read. Everything under a recap is readable by whoever holds the link, so a
- * field on a comment is a field published to the whole grupo — and the page
- * promises the opposite. `writeIdentity` is called *beside* the write it
+ * **No address is on anything everybody can read.** A comment carries a uid
+ * and a display name; a ballot carries neither — `players`, `mvp` and `at`,
+ * nothing else (see below). The Google address goes to `identities/{uid}`,
+ * which only the recap's owner and the super admins may read. The recap, its
+ * faces and its comments are readable by whoever holds the link, so a field
+ * on a comment is a field published to the whole grupo — and the page
+ * promises the opposite. The ballots are not: the recap's owner and the site
+ * owner read the pile, a voter reads only their own, and nobody else reads
+ * any. `writeIdentity` is called *beside* the write it
  * belongs to rather than in a batch with it, for the same two reasons
  * `submitBallot` does it that way: rules are pasted into a console by hand, so
  * a batch would turn an unpublished rule into a page nobody can write on, and
