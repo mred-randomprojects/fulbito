@@ -12,6 +12,7 @@ import type { ReviewBook } from "./lib/reviews.js";
 import type { MatchVideo } from "./lib/video.js";
 import { normalizeTagList } from "./lib/tags.js";
 import { byMatchOrder } from "./lib/matchOrder.js";
+import { todayIso } from "./lib/dates.js";
 
 export type PlayerId = string & { readonly __brand: "PlayerId" };
 export type MatchId = string & { readonly __brand: "MatchId" };
@@ -920,7 +921,8 @@ function normalizeMatch(raw: unknown): Match | null {
   return {
     id: id as MatchId,
     name: str(raw.name, "Picado"),
-    date: str(raw.date, new Date().toISOString().slice(0, 10)),
+    // Today in local time: the UTC date is already tomorrow from 21:00 here.
+    date: str(raw.date, todayIso()),
     teamA: normalizeTeamConfig(raw.teamA, DEFAULT_TEAM_A),
     teamB: normalizeTeamConfig(raw.teamB, DEFAULT_TEAM_B),
     squad,

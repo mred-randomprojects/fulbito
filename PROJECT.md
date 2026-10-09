@@ -349,7 +349,7 @@ gate, including tooltips and charts.
 | `lib/lineupImage.ts` | Drawing the shareable PNG of the pitch on a canvas |
 | `lib/tournamentImage.ts` | Drawing the shareable PNG of the whole torneito |
 | `lib/canvas.ts` | The canvas drawing both of those share: photos, chips, corners |
-| `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish; what each number on the 0–100 scale means |
+| `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish, and today in local time (`todayIso`, also the date an undated match falls back to; never `toISOString()`, which is tomorrow from 21:00 here); what each number on the 0–100 scale means |
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
 | `lib/pwa.ts` | Whether to offer to install the app, and whether this is a device that will never ask |
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import {
   HANDICAP_LIMIT,
   RATING_DEFAULT,
@@ -487,5 +487,34 @@ describe("torneo links on a stored match", () => {
       matches: [{ ...raw, tournament: { id: "t", turn: -3, field: "dos" } }],
     }).matches;
     assert.deepEqual(bad.tournament, { id: "t", name: "Torneo", turn: 1, field: 1 });
+  });
+});
+
+describe("a match with no date", () => {
+  it("falls back to today in local time, not the UTC date", (t) => {
+    // 22:30 in Buenos Aires is already 01:30 the next day in UTC, which is
+    // where `toISOString().slice(0, 10)` used to put an undated match.
+    const tz = process.env.TZ;
+    process.env.TZ = "America/Argentina/Buenos_Aires";
+    try {
+      const evening = new Date(2026, 9, 9, 22, 30);
+      assert.equal(evening.toISOString().slice(0, 10), "2026-10-10", "the zone did not take");
+      try {
+        mock.timers.enable({ apis: ["Date"], now: evening });
+      } catch {
+        // Date mocking needs Node 20.11+; .nvmrc and CI run 22.
+        t.skip("this Node cannot mock Date");
+        return;
+      }
+      try {
+        assert.equal(withMatch({}).date, "2026-10-09");
+        assert.equal(withMatch({ date: "2026-09-01" }).date, "2026-09-01");
+      } finally {
+        mock.timers.reset();
+      }
+    } finally {
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
+    }
   });
 });
