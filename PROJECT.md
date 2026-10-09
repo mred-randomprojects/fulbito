@@ -1477,7 +1477,8 @@ Every path inside the manifest is relative — `start_url`, `scope` and `id` are
 all `./` — because the app is served from `/` on the dev server and `/fulbito/`
 on Pages, and a relative path resolves against the manifest's own URL either
 way. The `<link rel="manifest">` in `index.html` is written root-absolute
-instead, because Vite rewrites those with the base path at build time.
+instead, because Vite rewrites those with the base path at build time — and so
+is the tab's icon, `/icons/icon.svg`, the same one the app installs with.
 
 Three things about the worker are worth knowing before touching it:
 
