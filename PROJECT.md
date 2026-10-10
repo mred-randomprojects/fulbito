@@ -135,6 +135,19 @@ enters the app without going through `normalizeAppData` — a hand-edited
   zero deviation to 0 at 20; it is not a win probability. Its dial takes the
   verdict's colour, rather than using separate thresholds. A handicap shifts
   the target; commentary reports the actual edge and the side that has it.
+- **A side is worth more than its sum, or less.** `evaluateLineup` reports a
+  `strength` per player — the average, less `weakLinks`, plus `chemistry` —
+  and `strengthEdge` (so every verdict, the dial and both searches) compares
+  that, not the raw total. `weakLinks` is `WEAK_LINK` (1) times the mean
+  shortfall of the outfield below its own average: an outfield of 80, 80, 40,
+  40 comes out 10 a player behind four 60s with the same sum, because the
+  rival plays through the flojitos. The keeper is left out, since an unrated
+  one is mostly `GK_PRIOR`. `chemistry` is `CHEMISTRY` (0.15) times the share
+  of the outfield with pase or juego en equipo filled in, times how far those
+  sit above (or below) the same players' level: a passing game is a property
+  of the side. No attributes, no chemistry. "Nivel total" on screen stays the
+  raw sum; "Lo que rinden por cabeza" shows `strength`. The Pronóstico does
+  not use any of this; it has its own models.
 - **Keep-apart penalties scale with rating costs.** `AVOID_PENALTY` is ten
   rating ranges (1,000 currently) per conflicting pair, shared by the two-team
   and multi-team searches. It must outweigh a full-range imbalance under the

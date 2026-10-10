@@ -533,6 +533,66 @@ describe("strengthEdge", () => {
   });
 });
 
+describe("weak links and the passing game", () => {
+  const formation = resolveFormation("5-1-2-1", 5);
+  /** A keeper who is clearly the one in goal, plus four outfield players. */
+  const side = (outfield: number[], extras: Partial<Player> = {}) =>
+    evaluateSquad(
+      [
+        player(60, { roleRatings: { GK: 100 } }),
+        ...outfield.map((rating) =>
+          player(rating, { roleRatings: { GK: 0 }, ...extras }),
+        ),
+      ],
+      formation,
+    );
+
+  it("rates two flojitos below a solid side that adds up to the same", () => {
+    const solid = side([60, 60, 60, 60]);
+    const shaky = side([80, 80, 40, 40]);
+    assert.equal(solid.total, shaky.total);
+    assert.equal(solid.weakLinks, 0);
+    assert.equal(shaky.weakLinks, 10);
+    assert.ok(strengthEdge(solid, shaky, "average") > 5);
+    assert.ok(strengthEdge(solid, shaky, "total") > 5);
+  });
+
+  it("charges nothing for missing attributes and nothing for an even side", () => {
+    const plain = side([70, 70, 70, 70]);
+    assert.equal(plain.chemistry, 0);
+    assert.equal(plain.weakLinks, 0);
+    assert.equal(plain.strength, plain.average);
+  });
+
+  it("adds for a side that passes above its level and takes from one below it", () => {
+    const passers = side([60, 60, 60, 60], { attributes: { passing: 80, teamplay: 80 } });
+    const hogs = side([60, 60, 60, 60], { attributes: { passing: 40, teamplay: 40 } });
+    const level = side([60, 60, 60, 60], { attributes: { passing: 60, teamplay: 60 } });
+    assert.ok(passers.chemistry > 0);
+    assert.ok(hogs.chemistry < 0);
+    assert.ok(Math.abs(level.chemistry) < 1e-9);
+  });
+
+  it("weighs the passing game by how many of the side have it filled in", () => {
+    const formationPlayers = (filled: number) =>
+      evaluateSquad(
+        [
+          player(60, { roleRatings: { GK: 100 } }),
+          ...[0, 1, 2, 3].map((i) =>
+            player(60, {
+              roleRatings: { GK: 0 },
+              attributes: i < filled ? { passing: 80, teamplay: 80 } : {},
+            }),
+          ),
+        ],
+        formation,
+      );
+    const one = formationPlayers(1).chemistry;
+    const all = formationPlayers(4).chemistry;
+    assert.ok(one > 0 && one < all);
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /* Keeping people apart                                                */
 /* ------------------------------------------------------------------ */

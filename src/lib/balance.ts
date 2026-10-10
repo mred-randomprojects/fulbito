@@ -196,6 +196,79 @@ export interface TeamEvaluation {
   worst: number;
   /** Mean evidence backing the numbers, 0..1. */
   confidence: number;
+  /**
+   * What the weak links cost, in points per player: `WEAK_LINK` times the mean
+   * shortfall of the outfield players below the outfield average. Zero for a
+   * side where everybody is the same.
+   */
+  weakLinks: number;
+  /**
+   * What the side gains (or loses) from moving the ball together, in points
+   * per player. Zero when nobody has pase or juego en equipo filled in.
+   */
+  chemistry: number;
+  /**
+   * What the side is actually worth per player: `average`, less `weakLinks`,
+   * plus `chemistry`. This — not the raw sum — is what balancing compares.
+   */
+  strength: number;
+}
+
+/**
+ * How much more a point of weakness costs than a point of class earns.
+ *
+ * A plain sum says an outfield of 80, 80, 40, 40 is worth exactly what four
+ * 60s are, and on a pitch it is not: the rival plays every ball through the
+ * two 40s, and the two good ones cannot cover for them all game. So each
+ * outfield point below the side's own outfield average is charged this much on
+ * top of itself. At 1 that example comes out 10 points a player behind the
+ * four 60s, a "ventaja clara", instead of dead level. The keeper is left out: their number is
+ * mostly `GK_PRIOR` for anyone without a GK rating, not a real weakness, and
+ * the keeper gap already has its own line in the cost.
+ */
+export const WEAK_LINK = 1;
+
+/**
+ * How much a side's passing game is worth beyond each player's own number.
+ *
+ * Pase and juego en equipo already nudge each player's rating, but a passing
+ * game is a property of the side: five who all give it and move get more out
+ * of each other than their ratings add up to, and a side of ball hogs gets
+ * less. Measured against the same players' own level so that data nobody
+ * filled in costs and earns nothing, and scaled by how many of them have it.
+ */
+export const CHEMISTRY = 0.15;
+
+/** The attributes that describe moving the ball together. */
+const LINK_ATTRIBUTES = ["passing", "teamplay"] as const;
+
+/** Per-player drag and passing bonus for one side's outfield. */
+function collective(
+  outfield: readonly { player: Player; rating: number }[],
+): { weakLinks: number; chemistry: number } {
+  if (outfield.length === 0) return { weakLinks: 0, chemistry: 0 };
+  const mean = outfield.reduce((sum, one) => sum + one.rating, 0) / outfield.length;
+  const shortfall =
+    outfield.reduce((sum, one) => sum + Math.max(0, mean - one.rating), 0) / outfield.length;
+
+  let linkSum = 0;
+  let levelSum = 0;
+  let linked = 0;
+  for (const { player, rating } of outfield) {
+    const values = LINK_ATTRIBUTES.map((key) => player.attributes[key]).filter(
+      (value): value is number => value !== undefined,
+    );
+    if (values.length === 0) continue;
+    linkSum += values.reduce((sum, value) => sum + value, 0) / values.length;
+    levelSum += rating;
+    linked += 1;
+  }
+  const chemistry =
+    linked === 0
+      ? 0
+      : CHEMISTRY * (linked / outfield.length) * ((linkSum - levelSum) / linked);
+
+  return { weakLinks: WEAK_LINK * shortfall, chemistry };
 }
 
 const EMPTY_LINE: LineStrength = { count: 0, total: 0, average: 0 };
@@ -243,6 +316,14 @@ export function evaluateLineup(
   }
 
   const average = filled > 0 ? total / filled : 0;
+  const { weakLinks, chemistry } = collective(
+    formation.slots.flatMap((slot, index) => {
+      const player = lineup[index] ?? null;
+      return player == null || slot.role === "GK"
+        ? []
+        : [{ player, rating: slotRatings[index] }];
+    }),
+  );
   const present = slotRatings.filter((_, i) => lineup[i] != null);
   const variance =
     present.length > 0
@@ -259,6 +340,9 @@ export function evaluateLineup(
     best,
     worst: worst === Infinity ? 0 : worst,
     confidence: filled > 0 ? confidenceSum / filled : 0,
+    weakLinks,
+    chemistry,
+    strength: filled > 0 ? average - weakLinks + chemistry : 0,
   };
 }
 
@@ -304,18 +388,19 @@ export const DEFAULT_WEIGHTS: CostWeights = {
 /**
  * Signed strength edge of A over B, expressed in rating points *per player* so
  * it stays readable whether teams are compared by total or by average, and
- * whether the sides are the same size or not.
+ * whether the sides are the same size or not. Compares `strength`, not the raw
+ * sum, so weak links and the passing game count.
  */
 export function strengthEdge(
   a: TeamEvaluation,
   b: TeamEvaluation,
   basis: BalanceBasis,
 ): number {
-  if (basis === "average") return a.average - b.average;
+  if (basis === "average") return a.strength - b.strength;
   const sizeA = a.lineup.filter((p) => p != null).length;
   const sizeB = b.lineup.filter((p) => p != null).length;
   const scale = Math.max(1, (sizeA + sizeB) / 2);
-  return (a.total - b.total) / scale;
+  return (a.strength * sizeA - b.strength * sizeB) / scale;
 }
 
 /** Mean absolute per-line gap, over the lines that both teams actually field. */

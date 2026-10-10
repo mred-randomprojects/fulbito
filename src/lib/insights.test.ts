@@ -165,6 +165,33 @@ describe("insights", () => {
     assert.ok(notes(6).some((n) => /dependen mucho/.test(n.text)));
   });
 
+  it("names the side with flojitos even when the sums tie, instead of the spread line", () => {
+    const keeper = () => player(60, { roleRatings: { GK: 100 } });
+    const side = (outfield: number[]) =>
+      evaluateSquad(
+        [keeper(), ...outfield.map((r) => player(r, { roleRatings: { GK: 0 } }))],
+        formation5,
+      );
+    const solid = side([60, 60, 60, 60]);
+    const shaky = side([80, 80, 40, 40]);
+    const notes = insights(solid, shaky, "Claro", "Oscuro", "total");
+    assert.ok(notes.some((n) => /Oscuro tienen flojitos/.test(n.text) && /10\.0/.test(n.text)));
+    assert.ok(!notes.some((n) => /dependen mucho/.test(n.text)));
+    assert.notEqual(summarise(solid, shaky, "total").verdict, "even");
+  });
+
+  it("speaks up for the side that passes better", () => {
+    const side = (passing: number) =>
+      evaluateSquad(
+        Array.from({ length: 5 }, () =>
+          player(60, { attributes: { passing, teamplay: passing } }),
+        ),
+        formation5,
+      );
+    const notes = insights(side(90), side(60), "Claro", "Oscuro", "total");
+    assert.ok(notes.some((n) => /Claro se la pasan mejor/.test(n.text)));
+  });
+
   it("reports the actual handicap achieved, even within the tolerance", () => {
     const notes = insights(uniformSquad(73), uniformSquad(60), "Claro", "Oscuro", "average", 15);
     assert.match(notes[0].text, /Pediste 15\.0/);

@@ -37,6 +37,8 @@ const LOPSIDED = RATING_RANGE * 0.2;
 const LINE_GAP = RATING_RANGE * 0.06;
 const SPREAD_GAP = RATING_RANGE * 0.055;
 const STAR_GAP = RATING_RANGE * 0.08;
+const WEAK_LINK_GAP = RATING_RANGE * 0.03;
+const CHEMISTRY_GAP = RATING_RANGE * 0.02;
 
 /**
  * The word for a gap of this size, in rating points per player.
@@ -106,6 +108,14 @@ export function comparisons(
       hint: "El total dividido por la cantidad. Es la comparación justa cuando van disparejos en número.",
       a: a.average,
       b: b.average,
+      scale: RATING_MAX,
+    },
+    {
+      key: "strength",
+      label: "Lo que rinden por cabeza",
+      hint: "El promedio, pero los flojitos restan el doble de lo que les falta y el buen pase entre todos suma. Es lo que se usa para emparejar.",
+      a: a.strength,
+      b: b.strength,
       scale: RATING_MAX,
     },
     {
@@ -231,8 +241,30 @@ export function insights(
     });
   }
 
+  // Weak links say the same thing as a top-heavy spread, with the number it
+  // actually costs, so when they speak the spread sentence stays quiet.
+  const weakGap = a.weakLinks - b.weakLinks;
+  const weakSpoke = Math.abs(weakGap) >= WEAK_LINK_GAP;
+  if (weakSpoke) {
+    const shaky = weakGap > 0 ? nameA : nameB;
+    const solid = weakGap > 0 ? nameB : nameA;
+    out.push({
+      side: weakGap > 0 ? "B" : "A",
+      text: `${shaky} tienen flojitos por donde ir a buscarlos, y ${solid} son más parejos. Aunque sumen parecido, eso le cuesta a ${shaky} ${Math.abs(weakGap).toFixed(1)} puntos por jugador.`,
+    });
+  }
+
+  const chemistryGap = a.chemistry - b.chemistry;
+  if (Math.abs(chemistryGap) >= CHEMISTRY_GAP) {
+    const passers = chemistryGap > 0 ? nameA : nameB;
+    out.push({
+      side: chemistryGap > 0 ? "A" : "B",
+      text: `${passers} se la pasan mejor entre ellos: el pase y el juego en equipo les suman ${Math.abs(chemistryGap).toFixed(1)} puntos por jugador más allá de lo que vale cada uno.`,
+    });
+  }
+
   const spreadGap = a.spread - b.spread;
-  if (Math.abs(spreadGap) > SPREAD_GAP) {
+  if (!weakSpoke && Math.abs(spreadGap) > SPREAD_GAP) {
     const topHeavy = spreadGap > 0 ? nameA : nameB;
     const even = spreadGap > 0 ? nameB : nameA;
     out.push({
@@ -260,7 +292,7 @@ export function insights(
   if (out.length === 0) {
     out.push({
       side: "none",
-      text: "No hay con qué separarlos. Ni una línea, ni una figura, ni un eslabón flojo. Más parejo que esto no se consigue.",
+      text: "No hay con qué separarlos. Ni una línea, ni una figura, ni un eslabón flojo, ni el pase. Más parejo que esto no se consigue.",
     });
   }
 
