@@ -153,13 +153,17 @@ enters the app without going through `normalizeAppData` — a hand-edited
   side in 4+ of the latest 30 played games — lineups, not opinions. Only the
   match screen passes one; Repartir, Equipos and the Pronóstico see zero.
 - **Armar asks one of four questions** (`lib/strategies.ts`), picked with the
-  chips above the pitch and held in component state, not on the `Match`:
+  chips above the pitch and held in component state, not on the `Match`.
+  *Completo* is the default (`DEFAULT_STRATEGY`) and takes everything: the
+  per-line, spread and star terms, the level edge half plain and half worn
+  down by aguante, the physical rules and the keeper and line terms of Por
+  puestos — so with no physical data and no keepers it is Por nivel.
   *Por nivel* is `balanceCost`; *Por físico* swaps the level term for the
   edge with each slot worn down by `rating × (0.75 + 0.25 × aguante/100)` and
   prices a mean-aguante gap past 5, de poco fondo (aguante ≤ 40) or motores
   (pique and aguante ≥ 85) bunched on one side; *Por puestos* adds
   `KEEPER_PENALTY` per side without an `isKeeper` (GK ≥ 60) when the squad
-  has any, and the per-player DEF/MID/FWD aptitude gaps; *Todo junto* is both.
+  has any, and the per-player DEF/MID/FWD aptitude gaps.
   `findSplits` takes the strategy as its `cost`, and the avoid/together
   penalties stay on top, unchanged. A blank aguante counts as the squad's
   mean and never makes anyone poco fondo or motor. Physical rules cost
@@ -175,7 +179,11 @@ enters the app without going through `normalizeAppData` — a hand-edited
   match respects avoids). Pins go in before the first pick; a captain stays
   their own side's whatever a pin says. `evaluateSquad` then stands each side
   in its best shape. The pick order is a ranking by puntaje, so `DraftCard`
-  shows it only inside `ScoresVisible`.
+  shows it only inside `ScoresVisible`. The draft is then played out: the
+  whole lineup is saved at once, and `MatchBuilder`'s `revealed` holds the
+  not-yet-chosen on the bench, one pick every 900 ms (none under
+  prefers-reduced-motion); any tap, or Saltear, shows the end, and the
+  analysis waits until then.
 - **`StrategyPicker` says what each strategy needs** (`strategyData`): per
   field, who has it filled in — never the value — with the missing names as
   buttons into the ficha, and a warning on the chip and the card when a

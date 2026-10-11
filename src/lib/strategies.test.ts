@@ -5,6 +5,8 @@ import { RATING_SCALE } from "../types.js";
 import { evaluateSquad, findSplits, type SplitOption } from "./balance.js";
 import { resolveFormation } from "./formations.js";
 import {
+  ARMAR_STRATEGIES,
+  DEFAULT_STRATEGY,
   readMatchup,
   readSide,
   STAMINA_TOLERANCE,
@@ -211,5 +213,51 @@ describe("strategyData", () => {
     assert.equal(strategyReady(strategyData("puestos", [...one, player(60, {}, 70)])), true);
     assert.equal(strategyReady(strategyData("capitanes", one)), true);
     assert.equal(strategyReady(strategyData("nivel", [player(60)])), true);
+  });
+});
+
+describe("Completo", () => {
+  it("is the default, and the first chip", () => {
+    assert.equal(DEFAULT_STRATEGY, "completo");
+    assert.equal(ARMAR_STRATEGIES[0], "completo");
+  });
+
+  it("still balances the level when there is no physical data and no keepers", () => {
+    const players = [80, 75, 70, 65, 60, 55, 50, 45, 40, 35].map((r) => player(r));
+    const best = split(players, "completo");
+    assert.ok(Math.abs(best.edge) < 5, `edge ${best.edge}`);
+  });
+
+  it("charges for a level gap even when the aguante is perfectly even", () => {
+    const strong = [player(60, {}, 100), ...[1, 2, 3, 4].map(() => player(80, { stamina: 70 }))];
+    const weak = [player(60, {}, 100), ...[1, 2, 3, 4].map(() => player(50, { stamina: 70 }))];
+    const even = [player(60, {}, 100), ...[1, 2, 3, 4].map(() => player(65, { stamina: 70 }))];
+    const context = strategyContext([...strong, ...weak, ...even]);
+    const cost = strategyCost("completo", context, "total", 0);
+    const lopsided = cost(evaluateSquad(strong, formation), evaluateSquad(weak, formation));
+    const level = cost(evaluateSquad(even, formation), evaluateSquad(even, formation));
+    assert.ok(lopsided > level + 20, `${lopsided} vs ${level}`);
+  });
+
+  it("also keeps the physical rules and the keepers", () => {
+    const players = [
+      player(60, {}, 90),
+      player(60, {}, 85),
+      player(75, { stamina: 30 }),
+      player(75, { stamina: 35 }),
+      player(60, { stamina: 90, pace: 90 }),
+      player(60, { stamina: 92, pace: 88 }),
+      player(65, { stamina: 60 }),
+      player(65, { stamina: 65 }),
+      player(55, { stamina: 70 }),
+      player(55, { stamina: 70 }),
+    ];
+    const best = split(players, "completo");
+    const context = strategyContext(players);
+    const a = readSide(context, best.evalA);
+    const b = readSide(context, best.evalB);
+    assert.equal(a.low, 1);
+    assert.ok(a.keeper && b.keeper);
+    assert.ok(Math.abs(a.engines - b.engines) <= 1);
   });
 });

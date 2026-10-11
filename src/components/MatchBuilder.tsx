@@ -1,5 +1,5 @@
 import { ScoresVisible } from "./ScorePrivacy";
-import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -51,7 +51,12 @@ import {
   type TeamEvaluation,
 } from "@/lib/balance";
 import { buildFamiliarity, familiarityBonus } from "@/lib/familiarity";
-import { strategyContext, strategyCost, type ArmarStrategy } from "@/lib/strategies";
+import {
+  DEFAULT_STRATEGY,
+  strategyContext,
+  strategyCost,
+  type ArmarStrategy,
+} from "@/lib/strategies";
 import { DraftError, draftTeams, drawCaptains, type DraftResult } from "@/lib/captains";
 import { DraftCard, StrategyPicker } from "./StrategyPicker";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
@@ -113,6 +118,17 @@ type Selection =
   | { where: "pitch"; team: TeamKey; slot: number }
   | { where: "unassigned"; id: PlayerId };
 
+
+/** Between two captains' picks while the draft is played out. */
+const PICK_DELAY_MS = 900;
+/** A beat longer before the first, so the two captains register. */
+const FIRST_PICK_DELAY_MS = 1400;
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 /** The players actually standing in a lineup, empty slots skipped. */
 function lineupIds(lineup: (Player | null)[]): PlayerId[] {
@@ -232,7 +248,7 @@ export function MatchBuilder({
    * person wants to look at tonight, and every lineup is read against all of
    * them anyway.
    */
-  const [strategy, setStrategy] = useState<ArmarStrategy>("nivel");
+  const [strategy, setStrategy] = useState<ArmarStrategy>(DEFAULT_STRATEGY);
 
   /** The captains asked for; whoever is no longer anotado drops out. */
   const [captainChoice, setCaptainChoice] = useState<Partial<Record<TeamKey, PlayerId>>>({});
@@ -248,6 +264,31 @@ export function MatchBuilder({
 
   /** How the captains picked, while that is what is on the pitch. */
   const [draft, setDraft] = useState<DraftResult | null>(null);
+
+  /**
+   * How many picks of the draft are on the pitch yet, while it is being
+   * played out; null once it is all there.
+   *
+   * Display only. The whole lineup is saved the moment the draft is made —
+   * patching the match once a pick would write storage and the cloud eight
+   * times for an animation — and the pitch, the bench and the card simply
+   * hold back whoever has not been chosen yet.
+   */
+  const [revealed, setRevealed] = useState<number | null>(null);
+  const draftTurns = draft == null ? 0 : draft.picks.filter((p) => p.turn > 0).length;
+  useEffect(() => {
+    if (revealed == null || draft == null) return;
+    const timer = setTimeout(
+      () => setRevealed(revealed >= draftTurns ? null : revealed + 1),
+      revealed >= draftTurns ? PICK_DELAY_MS : revealed === 0 ? FIRST_PICK_DELAY_MS : PICK_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [revealed, draft, draftTurns]);
+  const skipReveal = useCallback(() => setRevealed(null), []);
+  const notYetPicked = useMemo(() => {
+    if (revealed == null || draft == null) return new Set<PlayerId>();
+    return new Set(draft.picks.filter((p) => p.turn > revealed).map((p) => p.id));
+  }, [revealed, draft]);
 
   const evalA = useMemo(
     () => evaluateLineup(lineupA, formationA, evaluationContext),
@@ -542,6 +583,7 @@ export function MatchBuilder({
         });
         setOptions(null);
         setDraft(result);
+        setRevealed(prefersReducedMotion() ? null : 0);
         setEdited(false);
         track({ name: "teams_generated", squad: squadPlayers.length, basis: match.basis });
         return;
@@ -563,6 +605,7 @@ export function MatchBuilder({
       });
       setOptions(result);
       setDraft(null);
+      setRevealed(null);
       setOptionIndex(0);
       setEdited(false);
       applyOption(result, 0);
@@ -710,9 +753,18 @@ export function MatchBuilder({
   /* Render                                                            */
   /* ---------------------------------------------------------------- */
 
+  // While a draft is being played out, whoever has not been chosen yet waits
+  // on the bench, and any tap just skips to the end.
+  const drafting = notYetPicked.size > 0;
+  const shownA = drafting ? lineupA.map((p) => (p != null && notYetPicked.has(p.id) ? null : p)) : lineupA;
+  const shownB = drafting ? lineupB.map((p) => (p != null && notYetPicked.has(p.id) ? null : p)) : lineupB;
+  const onTap = drafting ? skipReveal : handleSelect;
+  const bench = drafting
+    ? squadPlayers.filter((p) => !placedIds.has(p.id) || notYetPicked.has(p.id))
+    : unassigned;
   const tokens = [
-    ...buildTokens("A", lineupA, formationA, match.teamA, match, selection, handleSelect, form.view),
-    ...buildTokens("B", lineupB, formationB, match.teamB, match, selection, handleSelect, form.view),
+    ...buildTokens("A", shownA, formationA, match.teamA, match, selection, onTap, form.view),
+    ...buildTokens("B", shownB, formationB, match.teamB, match, selection, onTap, form.view),
   ];
 
   const summary = hasLineup
@@ -1149,12 +1201,14 @@ export function MatchBuilder({
                     </p>
                   )}
 
-                  {unassigned.length > 0 && (
+                  {bench.length > 0 && (
                     <UnassignedStrip
-                      players={unassigned}
+                      players={bench}
                       selection={selection}
                       reviews={match.reviews}
-                      onSelect={(id) => handleSelect({ where: "unassigned", id })}
+                      onSelect={(id) =>
+                        drafting ? skipReveal() : handleSelect({ where: "unassigned", id })
+                      }
                       onView={form.view}
                       lockedTo={lockedTo}
                     />
@@ -1165,13 +1219,15 @@ export function MatchBuilder({
                   {hasLineup && draft != null && !edited && (
                     <DraftCard
                       draft={draft}
+                      revealed={revealed}
+                      onSkip={skipReveal}
                       squad={squadPlayers}
                       teamA={match.teamA}
                       teamB={match.teamB}
                     />
                   )}
 
-                  {hasLineup && (
+                  {hasLineup && revealed == null && (
                     <TeamInsights
                       evalA={evalA}
                       evalB={evalB}

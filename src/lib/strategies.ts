@@ -1,5 +1,5 @@
 import type { BalanceBasis, Player, PlayerId, Role } from "../types.js";
-import { balanceCost, DEFAULT_WEIGHTS, type TeamEvaluation } from "./balance.js";
+import { balanceCost, DEFAULT_WEIGHTS, strengthEdge, type TeamEvaluation } from "./balance.js";
 import { isKeeper, KEEPER_PENALTY } from "./keepers.js";
 import { effectiveRating } from "./rating.js";
 
@@ -16,7 +16,7 @@ import { effectiveRating } from "./rating.js";
  * Every strategy is a cost over two evaluated sides; `findSplits` adds the
  * avoid and together penalties on top, untouched, whichever one is in use.
  */
-export type SplitStrategy = "nivel" | "fisico" | "puestos" | "todo";
+export type SplitStrategy = "completo" | "nivel" | "fisico" | "puestos";
 
 /**
  * Everything Armar can do: the four searches, plus two captains picking by
@@ -25,27 +25,30 @@ export type SplitStrategy = "nivel" | "fisico" | "puestos" | "todo";
 export type ArmarStrategy = SplitStrategy | "capitanes";
 
 export const ARMAR_STRATEGIES: readonly ArmarStrategy[] = [
+  "completo",
   "nivel",
   "fisico",
   "puestos",
-  "todo",
   "capitanes",
 ];
+
+/** What Armar asks when nobody picked anything: everything at once. */
+export const DEFAULT_STRATEGY: ArmarStrategy = "completo";
 
 export const STRATEGY_LABEL: Record<ArmarStrategy, string> = {
   nivel: "Por nivel",
   fisico: "Por físico",
   puestos: "Por puestos",
-  todo: "Todo junto",
+  completo: "Completo",
   capitanes: "Capitanes",
 };
 
 /** One line: what the strategy is for. */
 export const STRATEGY_HINT: Record<ArmarStrategy, string> = {
-  nivel: "Que los dos equipos rindan lo mismo.",
+  nivel: "Solo el nivel: que los dos equipos rindan lo mismo.",
   fisico: "Que ninguno se caiga en el segundo tiempo.",
   puestos: "Que cada uno tenga arquero y las líneas estén parejas.",
-  todo: "Físico y puestos a la vez.",
+  completo: "Nivel, físico y puestos, todo a la vez.",
   capitanes: "Como en el potrero: dos capitanes eligen de a uno.",
 };
 
@@ -66,9 +69,11 @@ export const STRATEGY_STEPS: Record<ArmarStrategy, readonly string[]> = {
     "Defensa, medio y ataque tienen que quedar parejos, jugador por jugador.",
     "Después de eso, el nivel más parejo posible.",
   ],
-  todo: [
-    "Junta las reglas de Por físico y las de Por puestos.",
-    "Son más condiciones, así que el nivel puede quedar un poco menos clavado.",
+  completo: [
+    "Nivel: que rindan parecido, con los flojitos restando y el buen pase y los que juegan juntos sumando.",
+    "Físico: el mismo nivel, pero gastado por el aguante, pesa igual que el nivel a secas; y el aguante parejo, los de poco fondo y los motores repartidos.",
+    "Puestos: un arquero de verdad para cada lado y las líneas parejas.",
+    "Si no hay datos de físico o de arqueros, esa parte no cambia nada y queda el nivel.",
   ],
   capitanes: [
     "Elegís los dos capitanes, o los sortea. Quién arranca se tira a pan y queso.",
@@ -168,8 +173,8 @@ export function strategyData(
       return [stamina(), pace()];
     case "puestos":
       return [keepers(true)];
-    case "todo":
-      return [stamina(), pace(), keepers(true)];
+    case "completo":
+      return [stamina(), pace(), keepers(false), link()];
     case "capitanes":
       return [keepers(false)];
   }
@@ -200,6 +205,9 @@ export const STAMINA_TOLERANCE = 5;
  * preference about the squad.
  */
 export const RULE_PENALTY = 10;
+
+/** Under Completo, how much of the level term is the plain edge rather than the worn-down one. */
+const COMPLETE_LEVEL_SHARE = 0.5;
 
 /** Per point of mean aguante gap, inside the tolerance: a nudge toward level. */
 const STAMINA_WEIGHT = 0.3;
@@ -412,11 +420,19 @@ export function strategyCost(
     if (strategy === "puestos") {
       return balanceCost(a, b, basis, handicap) + positionTerms(context, ra, rb);
     }
-    const physical =
+    const enduring = Math.abs(enduringEdge(ra, rb, basis) - handicap);
+    if (strategy === "fisico") {
+      return balanceCost(a, b, basis, handicap, withoutLevel) + enduring + physicalTerms(ra, rb);
+    }
+    // Completo: the level counted both ways, half plain and half worn down by
+    // aguante, so it stays the backbone however much physical data there is.
+    return (
       balanceCost(a, b, basis, handicap, withoutLevel) +
-      Math.abs(enduringEdge(ra, rb, basis) - handicap) +
-      physicalTerms(ra, rb);
-    return strategy === "todo" ? physical + positionTerms(context, ra, rb) : physical;
+      COMPLETE_LEVEL_SHARE * Math.abs(strengthEdge(a, b, basis) - handicap) +
+      (1 - COMPLETE_LEVEL_SHARE) * enduring +
+      physicalTerms(ra, rb) +
+      positionTerms(context, ra, rb)
+    );
   };
 }
 
@@ -438,7 +454,7 @@ export interface MatchupReading {
   /** Whether anybody in the squad is rated as a keeper. */
   anyKeepers: boolean;
   /** Which of the strategies' rules this lineup breaks, per strategy. */
-  broken: Record<Exclude<SplitStrategy, "nivel" | "todo">, string[]>;
+  broken: Record<Exclude<SplitStrategy, "nivel" | "completo">, string[]>;
 }
 
 /**

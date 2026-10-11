@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Crown, Dices, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Crown, Dices, FastForward, Info } from "lucide-react";
 import { ScoresVisible } from "./ScorePrivacy";
 import { useScoresHidden } from "@/useScorePrivacy";
 import type { DraftResult } from "@/lib/captains";
@@ -277,11 +277,16 @@ function CaptainPicker({
  */
 export function DraftCard({
   draft,
+  revealed,
+  onSkip,
   squad,
   teamA,
   teamB,
 }: {
   draft: DraftResult;
+  /** Picks shown so far while it is played out; null when it is all shown. */
+  revealed: number | null;
+  onSkip: () => void;
   squad: Player[];
   teamA: TeamConfig;
   teamB: TeamConfig;
@@ -290,15 +295,30 @@ export function DraftCard({
   const config = (team: TeamKey) => (team === "A" ? teamA : teamB);
   const captain = (team: TeamKey) =>
     nameOf.get(draft.picks.find((p) => p.team === team && p.reason === "captain")?.id ?? ("" as PlayerId)) ?? "?";
-  const chosen = draft.picks.filter((p) => p.turn > 0);
+  const all = draft.picks.filter((p) => p.turn > 0);
+  const chosen = revealed == null ? all : all.filter((p) => p.turn <= revealed);
+  const playing = revealed != null && revealed < all.length;
+  const next = playing ? all[revealed] : null;
   const pinned = draft.picks.filter((p) => p.reason === "pin");
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-        <Crown className="h-4 w-4 text-primary" />
-        Así eligieron los capitanes
-      </h3>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-medium">
+          <Crown className="h-4 w-4 text-primary" />
+          {playing ? "Eligiendo…" : "Así eligieron los capitanes"}
+        </h3>
+        {playing && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs hover:bg-accent"
+          >
+            <FastForward className="h-3.5 w-3.5" />
+            Saltear
+          </button>
+        )}
+      </div>
       <p className="text-sm text-muted-foreground">
         <TeamName config={teamA} /> {captain("A")} y <TeamName config={teamB} /> {captain("B")}.
         Arrancó eligiendo {captain(draft.first)}, por pan y queso.
@@ -308,10 +328,26 @@ export function DraftCard({
           Ya estaban fijos: {pinned.map((p) => nameOf.get(p.id) ?? "?").join(", ")}.
         </p>
       )}
+      {next != null && (
+        <p className="mt-2 flex items-center gap-1.5 text-sm">
+          <span
+            aria-hidden
+            className="h-2.5 w-2.5 animate-pulse rounded-full"
+            style={{ background: KITS[config(next.team).kit].fill }}
+          />
+          Le toca a {captain(next.team)}… ({next.turn} de {all.length})
+        </p>
+      )}
       <ScoresVisible fallback={null}>
         <ol className="mt-3 grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
-          {chosen.map((pick) => (
-            <li key={pick.id} className="flex items-center gap-2">
+          {chosen.map((pick, index) => (
+            <li
+              key={pick.id}
+              className={cn(
+                "flex items-center gap-2 rounded px-1 transition-colors",
+                playing && index === chosen.length - 1 && "bg-primary/15",
+              )}
+            >
               <span className="tabular w-5 text-right text-muted-foreground">{pick.turn}.</span>
               <span
                 aria-hidden
