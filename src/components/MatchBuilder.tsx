@@ -3,6 +3,8 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import {
   ArrowLeft,
   ArrowLeftRight,
+  Bot,
+  Check,
   ChevronLeft,
   CalendarDays,
   ChevronRight,
@@ -51,6 +53,10 @@ import {
   type TeamEvaluation,
 } from "@/lib/balance";
 import { buildFamiliarity, familiarityBonus } from "@/lib/familiarity";
+import { matchBrief } from "@/lib/matchBrief";
+import { useCopy } from "@/useCopy";
+import { COPY_REFUSED } from "@/share";
+import { useViewAs } from "@/viewAs";
 import {
   DEFAULT_STRATEGY,
   strategyContext,
@@ -235,10 +241,14 @@ export function MatchBuilder({
    * Who is used to playing with whom, from the games already played. Public
    * facts — who stood on which side — so it travels with every evaluation.
    */
-  const evaluationContext = useMemo<EvaluationContext>(() => {
-    const index = buildFamiliarity(matches, match.id);
-    return { familiarity: (ids) => familiarityBonus(index, ids) };
-  }, [matches, match.id]);
+  const familiarityIndex = useMemo(
+    () => buildFamiliarity(matches, match.id),
+    [matches, match.id],
+  );
+  const evaluationContext = useMemo<EvaluationContext>(
+    () => ({ familiarity: (ids) => familiarityBonus(familiarityIndex, ids) }),
+    [familiarityIndex],
+  );
 
   /** The squad as the strategies read it: aguante, motores, keepers, lines. */
   const squadContext = useMemo(() => strategyContext(squadPlayers), [squadPlayers]);
@@ -805,6 +815,63 @@ export function MatchBuilder({
     return separatedAcross(togetherIndex, [lineupIds(lineupA), lineupIds(lineupB)]);
   }, [match.respectTogether, togetherIndex, lineupA, lineupB]);
 
+  /**
+   * The whole squad as Markdown — every puntaje, attribute and pair — for the
+   * owner of the match to paste into their own AI. Secret by construction, so
+   * the button is behind `ScoresVisible` and gone while viewing as somebody
+   * else; see the header of `lib/matchBrief.ts`.
+   */
+  const viewingAs = useViewAs().target !== null;
+  const { copied: briefCopied, copy: copyBrief } = useCopy();
+  const [briefError, setBriefError] = useState<string | null>(null);
+  const copySquadBrief = useCallback(async () => {
+    const squadIds = squadPlayers.map((p) => p.id);
+    const text = matchBrief({
+      title: `${match.name.trim() || "Partido"} — ${formatMatchDate(match.date) || "sin fecha"}`,
+      players: squadPlayers,
+      sides: {
+        A: {
+          name: match.teamA.name,
+          size: match.sizeA,
+          formation: formationA.label,
+          lineup: lineupIds(lineupA),
+        },
+        B: {
+          name: match.teamB.name,
+          size: match.sizeB,
+          formation: formationB.label,
+          lineup: lineupIds(lineupB),
+        },
+      },
+      pins: match.pins,
+      avoid: match.respectAvoids ? conflictsWithin(avoidIndex, squadIds) : [],
+      together: match.respectTogether ? pairedWithin(togetherIndex, squadIds) : [],
+      familiarity: familiarityIndex,
+    });
+    const ok = await copyBrief(text, "brief");
+    setBriefError(ok ? null : COPY_REFUSED);
+    if (ok) track({ name: "squad_brief_copied", squad: squadIds.length });
+  }, [
+    squadPlayers,
+    match.name,
+    match.date,
+    match.teamA.name,
+    match.teamB.name,
+    match.sizeA,
+    match.sizeB,
+    match.pins,
+    match.respectAvoids,
+    match.respectTogether,
+    formationA.label,
+    formationB.label,
+    lineupA,
+    lineupB,
+    avoidIndex,
+    togetherIndex,
+    familiarityIndex,
+    copyBrief,
+  ]);
+
   /** The kit of the side a player is pinned to, for the squad list to colour. */
   const lockedTo = useCallback(
     (id: PlayerId): LockTarget | null => {
@@ -1090,6 +1157,23 @@ export function MatchBuilder({
 
                     <div className="flex-1" />
 
+                    {!viewingAs && squadPlayers.length > 0 && (
+                      <ScoresVisible>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void copySquadBrief()}
+                          title="Copia a todos los anotados con sus puntajes, atributos y parejas, en Markdown, para pegárselo a tu IA. Tiene los puntajes de todos: es para vos."
+                        >
+                          {briefCopied === "brief" ? (
+                            <Check className="mr-1.5 h-4 w-4" />
+                          ) : (
+                            <Bot className="mr-1.5 h-4 w-4" />
+                          )}
+                          {briefCopied === "brief" ? "¡Copiado!" : "Copiar para IA"}
+                        </Button>
+                      </ScoresVisible>
+                    )}
+
                     {hasLineup && (
                       <Button variant="secondary" onClick={() => setShareOpen(true)}>
                         <Share2 className="mr-1.5 h-4 w-4" />
@@ -1113,6 +1197,12 @@ export function MatchBuilder({
                   {sizeHint != null && (
                     <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
                       {sizeHint}
+                    </p>
+                  )}
+
+                  {briefError != null && (
+                    <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      {briefError}
                     </p>
                   )}
 

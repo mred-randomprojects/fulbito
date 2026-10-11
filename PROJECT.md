@@ -356,6 +356,7 @@ gate, including tooltips and charts.
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
 | `lib/strategies.ts` | What "parejo" means under each of Armar's strategies, and how a lineup reads against all of them |
+| `lib/matchBrief.ts` | The squad as Markdown, every puntaje included, for the match owner's own AI — see "Un puntaje es secreto" |
 | `lib/captains.ts` | Two captains picking by turns: the draft, and drawing the captains |
 | `lib/familiarity.ts` | Who has shared a side with whom lately, and what that is worth to a side |
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
@@ -1604,6 +1605,20 @@ Three things follow, and they are not negotiable in a code review:
    "…unless you tick this".
 4. **`src/secrecy.test.ts` going red is that conversation arriving early.** It
    is not a lint rule to be updated to match the new code.
+
+**The one deliberate exception: "Copiar para IA".** On the match screen, the
+owner of the match can copy every anotado's numbers — overall, positions,
+attributes, foot, pins, the avoid and together pairs the match respects, and
+who has shared a side lately — as Markdown, with a preamble that explains each
+scale (`lib/matchBrief.ts`), to paste into their own private AI. The owner
+asked for it in October 2026, after being told exactly what it exposes, on
+these terms: it is that person's own clipboard, the app sends nothing, and
+what happens after the paste is theirs. It is not a share flow and never
+becomes one: the button sits behind `ScoresVisible`, is gone while viewing as
+somebody else, private notes are left out, and `secrecy.test.ts` pins that
+`MatchBuilder` is the only thing that builds it. Anything that would carry the
+brief further — into a share, a link, a page outside the wall — is the
+conversation in point 2, not an extension of this one.
 
 **This exists because we shipped the opposite and nearly kept it.** El tercer
 tiempo went out with `recaps/{id}/reviews` readable by any session holding the

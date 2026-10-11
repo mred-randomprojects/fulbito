@@ -32,6 +32,7 @@ export type TrackEvent =
   | { name: "player_created"; players: number }
   | { name: "match_created"; matches: number }
   | { name: "teams_generated"; squad: number; basis: string }
+  | { name: "squad_brief_copied"; squad: number }
   /** No `ratings` any more: nothing shared carries one. See `ShareDialog`. */
   | { name: "lineup_shared"; via: "text" | "image" }
   | { name: "result_recorded" }

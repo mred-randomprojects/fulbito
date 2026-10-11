@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
@@ -431,4 +431,45 @@ describe("a puntaje is secret: the pages anybody can open", () => {
       }
     });
   }
+});
+
+describe("a puntaje is secret: the brief for your own AI", () => {
+  /**
+   * "Copiar para IA" is the one place this app hands every puntaje over at
+   * once — overall, positions, attributes, who cannot stand whom — as text.
+   * The owner asked for it on purpose (October 2026), on these terms: it is
+   * the owner of the match copying to their own clipboard, to paste into
+   * their own private AI. Nothing is sent anywhere by the app.
+   *
+   * So the terms are what is pinned: one screen builds it, the owner's own
+   * match screen; the button is behind the hide-scores gate and gone while
+   * viewing as somebody else; and none of the sharing paths can reach it. A
+   * red test here is not a refactor to follow. It is the question "who else
+   * can now read this?", asked early.
+   */
+  function sources(dir: string): string[] {
+    return readdirSync(join(process.cwd(), dir), { withFileTypes: true }).flatMap((entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return sources(path);
+      return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
+    });
+  }
+
+  it("is built only by the owner's match screen", () => {
+    const importers = sources("src").filter((path) => /lib\/matchBrief(\.js)?"/.test(code(path)));
+    assert.deepEqual(
+      importers,
+      ["src/components/MatchBuilder.tsx"],
+      "Something new builds the brief with every puntaje in it. Read the header of this block first.",
+    );
+  });
+
+  it("is copied only from behind the hide-scores gate, and never while viewing as somebody else", () => {
+    const source = code("src/components/MatchBuilder.tsx");
+    const at = source.indexOf("copySquadBrief()}");
+    assert.notEqual(at, -1, "the Copiar para IA button is gone or renamed — update this test with it");
+    const before = source.slice(Math.max(0, at - 400), at);
+    assert.match(before, /!viewingAs/, "the brief can be copied while viewing as somebody else");
+    assert.match(before, /<ScoresVisible>/, "the brief button is outside the hide-scores gate");
+  });
 });

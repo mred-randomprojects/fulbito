@@ -314,7 +314,9 @@ all game spread out, a real keeper each and even lines. Armar can also be
 asked just **Por físico** or just **Por puestos**, or **Capitanes** — two
 captains, chosen or drawn, picking the best one left by turns, played out on
 the pitch one pick at a time — and every lineup is read against all of them.
-Each one explains how it works and who is missing the data it needs.
+Each one explains how it works and who is missing the data it needs. And
+**Copiar para IA** puts the whole squad — every number, explained — on your
+clipboard as Markdown, so you can ask your own AI how to split it.
 
 Below roughly 8-a-side every combination is
 enumerated; above that it falls back to multi-start local search and says so.
