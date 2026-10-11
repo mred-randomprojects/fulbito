@@ -19,7 +19,7 @@ interface Props {
    * What the optimiser did to arrive at this lineup, or null when no search
    * stands behind it — a match reopened from storage, for instance.
    */
-  search: { exhaustive: boolean; evaluated: number } | null;
+  search: { exhaustive: boolean; evaluated: number } | "draft" | null;
   /** True when the lineup has been hand-edited away from the search result. */
   edited: boolean;
 }
@@ -209,11 +209,14 @@ function TeamInsightsContent({
  * thing this panel could say.
  */
 function searchNote(
-  search: { exhaustive: boolean; evaluated: number } | null,
+  search: { exhaustive: boolean; evaluated: number } | "draft" | null,
   edited: boolean,
 ): string {
   if (edited) {
     return "Moviste jugadores a mano, así que esta formación es tuya y no la que salió del reparto. Dale a Rearmar si querés volver a la óptima.";
+  }
+  if (search === "draft") {
+    return "Estos equipos salieron de dos capitanes eligiendo de a uno, no de buscar el reparto más parejo. Fijate arriba cuánto se desbalanceó.";
   }
   if (search == null) {
     return "Estos equipos quedaron guardados de antes. Dale a Armar los equipos para buscar el reparto más parejo con la lista de ahora.";

@@ -44,20 +44,16 @@ import { useLongPress } from "@/useLongPress";
 import { PlayerAvatar } from "./PlayerAvatar";
 import {
   evaluateLineup,
+  evaluateSquad,
   findSplits,
   SplitError,
   type EvaluationContext,
   type TeamEvaluation,
 } from "@/lib/balance";
 import { buildFamiliarity, familiarityBonus } from "@/lib/familiarity";
-import {
-  SPLIT_STRATEGIES,
-  STRATEGY_HINT,
-  STRATEGY_LABEL,
-  strategyContext,
-  strategyCost,
-  type SplitStrategy,
-} from "@/lib/strategies";
+import { strategyContext, strategyCost, type ArmarStrategy } from "@/lib/strategies";
+import { DraftError, draftTeams, drawCaptains, type DraftResult } from "@/lib/captains";
+import { DraftCard, StrategyPicker } from "./StrategyPicker";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
 import {
   buildTogetherIndex,
@@ -117,28 +113,6 @@ type Selection =
   | { where: "pitch"; team: TeamKey; slot: number }
   | { where: "unassigned"; id: PlayerId };
 
-
-/**
- * What a strategy has to work with in this squad, said only when it is short
- * of something: counts of who has a field filled in, never what is in it.
- */
-function strategyDataNote(
-  strategy: SplitStrategy,
-  squad: ReturnType<typeof strategyContext>,
-): string {
-  const notes: string[] = [];
-  if ((strategy === "fisico" || strategy === "todo") && squad.staminaKnown < squad.squadSize) {
-    notes.push(
-      squad.staminaKnown === 0
-        ? "Nadie tiene el aguante cargado, así que por ahora sale igual que por nivel."
-        : `${squad.staminaKnown} de ${squad.squadSize} tienen el aguante cargado; el resto cuenta como el promedio.`,
-    );
-  }
-  if ((strategy === "puestos" || strategy === "todo") && squad.keepers.size === 0) {
-    notes.push("Nadie tiene puntaje de arquero de 60 para arriba, así que no hay arqueros para repartir.");
-  }
-  return notes.length === 0 ? "" : ` ${notes.join(" ")}`;
-}
 
 /** The players actually standing in a lineup, empty slots skipped. */
 function lineupIds(lineup: (Player | null)[]): PlayerId[] {
@@ -258,7 +232,22 @@ export function MatchBuilder({
    * person wants to look at tonight, and every lineup is read against all of
    * them anyway.
    */
-  const [strategy, setStrategy] = useState<SplitStrategy>("nivel");
+  const [strategy, setStrategy] = useState<ArmarStrategy>("nivel");
+
+  /** The captains asked for; whoever is no longer anotado drops out. */
+  const [captainChoice, setCaptainChoice] = useState<Partial<Record<TeamKey, PlayerId>>>({});
+  const captains = useMemo(() => {
+    const anotados = new Set(match.squad);
+    const kept: Partial<Record<TeamKey, PlayerId>> = {};
+    for (const team of ["A", "B"] as const) {
+      const id = captainChoice[team];
+      if (id !== undefined && anotados.has(id)) kept[team] = id;
+    }
+    return kept;
+  }, [captainChoice, match.squad]);
+
+  /** How the captains picked, while that is what is on the pitch. */
+  const [draft, setDraft] = useState<DraftResult | null>(null);
 
   const evalA = useMemo(
     () => evaluateLineup(lineupA, formationA, evaluationContext),
@@ -448,6 +437,7 @@ export function MatchBuilder({
 
       // The options on screen are answers to a question that has been replaced.
       setOptions(null);
+      setDraft(null);
       setSelection(null);
       setEdited(false);
       setBalanceError(null);
@@ -482,6 +472,7 @@ export function MatchBuilder({
     (lineups: { lineupA: (PlayerId | null)[]; lineupB: (PlayerId | null)[] }) => {
       patch(lineups);
       setOptions(null);
+      setDraft(null);
       setSelection(null);
       setEdited(false);
       setBalanceError(null);
@@ -521,9 +512,40 @@ export function MatchBuilder({
    * failure mode that is much worse than a brief pause: a callback that never
    * fires because the browser backgrounded the tab, leaving the button dead.
    */
-  const balance = useCallback((asked: SplitStrategy = strategy) => {
+  const balance = useCallback((
+    asked: ArmarStrategy = strategy,
+    wanted: Partial<Record<TeamKey, PlayerId>> = captains,
+  ) => {
     setBalanceError(null);
     try {
+      if (asked === "capitanes") {
+        const chosen = drawCaptains(squadPlayers, Math.random, wanted);
+        if (chosen == null) {
+          setBalanceError("Hacen falta al menos dos anotados para tener dos capitanes.");
+          return;
+        }
+        setCaptainChoice(chosen);
+        const result = draftTeams({
+          players: squadPlayers,
+          captains: chosen,
+          sizeA: match.sizeA,
+          sizeB: match.sizeB,
+          pins: match.pins,
+          first: Math.random() < 0.5 ? "A" : "B",
+          avoid: match.respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
+        });
+        const sideA = evaluateSquad(result.teamA, formationA, evaluationContext);
+        const sideB = evaluateSquad(result.teamB, formationB, evaluationContext);
+        patch({
+          lineupA: sideA.lineup.map((p) => p?.id ?? null),
+          lineupB: sideB.lineup.map((p) => p?.id ?? null),
+        });
+        setOptions(null);
+        setDraft(result);
+        setEdited(false);
+        track({ name: "teams_generated", squad: squadPlayers.length, basis: match.basis });
+        return;
+      }
       const result = findSplits({
         players: squadPlayers,
         sizeA: match.sizeA,
@@ -540,6 +562,7 @@ export function MatchBuilder({
         optionCount: 6,
       });
       setOptions(result);
+      setDraft(null);
       setOptionIndex(0);
       setEdited(false);
       applyOption(result, 0);
@@ -547,7 +570,9 @@ export function MatchBuilder({
     } catch (e) {
       console.error("[balance] failed:", e);
       setBalanceError(
-        e instanceof SplitError ? e.message : "Algo salió mal al armar los equipos.",
+        e instanceof SplitError || e instanceof DraftError
+          ? e.message
+          : "Algo salió mal al armar los equipos.",
       );
     }
   }, [
@@ -567,6 +592,8 @@ export function MatchBuilder({
     strategy,
     evaluationContext,
     squadContext,
+    captains,
+    patch,
   ]);
 
 
@@ -760,12 +787,30 @@ export function MatchBuilder({
    * hand is theirs, and waits for Armar.
    */
   const chooseStrategy = useCallback(
-    (next: SplitStrategy) => {
+    (next: ArmarStrategy) => {
       setStrategy(next);
-      if (options != null && !edited && mismatch === 0) balance(next);
+      if ((options != null || draft != null) && !edited && mismatch === 0) balance(next);
     },
-    [options, edited, mismatch, balance],
+    [options, draft, edited, mismatch, balance],
   );
+
+  const changeCaptain = useCallback((team: TeamKey, id: PlayerId | null) => {
+    setCaptainChoice((current) => {
+      const next = { ...current };
+      if (id == null) delete next[team];
+      else next[team] = id;
+      return next;
+    });
+  }, []);
+
+  /** A fresh pair, ignoring whoever was picked, straight onto the pitch. */
+  const redrawCaptains = useCallback(() => {
+    if (mismatch === 0) balance("capitanes", {});
+    else {
+      const drawn = drawCaptains(squadPlayers, Math.random);
+      if (drawn != null) setCaptainChoice(drawn);
+    }
+  }, [mismatch, balance, squadPlayers]);
 
   const sizeHint =
     mismatch > 0
@@ -1001,35 +1046,17 @@ export function MatchBuilder({
                     )}
                   </div>
 
-                  <div className="space-y-1.5">
-                    <div
-                      role="radiogroup"
-                      aria-label="Cómo armar los equipos"
-                      className="flex flex-wrap gap-1.5"
-                    >
-                      {SPLIT_STRATEGIES.map((key) => (
-                        <button
-                          key={key}
-                          type="button"
-                          role="radio"
-                          aria-checked={strategy === key}
-                          onClick={() => chooseStrategy(key)}
-                          className={cn(
-                            "rounded-full border px-3 py-1 text-xs transition-colors",
-                            strategy === key
-                              ? "border-primary bg-primary/15 text-foreground"
-                              : "border-border text-muted-foreground hover:bg-accent",
-                          )}
-                        >
-                          {STRATEGY_LABEL[key]}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {STRATEGY_HINT[strategy]}
-                      {strategyDataNote(strategy, squadContext)}
-                    </p>
-                  </div>
+                  <StrategyPicker
+                    strategy={strategy}
+                    onChange={chooseStrategy}
+                    squad={squadPlayers}
+                    teamA={match.teamA}
+                    teamB={match.teamB}
+                    captains={captains}
+                    onCaptainChange={changeCaptain}
+                    onDrawCaptains={redrawCaptains}
+                    onViewPlayer={form.view}
+                  />
 
                   {sizeHint != null && (
                     <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
@@ -1135,6 +1162,15 @@ export function MatchBuilder({
                 </div>
 
                 <div className="space-y-4">
+                  {hasLineup && draft != null && !edited && (
+                    <DraftCard
+                      draft={draft}
+                      squad={squadPlayers}
+                      teamA={match.teamA}
+                      teamB={match.teamB}
+                    />
+                  )}
+
                   {hasLineup && (
                     <TeamInsights
                       evalA={evalA}
@@ -1145,9 +1181,11 @@ export function MatchBuilder({
                       basis={match.basis}
                       handicap={match.handicap}
                       search={
-                        options == null
-                          ? null
-                          : { exhaustive: options.exhaustive, evaluated: options.evaluated }
+                        draft != null
+                          ? "draft"
+                          : options == null
+                            ? null
+                            : { exhaustive: options.exhaustive, evaluated: options.evaluated }
                       }
                       edited={edited}
                     />

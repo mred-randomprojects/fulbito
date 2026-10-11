@@ -11,6 +11,8 @@ import {
   staminaFactor,
   strategyContext,
   strategyCost,
+  strategyData,
+  strategyReady,
   type SplitStrategy,
 } from "./strategies.js";
 
@@ -188,5 +190,26 @@ describe("Por nivel", () => {
     const physical = strategyCost("fisico", context, "total", 0)(a, b);
     const level = strategyCost("nivel", context, "total", 0)(a, b);
     assert.notEqual(physical, level);
+  });
+});
+
+describe("strategyData", () => {
+  it("says who is missing aguante, and that Por físico is not ready without it", () => {
+    const has = player(60, { stamina: 70, pace: 60 });
+    const lacks = player(60);
+    const checks = strategyData("fisico", [has, lacks]);
+    const stamina = checks.find((c) => c.key === "stamina");
+    assert.equal(stamina?.have, 1);
+    assert.deepEqual(stamina?.missing, [lacks.id]);
+    assert.equal(strategyReady(checks), false);
+    assert.equal(strategyReady(strategyData("fisico", [has])), true);
+  });
+
+  it("needs two keepers for Por puestos, but Capitanes and Por nivel work without", () => {
+    const one = [player(60, {}, 90), player(60)];
+    assert.equal(strategyReady(strategyData("puestos", one)), false);
+    assert.equal(strategyReady(strategyData("puestos", [...one, player(60, {}, 70)])), true);
+    assert.equal(strategyReady(strategyData("capitanes", one)), true);
+    assert.equal(strategyReady(strategyData("nivel", [player(60)])), true);
   });
 });

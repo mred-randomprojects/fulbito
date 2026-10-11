@@ -166,6 +166,22 @@ enters the app without going through `normalizeAppData` — a hand-edited
   `RULE_PENALTY` (10): above balance, below keepers and named pairs. Whatever
   built the lineup, "Según cada criterio" reads it against all of them
   (`readMatchup`). Repartir does not have strategies yet.
+- **A fifth option, Capitanes, is not a search** (`lib/captains.ts`). Two
+  captains — picked in the selects or drawn — and pan y queso for the first
+  pick, then one each, always the highest overall `rating` left, with two bits
+  of sense: a side without a keeper (`isKeeper`) takes one when fewer are left
+  than sides short of one, or on its last shirt; and nobody is picked who
+  avoids somebody already on that side while anyone else is left (when the
+  match respects avoids). Pins go in before the first pick; a captain stays
+  their own side's whatever a pin says. `evaluateSquad` then stands each side
+  in its best shape. The pick order is a ranking by puntaje, so `DraftCard`
+  shows it only inside `ScoresVisible`.
+- **`StrategyPicker` says what each strategy needs** (`strategyData`): per
+  field, who has it filled in — never the value — with the missing names as
+  buttons into the ficha, and a warning on the chip and the card when a
+  required one is short (aguante for Por físico, two keepers for Por puestos).
+  The keepers check is about who has a GK rating of 60+, so it disappears
+  while scores are hidden.
 - **Keep-apart penalties scale with rating costs.** `AVOID_PENALTY` is ten
   rating ranges (1,000 currently) per conflicting pair, shared by the two-team
   and multi-team searches. It must outweigh a full-range imbalance under the
@@ -332,6 +348,7 @@ gate, including tooltips and charts.
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
 | `lib/strategies.ts` | What "parejo" means under each of Armar's strategies, and how a lineup reads against all of them |
+| `lib/captains.ts` | Two captains picking by turns: the draft, and drawing the captains |
 | `lib/familiarity.ts` | Who has shared a side with whom lately, and what that is worth to a side |
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
 | `lib/splitDraft.ts` | Repartir's device-local working copy: validation, compact result storage and re-scoring on restore |

@@ -310,8 +310,10 @@ Splits are then ranked on that strength, per-line gaps, top-heaviness, and the
 gap between each side's best player — that is **Por nivel**. Armar can also be
 asked **Por físico** (level worn down by aguante, aguante kept even, the ones
 with little of it and the ones who run all game spread out), **Por puestos** (a
-real keeper each and even lines) or **Todo junto**, and every lineup is read
-against all four. Below roughly 8-a-side every combination is
+real keeper each and even lines), **Todo junto**, or **Capitanes** — two
+captains, chosen or drawn, picking the best one left by turns, the way it is
+done on the pitch — and every lineup is read against all of them. Each one
+explains how it works and who is missing the data it needs. Below roughly 8-a-side every combination is
 enumerated; above that it falls back to multi-start local search and says so.
 
 Splitting into **three or more teams** scores every pair of teams and averages

@@ -18,25 +18,167 @@ import { effectiveRating } from "./rating.js";
  */
 export type SplitStrategy = "nivel" | "fisico" | "puestos" | "todo";
 
-export const SPLIT_STRATEGIES: readonly SplitStrategy[] = ["nivel", "fisico", "puestos", "todo"];
+/**
+ * Everything Armar can do: the four searches, plus two captains picking by
+ * turns (`lib/captains.ts`), which is not a search and has no cost.
+ */
+export type ArmarStrategy = SplitStrategy | "capitanes";
 
-export const STRATEGY_LABEL: Record<SplitStrategy, string> = {
+export const ARMAR_STRATEGIES: readonly ArmarStrategy[] = [
+  "nivel",
+  "fisico",
+  "puestos",
+  "todo",
+  "capitanes",
+];
+
+export const STRATEGY_LABEL: Record<ArmarStrategy, string> = {
   nivel: "Por nivel",
   fisico: "Por físico",
   puestos: "Por puestos",
   todo: "Todo junto",
+  capitanes: "Capitanes",
 };
 
-export const STRATEGY_HINT: Record<SplitStrategy, string> = {
-  nivel:
-    "Lo de siempre: que rindan parecido. Los flojitos restan, y el buen pase y los que juegan juntos seguido suman.",
-  fisico:
-    "Que ninguno se caiga en el segundo tiempo: el nivel con el aguante adentro, el aguante parejo, los de poco fondo repartidos y los motores también.",
-  puestos:
-    "Un arquero de verdad para cada lado, y defensa, medio y ataque parejos.",
-  todo:
-    "Físico y puestos a la vez. Son más condiciones, así que el nivel puede quedar un poco menos clavado.",
+/** One line: what the strategy is for. */
+export const STRATEGY_HINT: Record<ArmarStrategy, string> = {
+  nivel: "Que los dos equipos rindan lo mismo.",
+  fisico: "Que ninguno se caiga en el segundo tiempo.",
+  puestos: "Que cada uno tenga arquero y las líneas estén parejas.",
+  todo: "Físico y puestos a la vez.",
+  capitanes: "Como en el potrero: dos capitanes eligen de a uno.",
 };
+
+/** How it works, in the few steps a person needs to trust it. */
+export const STRATEGY_STEPS: Record<ArmarStrategy, readonly string[]> = {
+  nivel: [
+    "Prueba todos los repartos posibles y se queda con los más parejos.",
+    "Compara lo que rinde cada equipo por jugador: los flojitos restan el doble de lo que les falta.",
+    "Suman un poco el buen pase y haber jugado juntos seguido.",
+  ],
+  fisico: [
+    "El nivel de cada uno se gasta con el aguante: con 100 rinde todo, con 0 rinde tres cuartos.",
+    "El aguante promedio de los dos no puede separarse más de 5 puntos.",
+    "Los de poco fondo (aguante 40 o menos) van mitad y mitad, y los motores (pique y aguante de 85 para arriba) también.",
+  ],
+  puestos: [
+    "Cada equipo se lleva a uno de los arqueros de verdad (puntaje de arquero de 60 para arriba).",
+    "Defensa, medio y ataque tienen que quedar parejos, jugador por jugador.",
+    "Después de eso, el nivel más parejo posible.",
+  ],
+  todo: [
+    "Junta las reglas de Por físico y las de Por puestos.",
+    "Son más condiciones, así que el nivel puede quedar un poco menos clavado.",
+  ],
+  capitanes: [
+    "Elegís los dos capitanes, o los sortea. Quién arranca se tira a pan y queso.",
+    "Eligen de a uno, siempre al de mejor puntaje que quede.",
+    "Con una viveza: si se quedan sin arquero, agarran uno antes de que se acaben. Y nadie elige a alguien que no se banca con uno de su equipo.",
+    "No busca el reparto más parejo: muestra cómo quedaría si lo hicieran ustedes.",
+  ],
+};
+
+/** One thing a strategy reads off the players, and who has it filled in. */
+export interface DataCheck {
+  key: "stamina" | "pace" | "keepers" | "link";
+  label: string;
+  /** Without it the strategy cannot do its job; with it missing it only does it worse. */
+  required: boolean;
+  ok: boolean;
+  /** How many have it, out of `total`. For keepers, how many there are, out of the two needed. */
+  have: number;
+  total: number;
+  /** Who is missing it, for the per-player fields; empty for keepers. */
+  missing: PlayerId[];
+  /** What happens to whoever is missing it. */
+  effect: string;
+}
+
+/** The data checks a strategy depends on, in the order they matter. */
+export function strategyData(
+  strategy: ArmarStrategy,
+  players: readonly Player[],
+): DataCheck[] {
+  const field = (
+    key: "stamina" | "pace" | "link",
+    label: string,
+    required: boolean,
+    filled: (p: Player) => boolean,
+    effect: string,
+  ): DataCheck => {
+    const missing = players.filter((p) => !filled(p)).map((p) => p.id);
+    return {
+      key,
+      label,
+      required,
+      ok: missing.length === 0,
+      have: players.length - missing.length,
+      total: players.length,
+      missing,
+      effect,
+    };
+  };
+  const stamina = () =>
+    field(
+      "stamina",
+      "Aguante",
+      true,
+      (p) => p.attributes.stamina !== undefined,
+      "Al que no lo tiene se le pone el promedio del grupo.",
+    );
+  const pace = () =>
+    field(
+      "pace",
+      "Pique",
+      false,
+      (p) => p.attributes.pace !== undefined,
+      "Sin pique no se sabe si es un motor.",
+    );
+  const link = () =>
+    field(
+      "link",
+      "Pase o juego en equipo",
+      false,
+      (p) => p.attributes.passing !== undefined || p.attributes.teamplay !== undefined,
+      "Sin eso no suma ni resta por cómo se la pasa.",
+    );
+  const keepers = (required: boolean): DataCheck => {
+    const count = players.filter(isKeeper).length;
+    return {
+      key: "keepers",
+      label: "Arqueros",
+      required,
+      ok: count >= 2,
+      have: Math.min(count, 2),
+      total: 2,
+      missing: [],
+      effect:
+        count === 0
+          ? "Nadie tiene puntaje de arquero de 60 para arriba: el arco se reparte a ciegas."
+          : count === 1
+            ? "Hay uno solo: el otro equipo va a poner a cualquiera."
+            : "",
+    };
+  };
+
+  switch (strategy) {
+    case "nivel":
+      return [link()];
+    case "fisico":
+      return [stamina(), pace()];
+    case "puestos":
+      return [keepers(true)];
+    case "todo":
+      return [stamina(), pace(), keepers(true)];
+    case "capitanes":
+      return [keepers(false)];
+  }
+}
+
+/** True when every check the strategy cannot do without is complete. */
+export function strategyReady(checks: readonly DataCheck[]): boolean {
+  return checks.every((check) => !check.required || check.ok);
+}
 
 /** At or under this much aguante, a player is "de poco fondo". */
 export const LOW_STAMINA = 40;
