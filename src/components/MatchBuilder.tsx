@@ -42,7 +42,22 @@ import { PlayerForm } from "./PlayerForm";
 import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { useLongPress } from "@/useLongPress";
 import { PlayerAvatar } from "./PlayerAvatar";
-import { evaluateLineup, findSplits, SplitError, type TeamEvaluation } from "@/lib/balance";
+import {
+  evaluateLineup,
+  findSplits,
+  SplitError,
+  type EvaluationContext,
+  type TeamEvaluation,
+} from "@/lib/balance";
+import { buildFamiliarity, familiarityBonus } from "@/lib/familiarity";
+import {
+  SPLIT_STRATEGIES,
+  STRATEGY_HINT,
+  STRATEGY_LABEL,
+  strategyContext,
+  strategyCost,
+  type SplitStrategy,
+} from "@/lib/strategies";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
 import {
   buildTogetherIndex,
@@ -102,6 +117,28 @@ type Selection =
   | { where: "pitch"; team: TeamKey; slot: number }
   | { where: "unassigned"; id: PlayerId };
 
+
+/**
+ * What a strategy has to work with in this squad, said only when it is short
+ * of something: counts of who has a field filled in, never what is in it.
+ */
+function strategyDataNote(
+  strategy: SplitStrategy,
+  squad: ReturnType<typeof strategyContext>,
+): string {
+  const notes: string[] = [];
+  if ((strategy === "fisico" || strategy === "todo") && squad.staminaKnown < squad.squadSize) {
+    notes.push(
+      squad.staminaKnown === 0
+        ? "Nadie tiene el aguante cargado, así que por ahora sale igual que por nivel."
+        : `${squad.staminaKnown} de ${squad.squadSize} tienen el aguante cargado; el resto cuenta como el promedio.`,
+    );
+  }
+  if ((strategy === "puestos" || strategy === "todo") && squad.keepers.size === 0) {
+    notes.push("Nadie tiene puntaje de arquero de 60 para arriba, así que no hay arqueros para repartir.");
+  }
+  return notes.length === 0 ? "" : ` ${notes.join(" ")}`;
+}
 
 /** The players actually standing in a lineup, empty slots skipped. */
 function lineupIds(lineup: (Player | null)[]): PlayerId[] {
@@ -204,8 +241,33 @@ export function MatchBuilder({
 
   const unassigned = squadPlayers.filter((p) => !placedIds.has(p.id));
 
-  const evalA = useMemo(() => evaluateLineup(lineupA, formationA), [lineupA, formationA]);
-  const evalB = useMemo(() => evaluateLineup(lineupB, formationB), [lineupB, formationB]);
+  /**
+   * Who is used to playing with whom, from the games already played. Public
+   * facts — who stood on which side — so it travels with every evaluation.
+   */
+  const evaluationContext = useMemo<EvaluationContext>(() => {
+    const index = buildFamiliarity(matches, match.id);
+    return { familiarity: (ids) => familiarityBonus(index, ids) };
+  }, [matches, match.id]);
+
+  /** The squad as the strategies read it: aguante, motores, keepers, lines. */
+  const squadContext = useMemo(() => strategyContext(squadPlayers), [squadPlayers]);
+
+  /**
+   * Which question Armar asks. Not stored on the match: it is how this
+   * person wants to look at tonight, and every lineup is read against all of
+   * them anyway.
+   */
+  const [strategy, setStrategy] = useState<SplitStrategy>("nivel");
+
+  const evalA = useMemo(
+    () => evaluateLineup(lineupA, formationA, evaluationContext),
+    [lineupA, formationA, evaluationContext],
+  );
+  const evalB = useMemo(
+    () => evaluateLineup(lineupB, formationB, evaluationContext),
+    [lineupB, formationB, evaluationContext],
+  );
 
   const hasLineup = placedIds.size > 0;
 
@@ -459,7 +521,7 @@ export function MatchBuilder({
    * failure mode that is much worse than a brief pause: a callback that never
    * fires because the browser backgrounded the tab, leaving the button dead.
    */
-  const balance = useCallback(() => {
+  const balance = useCallback((asked: SplitStrategy = strategy) => {
     setBalanceError(null);
     try {
       const result = findSplits({
@@ -473,6 +535,8 @@ export function MatchBuilder({
         handicap: match.handicap,
         avoid: match.respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
         together: match.respectTogether ? togetherIndex : EMPTY_TOGETHER_INDEX,
+        context: evaluationContext,
+        cost: strategyCost(asked, squadContext, match.basis, match.handicap),
         optionCount: 6,
       });
       setOptions(result);
@@ -500,7 +564,11 @@ export function MatchBuilder({
     formationA,
     formationB,
     applyOption,
+    strategy,
+    evaluationContext,
+    squadContext,
   ]);
+
 
   const stepOption = useCallback(
     (delta: number) => {
@@ -685,6 +753,20 @@ export function MatchBuilder({
   // headcount, which is fine while you are still fiddling — but the split
   // cannot run until they match, so say why rather than fail on the click.
   const mismatch = match.sizeA + match.sizeB - match.squad.length;
+
+  /**
+   * Picking a strategy re-asks the question straight away when what is on the
+   * pitch is a search result nobody has touched; a lineup somebody moved by
+   * hand is theirs, and waits for Armar.
+   */
+  const chooseStrategy = useCallback(
+    (next: SplitStrategy) => {
+      setStrategy(next);
+      if (options != null && !edited && mismatch === 0) balance(next);
+    },
+    [options, edited, mismatch, balance],
+  );
+
   const sizeHint =
     mismatch > 0
       ? `Te falta${mismatch === 1 ? "" : "n"} ${mismatch} jugador${mismatch === 1 ? "" : "es"} para llenar un ${match.sizeA} v ${match.sizeB}. Sumá gente o achicá un equipo.`
@@ -868,7 +950,7 @@ export function MatchBuilder({
                 <div className="space-y-4 lg:sticky lg:top-14">
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
-                      onClick={balance}
+                      onClick={() => balance()}
                       disabled={mismatch !== 0}
                       title={mismatch === 0 ? undefined : sizeHint ?? undefined}
                       className="flex-1 sm:flex-none"
@@ -917,6 +999,36 @@ export function MatchBuilder({
                         Compartir
                       </Button>
                     )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div
+                      role="radiogroup"
+                      aria-label="Cómo armar los equipos"
+                      className="flex flex-wrap gap-1.5"
+                    >
+                      {SPLIT_STRATEGIES.map((key) => (
+                        <button
+                          key={key}
+                          type="button"
+                          role="radio"
+                          aria-checked={strategy === key}
+                          onClick={() => chooseStrategy(key)}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs transition-colors",
+                            strategy === key
+                              ? "border-primary bg-primary/15 text-foreground"
+                              : "border-border text-muted-foreground hover:bg-accent",
+                          )}
+                        >
+                          {STRATEGY_LABEL[key]}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {STRATEGY_HINT[strategy]}
+                      {strategyDataNote(strategy, squadContext)}
+                    </p>
                   </div>
 
                   {sizeHint != null && (
@@ -1027,6 +1139,7 @@ export function MatchBuilder({
                     <TeamInsights
                       evalA={evalA}
                       evalB={evalB}
+                      squad={squadContext}
                       teamA={match.teamA}
                       teamB={match.teamB}
                       basis={match.basis}

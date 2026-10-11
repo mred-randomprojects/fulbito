@@ -1,6 +1,7 @@
 import { ScoresVisible, HiddenScoresNotice } from "./ScorePrivacy";
-import { Info, Scale, ShieldAlert, Sparkles } from "lucide-react";
-import { comparisons, insights, summarise, VERDICT_LABEL } from "@/lib/insights";
+import { Info, ListChecks, Scale, ShieldAlert, Sparkles } from "lucide-react";
+import { comparisons, insights, summarise, VERDICT_LABEL, verdictFor } from "@/lib/insights";
+import { readMatchup, STRATEGY_LABEL, type StrategyContext } from "@/lib/strategies";
 import type { TeamEvaluation } from "@/lib/balance";
 import { KITS, type BalanceBasis, type TeamConfig } from "@/types";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,8 @@ import { cn } from "@/lib/utils";
 interface Props {
   evalA: TeamEvaluation;
   evalB: TeamEvaluation;
+  /** The squad as the strategies read it, for "según cada criterio". */
+  squad: StrategyContext;
   teamA: TeamConfig;
   teamB: TeamConfig;
   basis: BalanceBasis;
@@ -24,6 +27,7 @@ interface Props {
 function TeamInsightsContent({
   evalA,
   evalB,
+  squad,
   teamA,
   teamB,
   basis,
@@ -31,6 +35,7 @@ function TeamInsightsContent({
   search,
   edited,
 }: Props) {
+  const reading = readMatchup(squad, evalA, evalB, teamA.name, teamB.name, basis);
   const summary = summarise(evalA, evalB, basis, handicap);
   const rows = comparisons(evalA, evalB);
   const notes = insights(evalA, evalB, teamA.name, teamB.name, basis, handicap);
@@ -112,6 +117,61 @@ function TeamInsightsContent({
 
       <div className="rounded-xl border border-border bg-card p-4">
         <h3 className="mb-3 flex items-center gap-1.5 text-sm font-medium">
+          <ListChecks className="h-4 w-4 text-primary" />
+          Según cada criterio
+        </h3>
+        <ul className="space-y-3 text-sm">
+          <Criterion
+            title={STRATEGY_LABEL.nivel}
+            ok={summary.verdict === "even" || summary.verdict === "slight"}
+            lines={[`${VERDICT_LABEL[summary.verdict]}, el de arriba.`]}
+          />
+          <Criterion
+            title={STRATEGY_LABEL.fisico}
+            ok={
+              reading.staminaKnown === 0
+                ? null
+                : reading.broken.fisico.length === 0 &&
+                  verdictFor(reading.enduringEdge - handicap) !== "clear" &&
+                  verdictFor(reading.enduringEdge - handicap) !== "lopsided"
+            }
+            lines={
+              reading.staminaKnown === 0
+                ? ["Nadie tiene el aguante cargado. Cargalo en la ficha y esto se pone interesante."]
+                : [
+                    `Aguante promedio ${reading.a.stamina.toFixed(0)} contra ${reading.b.stamina.toFixed(0)}.`,
+                    `Con el desgaste: ${edgeText(reading.enduringEdge - handicap, teamA.name, teamB.name)}`,
+                    ...reading.broken.fisico,
+                  ]
+            }
+          />
+          <Criterion
+            title={STRATEGY_LABEL.puestos}
+            ok={reading.broken.puestos.length === 0}
+            lines={
+              reading.broken.puestos.length === 0
+                ? [
+                    reading.anyKeepers
+                      ? "Arquero de verdad para cada lado, y las líneas parejas."
+                      : "Las líneas parejas. Nadie tiene puntaje de arquero de 60 para arriba.",
+                  ]
+                : reading.broken.puestos
+            }
+          />
+          {(evalA.familiarity > 0 || evalB.familiarity > 0) && (
+            <Criterion
+              title="Los que juegan juntos"
+              ok={null}
+              lines={[
+                `Por haber jugado juntos: ${teamA.name} +${evalA.familiarity.toFixed(1)}, ${teamB.name} +${evalB.familiarity.toFixed(1)} por jugador. Ya está sumado en el nivel.`,
+              ]}
+            />
+          )}
+        </ul>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4">
+        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-medium">
           <Sparkles className="h-4 w-4 text-primary" />
           Qué quiere decir todo esto
         </h3>
@@ -162,6 +222,47 @@ function searchNote(
     return `Se probaron las ${search.evaluated.toLocaleString("es-AR")} combinaciones posibles, una por una. Esta es la mejor de verdad, no una que salió de pedo.`;
   }
   return `Son demasiadas combinaciones para probarlas todas, así que se afinaron ${search.evaluated} repartos prometedores a fuerza de prueba y error. Va a estar muy bien, pero no te lo puedo jurar.`;
+}
+
+/** "Claro por 3.2 por jugador", or level when the gap is inside the even band. */
+function edgeText(edge: number, nameA: string, nameB: string): string {
+  if (verdictFor(edge) === "even") return "parejo.";
+  return `${edge > 0 ? nameA : nameB} por ${Math.abs(edge).toFixed(1)} por jugador.`;
+}
+
+/** One strategy's reading of the lineup: a title, a tick or a warning, the why. */
+function Criterion({
+  title,
+  ok,
+  lines,
+}: {
+  title: string;
+  /** null when there is nothing to judge — no data, or nothing to compare. */
+  ok: boolean | null;
+  lines: string[];
+}) {
+  return (
+    <li>
+      <div className="flex items-center gap-2">
+        <span className="font-medium">{title}</span>
+        {ok != null && (
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[11px]",
+              ok ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300",
+            )}
+          >
+            {ok ? "Bien" : "Ojo"}
+          </span>
+        )}
+      </div>
+      {lines.map((line, index) => (
+        <p key={index} className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          {line}
+        </p>
+      ))}
+    </li>
+  );
 }
 
 function Legend({ color, label }: { color: string; label: string }) {

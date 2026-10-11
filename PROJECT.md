@@ -147,7 +147,25 @@ enters the app without going through `normalizeAppData` — a hand-edited
   sit above (or below) the same players' level: a passing game is a property
   of the side. No attributes, no chemistry. "Nivel total" on screen stays the
   raw sum; "Lo que rinden por cabeza" shows `strength`. The Pronóstico does
-  not use any of this; it has its own models.
+  not use any of this; it has its own models. `familiarity` comes from
+  `lib/familiarity.ts` through an `EvaluationContext`: up to
+  `FAMILIARITY_POINTS` (3) a player for a side whose every pair has shared a
+  side in 4+ of the latest 30 played games — lineups, not opinions. Only the
+  match screen passes one; Repartir, Equipos and the Pronóstico see zero.
+- **Armar asks one of four questions** (`lib/strategies.ts`), picked with the
+  chips above the pitch and held in component state, not on the `Match`:
+  *Por nivel* is `balanceCost`; *Por físico* swaps the level term for the
+  edge with each slot worn down by `rating × (0.75 + 0.25 × aguante/100)` and
+  prices a mean-aguante gap past 5, de poco fondo (aguante ≤ 40) or motores
+  (pique and aguante ≥ 85) bunched on one side; *Por puestos* adds
+  `KEEPER_PENALTY` per side without an `isKeeper` (GK ≥ 60) when the squad
+  has any, and the per-player DEF/MID/FWD aptitude gaps; *Todo junto* is both.
+  `findSplits` takes the strategy as its `cost`, and the avoid/together
+  penalties stay on top, unchanged. A blank aguante counts as the squad's
+  mean and never makes anyone poco fondo or motor. Physical rules cost
+  `RULE_PENALTY` (10): above balance, below keepers and named pairs. Whatever
+  built the lineup, "Según cada criterio" reads it against all of them
+  (`readMatchup`). Repartir does not have strategies yet.
 - **Keep-apart penalties scale with rating costs.** `AVOID_PENALTY` is ten
   rating ranges (1,000 currently) per conflicting pair, shared by the two-team
   and multi-team searches. It must outweigh a full-range imbalance under the
@@ -313,6 +331,8 @@ gate, including tooltips and charts.
 | --- | --- |
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
+| `lib/strategies.ts` | What "parejo" means under each of Armar's strategies, and how a lineup reads against all of them |
+| `lib/familiarity.ts` | Who has shared a side with whom lately, and what that is worth to a side |
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
 | `lib/splitDraft.ts` | Repartir's device-local working copy: validation, compact result storage and re-scoring on restore |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |

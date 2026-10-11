@@ -208,10 +208,28 @@ export interface TeamEvaluation {
    */
   chemistry: number;
   /**
+   * What the side gains from having played together before, in points per
+   * player. Zero without an `EvaluationContext` that knows the history.
+   */
+  familiarity: number;
+  /**
    * What the side is actually worth per player: `average`, less `weakLinks`,
-   * plus `chemistry`. This — not the raw sum — is what balancing compares.
+   * plus `chemistry` and `familiarity`. This — not the raw sum — is what
+   * balancing compares.
    */
   strength: number;
+}
+
+/**
+ * What an evaluation may know beyond the eleven in front of it.
+ *
+ * Only history so far: how used a set of people is to playing on the same
+ * side, already in points per player. See `lib/familiarity.ts`. Left out, the
+ * side is judged as if nobody had ever met, which is what every caller that
+ * has no match history to hand gets.
+ */
+export interface EvaluationContext {
+  familiarity?: (ids: readonly PlayerId[]) => number;
 }
 
 /**
@@ -277,6 +295,7 @@ const EMPTY_LINE: LineStrength = { count: 0, total: 0, average: 0 };
 export function evaluateLineup(
   lineup: readonly (Player | null)[],
   formation: Formation,
+  context: EvaluationContext = {},
 ): TeamEvaluation {
   const slotRatings: number[] = [];
   const byRole: Record<Role, LineStrength> = {
@@ -324,6 +343,12 @@ export function evaluateLineup(
         : [{ player, rating: slotRatings[index] }];
     }),
   );
+  const ids = formation.slots.flatMap((_, index) => {
+    const player = lineup[index] ?? null;
+    return player == null ? [] : [player.id];
+  });
+  const familiarity =
+    context.familiarity !== undefined && ids.length > 1 ? context.familiarity(ids) : 0;
   const present = slotRatings.filter((_, i) => lineup[i] != null);
   const variance =
     present.length > 0
@@ -342,7 +367,8 @@ export function evaluateLineup(
     confidence: filled > 0 ? confidenceSum / filled : 0,
     weakLinks,
     chemistry,
-    strength: filled > 0 ? average - weakLinks + chemistry : 0,
+    familiarity,
+    strength: filled > 0 ? average - weakLinks + chemistry + familiarity : 0,
   };
 }
 
@@ -350,17 +376,18 @@ export function evaluateLineup(
 export function evaluateSquad(
   players: readonly Player[],
   formation: Formation,
+  context: EvaluationContext = {},
 ): TeamEvaluation {
   if (players.length !== formation.slots.length) {
     // Partially filled team — lay players out in order and score what is there.
     const lineup = formation.slots.map((_, i) => players[i] ?? null);
-    return evaluateLineup(lineup, formation);
+    return evaluateLineup(lineup, formation, context);
   }
   const { slotToPlayer } = bestAssignment(players, formation.slots);
   const lineup = slotToPlayer.map((playerIndex) =>
     playerIndex >= 0 ? players[playerIndex] : null,
   );
-  return evaluateLineup(lineup, formation);
+  return evaluateLineup(lineup, formation, context);
 }
 
 /* ------------------------------------------------------------------ */
@@ -461,6 +488,14 @@ export interface SplitRequest {
    * to ignore the preference, which is what the match's own switch does.
    */
   together?: TogetherIndex;
+  /** History and anything else the evaluation of a side should know. */
+  context?: EvaluationContext;
+  /**
+   * What makes one split more even than another, when it is not
+   * `balanceCost` — the strategies in `lib/strategies.ts`. The avoid and
+   * together penalties are added on top either way.
+   */
+  cost?: (a: TeamEvaluation, b: TeamEvaluation) => number;
   /** How many distinct options to return. */
   optionCount?: number;
   /** Injected in tests for deterministic search. */
@@ -552,6 +587,8 @@ export function findSplits(request: SplitRequest): SplitResult {
     handicap,
     avoid = EMPTY_AVOID_INDEX,
     together = EMPTY_TOGETHER_INDEX,
+    context = {},
+    cost = (a: TeamEvaluation, b: TeamEvaluation) => balanceCost(a, b, basis, handicap),
     optionCount = 5,
   } = request;
 
@@ -660,6 +697,7 @@ export function findSplits(request: SplitRequest): SplitResult {
     const result = evaluateSquad(
       indices.map((i) => players[i]),
       formation,
+      context,
     );
     evalCache.set(key, result);
     return result;
@@ -681,7 +719,7 @@ export function findSplits(request: SplitRequest): SplitResult {
       // kept outside it would be honoured by the exhaustive path and quietly
       // ignored by the other one.
       cost:
-        balanceCost(evalA, evalB, basis, handicap) +
+        cost(evalA, evalB) +
         AVOID_PENALTY * conflicts +
         TOGETHER_PENALTY * separated,
       edge: strengthEdge(evalA, evalB, basis),

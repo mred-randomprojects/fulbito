@@ -39,6 +39,7 @@ const SPREAD_GAP = RATING_RANGE * 0.055;
 const STAR_GAP = RATING_RANGE * 0.08;
 const WEAK_LINK_GAP = RATING_RANGE * 0.03;
 const CHEMISTRY_GAP = RATING_RANGE * 0.02;
+const FAMILIARITY_GAP = RATING_RANGE * 0.01;
 
 /**
  * The word for a gap of this size, in rating points per player.
@@ -113,7 +114,7 @@ export function comparisons(
     {
       key: "strength",
       label: "Lo que rinden por cabeza",
-      hint: "El promedio, pero los flojitos restan el doble de lo que les falta y el buen pase entre todos suma. Es lo que se usa para emparejar.",
+      hint: "El promedio, pero los flojitos restan el doble de lo que les falta, y el buen pase y haber jugado juntos seguido suman. Es lo que se usa para emparejar.",
       a: a.strength,
       b: b.strength,
       scale: RATING_MAX,
@@ -260,6 +261,15 @@ export function insights(
     out.push({
       side: chemistryGap > 0 ? "A" : "B",
       text: `${passers} se la pasan mejor entre ellos: el pase y el juego en equipo les suman ${Math.abs(chemistryGap).toFixed(1)} puntos por jugador más allá de lo que vale cada uno.`,
+    });
+  }
+
+  const familiarityGap = a.familiarity - b.familiarity;
+  if (Math.abs(familiarityGap) >= FAMILIARITY_GAP) {
+    const used = familiarityGap > 0 ? nameA : nameB;
+    out.push({
+      side: familiarityGap > 0 ? "A" : "B",
+      text: `${used} vienen jugando más juntos y se conocen de memoria: eso les suma ${Math.abs(familiarityGap).toFixed(1)} puntos por jugador.`,
     });
   }
 
