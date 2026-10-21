@@ -1005,6 +1005,13 @@ it differs.)
   ballot it names. The obvious way round — "you may write a ballot if you have
   no marker" — passes a batch holding two ballots and one marker, because
   rules are evaluated against the state before the write.
+- **A marker names a ballot nobody has written.** Ballot ids are not secret:
+  `ignored` on the poll (and on a recap) lists the ones set aside, to whoever
+  can open the link. Until October 2026 a fresh account could create its
+  marker naming one of those and the rules then took it for that ballot's
+  voter — read it, rewrite it. Now a marker is created only for an id with no
+  ballot under it, shaped like one `generateId()` makes, and the same holds
+  under `recaps/{id}/voters`.
 - **Nothing is aggregated on the way in.** `lib/crowd.ts` takes the median of
   the raw votes on every pass, the same bargain `lib/stats.ts` makes with
   match results. Below `MIN_VOTERS` there is no number at all, and

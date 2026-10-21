@@ -527,6 +527,33 @@ describe("polls", () => {
     await denied(setIgnoredBallots(as(ADMIN), pollId, []));
   });
 
+  /**
+   * The ids of the ballots set aside are on the poll, for whoever can open
+   * the link. A marker naming one of them used to make a fresh account that
+   * ballot's voter: read it, rewrite it, sign it. A marker may only name a
+   * ballot nobody has written.
+   */
+  it("keeps a set-aside ballot its voter's: no fresh account can claim its id", async () => {
+    const pollId = await createPoll(as(OWNER), "owner-1", draft);
+    const ballotId = await claimBallotId(as(VOTER), pollId, "voter-1");
+    const ballot = { votes: { p1: { played: true, overall: 20, roleRatings: {}, attributes: {} } } };
+    await submitBallot(as(VOTER), pollId, ballotId, ballot);
+    await setIgnoredPollBallots(as(OWNER), pollId, [ballotId]);
+
+    const db = as(VOTER_2);
+    const visible = (await fetchPoll(db, pollId))?.ignored ?? [];
+    assert.deepEqual(visible, [ballotId]);
+    await denied(setDoc(doc(db, "polls", pollId, "voters", "voter-2"), { ballotId }));
+    await denied(fetchBallot(db, pollId, ballotId));
+    await denied(setDoc(doc(db, "polls", pollId, "ballots", ballotId), { votes: {} }));
+    // Nor anything that is not an id the app makes — a uid, say.
+    await denied(
+      setDoc(doc(db, "polls", pollId, "voters", "voter-2"), { ballotId: "Xk3m9QpL2vZr8TnW5yHc1BdF0aE7" }),
+    );
+    // A fresh one is still theirs to claim.
+    assert.notEqual(await claimBallotId(db, pollId, "voter-2"), ballotId);
+  });
+
   it("refuses an identity whose address is not the token's", async () => {
     const pollId = await createPoll(as(OWNER), "owner-1", draft);
     const db = as(VOTER);
@@ -1002,6 +1029,20 @@ describe("recaps", () => {
     await denied(setIgnoredBallots(as(STRANGER), id, ["b1"]));
     await setIgnoredBallots(as(OWNER), id, ["b1"]);
     assert.deepEqual((await getDoc(doc(as(OWNER), "recaps", id))).data()?.ignored, ["b1"]);
+  });
+
+  it("keeps a set-aside ballot its voter's: no fresh account can claim its id", async () => {
+    const id = await publish();
+    const ballotId = await claimRecapBallotId(as(VOTER), id, "voter-1");
+    await submitRecapBallot(as(VOTER), id, ballotId, { players: { [MAXI]: { score: 20 } } });
+    await setIgnoredBallots(as(OWNER), id, [ballotId]);
+
+    const db = as(STRANGER);
+    const visible = (await getDoc(doc(db, "recaps", id))).data()?.ignored;
+    assert.deepEqual(visible, [ballotId]);
+    await denied(setDoc(doc(db, "recaps", id, "voters", "stranger"), { ballotId }));
+    await denied(fetchOwnRecapBallot(db, id, ballotId));
+    assert.notEqual(await claimRecapBallotId(db, id, "stranger"), ballotId);
   });
 
   it("lets only the owner take the recap down", async () => {

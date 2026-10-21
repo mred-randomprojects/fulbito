@@ -31,6 +31,10 @@ rules_version = '2';
 //
 //   a. A face belongs to whoever owns the poll, recap or pick it sits under.
 //      Stamping your own uid on it is not enough — see `canWriteFace()`.
+//   b. A voter's marker names a ballot nobody has written yet. Ballot ids are
+//      not secret — `ignored` on a poll or a recap lists the ones set aside,
+//      to whoever holds the link — so a marker pointed at an existing one
+//      would hand somebody else's puntajes to a fresh account.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -101,6 +105,15 @@ service cloud.firestore {
     function isPerson() {
       return request.auth != null
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // An id `generateId()` made: a UUID, or two base-36 runs and a dash where
+    // `crypto.randomUUID` is missing. Always a dash, which a Firebase uid
+    // never has, so a marker cannot name a device's uid either.
+    function isGeneratedId(id) {
+      return id is string
+        && id.size() <= 64
+        && id.matches('[A-Za-z0-9]+(-[A-Za-z0-9]+)+');
     }
 
     // What a face is: the three fields every publisher has always written,
@@ -211,10 +224,14 @@ service cloud.firestore {
     // who may sync their own roster; the entire point of a poll is people who
     // are not on that list answering it.
     //
-    // Not defended: the owner can list their own poll's ballot ids, so they
-    // could point their own marker at one and overwrite it. That is somebody
-    // forging the answers to their own question, which costs them their own
-    // numbers and nobody else's.
+    // And a marker may only name a ballot that does not exist yet — (b) at
+    // the top. `ignored` on the poll lists the ballots the owner set aside, to
+    // anybody who can open the link, and a marker pointed at one of those
+    // used to read, rewrite and re-sign somebody else's answers.
+    //
+    // Not defended: a ballot that was deleted leaves its id free, so whoever
+    // learned it can claim it afresh — a ballot that is gone is nobody's
+    // answers any more, and one filed under a set-aside id is still set aside.
     // ------------------------------------------------------------------
     match /polls/{pollId} {
       function poll() {
@@ -308,11 +325,12 @@ service cloud.firestore {
         // uid beside every ballot and undo the whole design above.
         allow get: if request.auth != null && request.auth.uid == voterId;
         allow list: if false;
+        // Naming a ballot nobody has written — see the header of this block.
         allow create: if isPerson()
           && request.auth.uid == voterId
           && request.resource.data.keys().hasOnly(['ballotId'])
-          && request.resource.data.ballotId is string
-          && request.resource.data.ballotId.size() > 0;
+          && isGeneratedId(request.resource.data.ballotId)
+          && !exists(/databases/$(database)/documents/polls/$(pollId)/ballots/$(request.resource.data.ballotId));
         // Never re-pointed: that is what makes one marker mean one vote.
         allow update, delete: if false;
       }
@@ -602,11 +620,15 @@ service cloud.firestore {
         // also why `deleteRecap` leaves these behind: they cannot be named.
         allow get: if request.auth != null && request.auth.uid == voterId;
         allow list: if false;
+        // A marker names a ballot nobody has written yet — (b) at the top.
+        // `ignored` on the recap lists ballot ids to whoever holds the link,
+        // and a marker pointed at one of those would read somebody else's
+        // puntajes back as "yours".
         allow create: if isPerson()
           && request.auth.uid == voterId
           && request.resource.data.keys().hasOnly(['ballotId'])
-          && request.resource.data.ballotId is string
-          && request.resource.data.ballotId.size() > 0;
+          && isGeneratedId(request.resource.data.ballotId)
+          && !exists(/databases/$(database)/documents/recaps/$(recapId)/ballots/$(request.resource.data.ballotId));
         // Never re-pointed: that is what makes one marker mean one ballot.
         allow update, delete: if false;
       }

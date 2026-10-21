@@ -342,4 +342,18 @@ const FACES: Row[] = [
   deny("A-F23", "anon deletes the organiser's votación face", { who: ANON, method: "delete", path: "picks/M1/players/p1", existing: face("owner-1") }),
 ];
 
-export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES];
+/* ------------------------------------------------------------------ */
+/* A marker names a ballot nobody has written: ids are not secret.     */
+/* ------------------------------------------------------------------ */
+
+const MARKERS: Row[] = [
+  deny("A-M1", "a fresh account points its marker at a ballot the owner set aside (the ids are on the poll)", { who: STRANGER, method: "create", path: "polls/P1/voters/stranger", data: { ballotId: "pb-ignored" } }, "ALLOW"),
+  deny("A-M2", "a marker naming somebody else's live poll ballot", { who: STRANGER, method: "create", path: "polls/P1/voters/stranger", data: { ballotId: "pb1" } }, "ALLOW"),
+  deny("A-M3", "a marker naming something that is not an id", { who: STRANGER, method: "create", path: "polls/P1/voters/stranger", data: { ballotId: "a/b" } }, "ALLOW"),
+  deny("A-M4", "a marker naming a uid rather than an id the app makes", { who: STRANGER, method: "create", path: "polls/P1/voters/stranger", data: { ballotId: "Xk3m9QpL2vZr8TnW5yHc1BdF0aE7" }, world: { ...W, "polls/P1/ballots/Xk3m9QpL2vZr8TnW5yHc1BdF0aE7": null } }, "ALLOW"),
+  deny("A-M5", "a fresh account points its marker at a ballot the owner set aside (the ids are on the recap)", { who: STRANGER, method: "create", path: "recaps/M1/voters/stranger", data: { ballotId: "rb-ignored" } }, "ALLOW"),
+  deny("A-M6", "a marker naming somebody else's live recap ballot", { who: STRANGER, method: "create", path: "recaps/M1/voters/stranger", data: { ballotId: "rb1" } }, "ALLOW"),
+  deny("A-M7", "a marker naming an id longer than any the app makes", { who: STRANGER, method: "create", path: "recaps/M1/voters/stranger", data: { ballotId: `a-${"x".repeat(63)}` } }, "ALLOW"),
+];
+
+export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES, ...MARKERS];
