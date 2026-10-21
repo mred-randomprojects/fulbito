@@ -9,6 +9,8 @@ import {
   type PlayerId,
 } from "./types.js";
 import { addVideo } from "./lib/video.js";
+import { upsertMatch, upsertPlayer } from "./appDataOps.js";
+import { mergeAppData } from "./mergeAppData.js";
 
 /**
  * `normalizeAppData` is the only door into the app's data, so the interesting
@@ -598,3 +600,56 @@ describe("a match with no date", () => {
     }
   });
 });
+
+/**
+ * A field a newer build added, read by this one. It used to be dropped here,
+ * on every read: a phone still on the previous build saved the record back
+ * without it under the same stamp, that copy won the tie after the reload,
+ * and the next edit wrote it over the cloud's — the field gone everywhere,
+ * without anybody having touched it.
+ */
+describe("a field from a newer build", () => {
+  const LATER = { futuro: { cosa: [1, 2, 3] }, otra: "x" };
+  /** Every field of a record, the ones its type does not name included. */
+  const fieldsOf = (record: object): Record<string, unknown> => ({ ...record });
+
+  it("is carried along, untouched, on a player, a match and a team", () => {
+    const data = normalizeAppData({
+      players: [{ id: "p1", firstName: "Juan", ...LATER }],
+      matches: [{ id: "m1", ...LATER }],
+      teams: [{ id: "t1", name: "Los Pibes", ...LATER }],
+    });
+    for (const record of [data.players[0], data.matches[0], data.teams[0]]) {
+      assert.deepEqual(fieldsOf(record).futuro, LATER.futuro);
+      assert.equal(fieldsOf(record).otra, "x");
+    }
+  });
+
+  it("never lets a field this build knows skip its normalizer", () => {
+    const player = withPlayer({ foot: "middle", rating: "a lot", tags: "x" });
+    assert.equal(player.foot, undefined);
+    assert.equal(typeof player.rating, "number");
+    assert.deepEqual(player.tags, []);
+    const match = withMatch({ videos: [{ url: "javascript:alert(1)", label: "" }], result: { goalsA: 1 } });
+    assert.deepEqual(match.videos, []);
+    assert.equal(match.result, null);
+  });
+
+  it("survives a save, a reload, a merge with the cloud and an edit on the old build", () => {
+    const cloud = normalizeAppData({
+      players: [{ id: "p1", firstName: "Juan", updatedAt: "2026-05-01T00:00:00.000Z", ...LATER }],
+      matches: [{ id: "m1", name: "Martes", updatedAt: "2026-05-01T00:00:00.000Z", ...LATER }],
+    });
+    // The phone: reads it, keeps it, reloads.
+    const reloaded = normalizeAppData(JSON.parse(JSON.stringify(cloud)));
+    const merged = mergeAppData(reloaded, cloud);
+    // And edits it, the way every screen does: a spread of what it read.
+    let edited = upsertPlayer(merged, { ...merged.players[0], nickname: "Juancho" }, "2026-06-01T00:00:00.000Z");
+    edited = upsertMatch(edited, { ...edited.matches[0], notes: "golazo" }, "2026-06-01T00:00:00.000Z");
+    const back = normalizeAppData(JSON.parse(JSON.stringify(edited)));
+    assert.deepEqual(fieldsOf(back.players[0]).futuro, LATER.futuro);
+    assert.deepEqual(fieldsOf(back.matches[0]).futuro, LATER.futuro);
+    assert.equal(back.players[0].nickname, "Juancho");
+  });
+});
+

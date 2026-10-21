@@ -742,6 +742,83 @@ function normalizeFoot(value: unknown): Foot | undefined {
   return value === "left" || value === "right" || value === "both" ? value : undefined;
 }
 
+/**
+ * The fields of a stored record that this build does not know, as they came.
+ *
+ * Every normalizer below rebuilds a record field by field, which is what lets
+ * a hand-edited blob never crash the app — and it used to drop everything it
+ * did not list. That is fine for junk and a slow data-loss bug for a field a
+ * *newer* build added: a phone still running the previous build reads the
+ * record, saves it back without the field under the same stamp, the copy
+ * without it wins the tie after the reload, and the next edit anywhere writes
+ * it over the cloud's. So what a build does not understand it carries along,
+ * untouched, and every field it does know still goes through its normalizer.
+ *
+ * The lists are `Record<keyof …, true>`, so a field added to a type and not
+ * to its list does not compile — a known field must never slip past its
+ * normalizer by being mistaken for an unknown one.
+ */
+function unknownFields(raw: Record<string, unknown>, known: object): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!Object.prototype.hasOwnProperty.call(known, key) && value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+const PLAYER_FIELDS: Record<keyof Player, true> = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  nickname: true,
+  avatar: true,
+  ratingScale: true,
+  rating: true,
+  roleRatings: true,
+  attributes: true,
+  foot: true,
+  avoid: true,
+  together: true,
+  tags: true,
+  notes: true,
+  updatedAt: true,
+};
+
+const MATCH_FIELDS: Record<keyof Match, true> = {
+  id: true,
+  name: true,
+  date: true,
+  teamA: true,
+  teamB: true,
+  squad: true,
+  pins: true,
+  sizeA: true,
+  sizeB: true,
+  lineupA: true,
+  lineupB: true,
+  basis: true,
+  respectAvoids: true,
+  respectTogether: true,
+  ratingScale: true,
+  handicap: true,
+  result: true,
+  courtCost: true,
+  payments: true,
+  notes: true,
+  reviews: true,
+  forecastNotes: true,
+  videos: true,
+  tournament: true,
+  updatedAt: true,
+};
+
+const TEAM_FIELDS: Record<keyof Team, true> = {
+  id: true,
+  name: true,
+  players: true,
+  updatedAt: true,
+};
+
 function normalizePlayer(raw: unknown): Player | null {
   if (!isRecord(raw)) return null;
   const id = str(raw.id);
@@ -769,7 +846,7 @@ function normalizePlayer(raw: unknown): Player | null {
   };
   const foot = normalizeFoot(raw.foot);
   if (foot !== undefined) player.foot = foot;
-  return player;
+  return { ...unknownFields(raw, PLAYER_FIELDS), ...player };
 }
 
 function normalizeKit(value: unknown, fallback: KitId): KitId {
@@ -924,6 +1001,7 @@ function normalizeMatch(raw: unknown): Match | null {
   const basis = raw.basis === "average" ? "average" : "total";
   const squad = strArray(raw.squad) as PlayerId[];
   return {
+    ...unknownFields(raw, MATCH_FIELDS),
     id: id as MatchId,
     name: str(raw.name, "Picado"),
     // Today in local time: the UTC date is already tomorrow from 21:00 here.
@@ -991,6 +1069,7 @@ function normalizeTeam(raw: unknown): Team | null {
   if (id === "") return null;
   const players = new Set(strArray(raw.players).filter((entry) => entry !== ""));
   return {
+    ...unknownFields(raw, TEAM_FIELDS),
     id: id as TeamId,
     name: str(raw.name),
     players: [...players] as PlayerId[],

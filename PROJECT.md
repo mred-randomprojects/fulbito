@@ -111,7 +111,11 @@ the loop above is exactly the app that existed before it.
 
 `src/types.ts` holds the domain model *and* the normalisation for it. Nothing
 enters the app without going through `normalizeAppData` — a hand-edited
-`localStorage` blob or a truncated backup file can never crash it.
+`localStorage` blob or a truncated backup file can never crash it. A field
+the build does not know is carried along untouched (`unknownFields`), and
+every field it does know still goes through its normalizer: a tab left open
+on the previous build used to strip a field the next build added, save the
+record back under the same stamp, and let the next edit erase it everywhere.
 
 - **`Player`** — name, nickname, avatar (a data URL, centre-cropped and
   re-encoded on upload), one required `rating`, optional `roleRatings` and
