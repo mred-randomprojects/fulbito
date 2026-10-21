@@ -11,7 +11,7 @@ import type { Auth, User, UserCredential } from "firebase/auth";
 import { cloudConfigured, loadCloud } from "./firebase";
 import { googleClientId, loadGoogleIdentity, requestGoogleAccessToken } from "./googleIdentity";
 import { clearCloudPrefs, readCloudPrefs, writeCloudConsent } from "./prefs";
-import { deleteCloudCopy, readSyncConsent, writeSyncConsent } from "./syncPrefs";
+import { deleteCloudCopy, readSyncConsent, watchSyncConsent, writeSyncConsent } from "./syncPrefs";
 import {
   hashNeedsAuth,
   hashNeedsGoogle,
@@ -233,6 +233,39 @@ export function CloudAuthProvider({ children }: { children: ReactNode }) {
     // the listener is already attached or was never going to be.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * The account's answer, kept current while somebody is signed in, so "off"
+   * on another device — or in another tab — stops this one too, instead of on
+   * its next reload. A "never asked" is left to `refreshConsent`, which knows
+   * whether this browser agreed under the old scheme.
+   */
+  const uid = user?.uid ?? null;
+  useEffect(() => {
+    if (uid === null) return;
+    let live = true;
+    let stop: (() => void) | null = null;
+    void loadCloud()
+      .then(({ db }) =>
+        watchSyncConsent(db, uid, (enabled) => {
+          if (!live || enabled === null) return;
+          setAccount(enabled);
+          const gate = syncGate({ configured: true, signedIn: true, account: enabled });
+          if (mirrorIsStale(gate, readCloudPrefs() !== null)) clearCloudPrefs();
+        }),
+      )
+      .then((unsubscribe) => {
+        if (live) stop = unsubscribe;
+        else unsubscribe();
+      })
+      .catch(() => {
+        // Offline or refused: the answer read at sign-in stands.
+      });
+    return () => {
+      live = false;
+      if (stop !== null) stop();
+    };
+  }, [uid]);
 
   /** A session, created if there is not one already. Consents to nothing. */
   const ensureSignedIn = useCallback(async (): Promise<string> => {

@@ -217,11 +217,28 @@ service cloud.firestore {
     // named `meta` documents. Anything else under an island is nothing the app
     // ever wrote, and the site owner's directory — every `meta`, in one query,
     // below — should list accounts rather than whatever somebody parked there.
+    //
+    // And nothing is put up while the account has said no. `meta/sync` is the
+    // account's answer about sync, and "apagado" is promised for every device:
+    // a tab still open somewhere — on a build that never re-reads the answer —
+    // used to keep uploading after it, and to put the whole roster back up a
+    // second after "borrar la copia de la nube". Deleting is always allowed,
+    // which is what that wipe is; so is the answer itself. An account that was
+    // never asked has no document, and syncs as it always did.
     match /users/{userId}/{sub}/{docId} {
-      allow write: if isAllowedUser()
-        && request.auth.uid == userId
-        && sub in ['players', 'matches', 'teams', 'meta']
-        && (sub != 'meta' || docId in ['tombstones', 'sync']);
+      function isIsland() {
+        return isAllowedUser()
+          && request.auth.uid == userId
+          && sub in ['players', 'matches', 'teams', 'meta']
+          && (sub != 'meta' || docId in ['tombstones', 'sync']);
+      }
+      function consentNotWithdrawn() {
+        let answer = /databases/$(database)/documents/users/$(userId)/meta/sync;
+        return !exists(answer) || get(answer).data.get('enabled', true) != false;
+      }
+      allow create, update: if isIsland()
+        && ((sub == 'meta' && docId == 'sync') || consentNotWithdrawn());
+      allow delete: if isIsland();
     }
 
     // Every account's `meta`, in one query: the owner's directory of who

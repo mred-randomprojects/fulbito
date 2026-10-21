@@ -51,6 +51,17 @@ export function syncGate({ configured, signedIn, account }: ConsentState): SyncG
   return account ? { kind: "on" } : { kind: "off" };
 }
 
+/**
+ * What `users/{uid}/meta/sync` says: yes, no, or `null` for an account never
+ * asked — three answers, not two; see `readSyncConsent`. Anything that is not
+ * a document with a boolean `enabled` is the third.
+ */
+export function consentOf(data: unknown): boolean | null {
+  if (typeof data !== "object" || data === null) return null;
+  const enabled: unknown = Object.getOwnPropertyDescriptor(data, "enabled")?.value;
+  return typeof enabled === "boolean" ? enabled : null;
+}
+
 /** The one question the gate answers for the engine: may it write anything? */
 export function maySync(gate: SyncGate): boolean {
   return gate.kind === "on";

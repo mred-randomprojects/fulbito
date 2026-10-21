@@ -80,6 +80,8 @@ const pickBallot = (options: number[]): Data => ({ options, at: TIME });
  *   M8  nothing yet
  */
 const W: World = {
+  // An account that was asked about sync and said yes.
+  "users/owner-1/meta/sync": { enabled: true, changedAt: SEEN },
   "polls/P1": poll,
   "polls/P1/voters/voter-1": { ballotId: "pb1" },
   "polls/P1/voters/stranger": null,
@@ -128,6 +130,11 @@ const W: World = {
   "recaps/M8": null,
   "picks/M8": null,
 };
+
+/** The same account after "Apagar la sincronización". */
+const OFF: World = { ...W, "users/owner-1/meta/sync": { enabled: false, changedAt: SEEN } };
+/** An account from before the answer was a document: never asked. */
+const NEVER_ASKED: World = { ...W, "users/owner-1/meta/sync": null };
 
 /** M1 with the thread and the vote shut. */
 const SHUT: World = { ...W, "recaps/M1": { ...recap, closed: true }, "picks/M1": { ...pick, closed: true } };
@@ -437,6 +444,17 @@ const SHAPES: Row[] = [
 /* La votación's ballots under a marker, with no uid on them.          */
 /* ------------------------------------------------------------------ */
 
+const CONSENT: Row[] = [
+  allow("L-C1", "an account never asked uploads, as it always did (applyPlan)", { who: OWNER, method: "create", path: "users/owner-1/players/p1", data: { id: "p1" }, world: NEVER_ASKED }),
+  allow("L-C2", "the wipe deletes a record while the answer is no (deleteCloudCopy)", { who: OWNER, method: "delete", path: "users/owner-1/players/p1", existing: { id: "p1" }, world: OFF }),
+  allow("L-C3", "the wipe deletes the tombstone book while the answer is no (deleteCloudCopy)", { who: OWNER, method: "delete", path: "users/owner-1/meta/tombstones", existing: {}, world: OFF }),
+  allow("L-C4", "saying yes again while the answer is no (enableSync)", { who: OWNER, method: "update", path: "users/owner-1/meta/sync", data: { enabled: true, changedAt: SEEN }, existing: { enabled: false }, world: OFF }),
+  allow("L-C5", "the first answer (refreshConsent backfill)", { who: OWNER, method: "create", path: "users/owner-1/meta/sync", data: { enabled: true, changedAt: SEEN }, world: NEVER_ASKED }),
+  deny("A-C1", "a tab still open uploads a player after sync was switched off everywhere", { who: OWNER, method: "create", path: "users/owner-1/players/p1", data: { id: "p1" }, world: OFF }, "ALLOW"),
+  deny("A-C2", "a tab still open overwrites a match after sync was switched off", { who: OWNER, method: "update", path: "users/owner-1/matches/m1", data: { id: "m1" }, existing: { id: "m1" }, world: OFF }, "ALLOW"),
+  deny("A-C3", "a tab still open puts the tombstone book back after the wipe", { who: OWNER, method: "create", path: "users/owner-1/meta/tombstones", data: { deletedPlayers: [] }, world: OFF }, "ALLOW"),
+];
+
 const PICK_BALLOTS: Row[] = [
   allow("L-V1", "anon reads its own marker on open (fetchMyPickBallotId)", { who: ANON, method: "get", path: "picks/M1/voters/anon-x", existing: { ballotId: "kb-1" } }, "DENY"),
   allow("L-V2", "a device that never voted looks for its marker (fetchMyPickBallotId)", { who: ANON_Y, method: "get", path: "picks/M1/voters/anon-y" }, "DENY"),
@@ -467,5 +485,5 @@ const PICK_BALLOTS: Row[] = [
 
 export const ROWS: Row[] = [
   ...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE,
-  ...FACES, ...MARKERS, ...SQUATS, ...ADMINS, ...SHAPES, ...PICK_BALLOTS,
+  ...FACES, ...MARKERS, ...SQUATS, ...ADMINS, ...SHAPES, ...PICK_BALLOTS, ...CONSENT,
 ];

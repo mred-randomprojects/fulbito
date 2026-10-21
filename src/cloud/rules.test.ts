@@ -69,6 +69,7 @@ import {
   updatePickHeading,
 } from "./picks";
 import { listAccounts, writeProfile } from "./accounts";
+import { deleteCloudCopy, writeSyncConsent } from "./syncPrefs";
 
 /**
  * `firestore.rules`, run against the emulator with the app's own cloud
@@ -247,6 +248,25 @@ describe("users/{uid}", () => {
     await denied(setDoc(doc(db, "users", "owner-1", "junk", "j1"), { blob: "x" }));
     await denied(setDoc(doc(db, "users", "owner-1", "meta", "anything"), { blob: "x" }));
     await denied(setDoc(doc(db, "users", "owner-1", "players", "p1", "deeper", "d1"), { blob: "x" }));
+  });
+
+  /**
+   * "Apagar la sincronización" is the account's answer, for every device. A
+   * tab still open somewhere used to keep uploading after it, and to put the
+   * whole roster back up a second after "borrar la copia de la nube".
+   */
+  it("takes no upload while the account has said no, and still lets it wipe", async () => {
+    const db = as(OWNER);
+    await setDoc(doc(db, "users", "owner-1", "players", "p1"), { firstName: "Maxi" });
+    await writeSyncConsent(db, "owner-1", false);
+    await denied(setDoc(doc(db, "users", "owner-1", "players", "p2"), { firstName: "Juan" }));
+    await denied(setDoc(doc(db, "users", "owner-1", "matches", "m1"), { id: "m1" }));
+    await denied(setDoc(doc(db, "users", "owner-1", "meta", "tombstones"), { deletedPlayers: [] }));
+    await deleteCloudCopy(db, "owner-1");
+    assert.equal((await getDocs(collection(db, "users", "owner-1", "players"))).size, 0);
+    // And yes again is yes.
+    await writeSyncConsent(db, "owner-1", true);
+    await setDoc(doc(db, "users", "owner-1", "players", "p2"), { firstName: "Juan" });
   });
 
   it("keeps everybody else out, signed in or not", async () => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  consentOf,
   hashNeedsAuth,
   hashNeedsGoogle,
   maySync,
@@ -39,6 +40,17 @@ describe("syncGate", () => {
       syncGate({ configured: true, signedIn: true, account: false }),
       { kind: "off" },
     );
+  });
+});
+
+describe("consentOf", () => {
+  it("reads yes, no, and never asked", () => {
+    assert.equal(consentOf({ enabled: true, changedAt: "x" }), true);
+    assert.equal(consentOf({ enabled: false }), false);
+    assert.equal(consentOf(undefined), null);
+    assert.equal(consentOf({}), null);
+    assert.equal(consentOf({ enabled: "false" }), null);
+    assert.equal(consentOf(null), null);
   });
 });
 

@@ -1,6 +1,7 @@
 import type { Firestore } from "firebase/firestore";
 import { deleteProfile } from "./accounts";
 import { errorCode } from "@/lib/authErrors";
+import { consentOf } from "@/lib/syncConsent";
 
 /**
  * The account's own answer about sync, and the way to take back what it kept.
@@ -35,11 +36,29 @@ export async function readSyncConsent(
 ): Promise<boolean | null> {
   const { doc, getDoc } = await import("firebase/firestore");
   const snap = await getDoc(doc(db, "users", uid, META, SYNC));
-  if (!snap.exists()) return null;
-  const data: unknown = snap.data();
-  if (typeof data !== "object" || data === null) return null;
-  const enabled = (data as { enabled?: unknown }).enabled;
-  return typeof enabled === "boolean" ? enabled : null;
+  return snap.exists() ? consentOf(snap.data()) : null;
+}
+
+/**
+ * The account's answer, live: every change of it, from any device.
+ *
+ * Reading it once per sign-in was not enough. "Apagar la sincronización" on
+ * the phone left the laptop's open tab syncing until it reloaded — and after
+ * "borrar la copia de la nube" that tab saw an empty cloud and put the whole
+ * roster back a second later. A failure here (offline, a refusal) keeps the
+ * last answer, which `CloudAuthProvider` already holds.
+ */
+export async function watchSyncConsent(
+  db: Firestore,
+  uid: string,
+  onAnswer: (enabled: boolean | null) => void,
+): Promise<() => void> {
+  const { doc, onSnapshot } = await import("firebase/firestore");
+  return onSnapshot(
+    doc(db, "users", uid, META, SYNC),
+    (snap) => onAnswer(snap.exists() ? consentOf(snap.data()) : null),
+    () => {},
+  );
 }
 
 export async function writeSyncConsent(
@@ -64,13 +83,17 @@ export async function writeSyncConsent(
  * "apagado" as "borrado" has been misled by a switch. So the off dialog offers
  * this, spelled out, as a separate and deliberate second action.
  *
- * The consent document is written last and on purpose: if the deleting fails
- * halfway, sync is still off, and running it again finishes the job.
+ * The account's answer is made "no" first, if it is not already: that is
+ * what stops every other device — `watchSyncConsent` on a current build, and
+ * `firestore.rules`, which refuse an upload while the answer is no, on any
+ * build. If the deleting then fails halfway, sync is still off, and running
+ * it again finishes the job.
  */
 export async function deleteCloudCopy(db: Firestore, uid: string): Promise<void> {
   const { collection, deleteDoc, doc, getDocs, writeBatch } = await import(
     "firebase/firestore"
   );
+  if ((await readSyncConsent(db, uid)) !== false) await writeSyncConsent(db, uid, false);
 
   for (const name of ["players", "matches", "teams"]) {
     const snap = await getDocs(collection(db, "users", uid, name));

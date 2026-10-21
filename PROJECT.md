@@ -926,7 +926,9 @@ The rules let a Google account write its own island in exactly those shapes —
 `players`, `matches`, `teams`, and `meta/tombstones` or `meta/sync`, one level
 deep — and nothing else, and an anonymous session not at all: the app never
 syncs one, and an island open to any session was free storage on the
-project's shared free quota for anybody holding the public API key.
+project's shared free quota for anybody holding the public API key. While
+`meta/sync` says no, nothing but that answer may be written there; deleting
+is always allowed.
 
 The engine is two triggers and one pure function, `planSync`:
 
@@ -2103,7 +2105,10 @@ something.
   `syncGate` therefore never reads the mirror, and `mirrorIsStale` clears one
   the account has contradicted. A missing account document with a mirror
   present is somebody who agreed under the old scheme, and is backfilled rather
-  than read as a no.
+  than read as a no. The answer is watched live (`watchSyncConsent`), so off on
+  one device stops every open tab on the others, and `firestore.rules` refuse
+  any upload while the answer is no — which is what stops a tab on an older
+  build from putting the roster back after "borrar la copia de la nube".
 - **Off is not deleted, and the screen says so.** Switching sync off stops the
   uploading and leaves what is already up there. Deleting that copy is a
   separate action from the off state, not a second button on the same dialog:
