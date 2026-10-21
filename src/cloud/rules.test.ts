@@ -15,6 +15,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type Firestore,
 } from "firebase/firestore";
 import type { MatchId, Player, PlayerId } from "@/types";
@@ -264,9 +265,15 @@ describe("users/{uid}", () => {
     await denied(setDoc(doc(db, "users", "owner-1", "meta", "tombstones"), { deletedPlayers: [] }));
     await deleteCloudCopy(db, "owner-1");
     assert.equal((await getDocs(collection(db, "users", "owner-1", "players"))).size, 0);
-    // And yes again is yes.
+    // And yes again is yes — for a whole upload in one batch, too, which is
+    // one read of the answer however many records it carries.
     await writeSyncConsent(db, "owner-1", true);
-    await setDoc(doc(db, "users", "owner-1", "players", "p2"), { firstName: "Juan" });
+    const batch = writeBatch(db);
+    for (let i = 0; i < 60; i++) {
+      batch.set(doc(db, "users", "owner-1", "players", `p${i}`), { firstName: `Jugador ${i}` });
+    }
+    await batch.commit();
+    assert.equal((await getDocs(collection(db, "users", "owner-1", "players"))).size, 60);
   });
 
   it("keeps everybody else out, signed in or not", async () => {
