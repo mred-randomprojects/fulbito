@@ -7,6 +7,7 @@ import {
   drawWinner,
   leadingOptions,
   lineupsFrom,
+  markerKnown,
   myBallot,
   needsDraw,
   normalizeBallot,
@@ -71,8 +72,8 @@ const OPTIONS: OptionLineups[] = [
   { a: [MAXI, GORDO], b: [JUAN, TINCHO] },
 ];
 
-function ballot(uid: string, options: number[], at = "2026-03-10T20:00:00.000Z"): PickBallot {
-  return { uid, options, at };
+function ballot(id: string, options: number[], at = "2026-03-10T20:00:00.000Z"): PickBallot {
+  return { id, options, at };
 }
 
 describe("cleanTitle", () => {
@@ -265,15 +266,41 @@ describe("drawWinner", () => {
 });
 
 describe("myBallot and voterCount", () => {
-  it("finds this device's own, and nobody else's", () => {
-    const ballots = [ballot("a", [0]), ballot("b", [1])];
-    assert.equal(myBallot(ballots, "b")?.options[0], 1);
-    assert.equal(myBallot(ballots, "c"), null);
-    assert.equal(myBallot(ballots, null), null);
+  it("finds the ballot this device's marker names, and nobody else's", () => {
+    const ballots = [ballot("b-1", [0]), ballot("b-2", [1]), ballot("anon-x", [2])];
+    assert.equal(myBallot(ballots, "b-2", "anon-x")?.options[0], 1);
+    assert.equal(myBallot(ballots, "b-3", "anon-x"), null);
+    assert.equal(myBallot(ballots, null, null), null);
+  });
+
+  /**
+   * A device that voted on a build from before the marker has its ballot
+   * filed under its uid, and no marker. It is still that device's: the rules
+   * let nobody else file one there. Once the device has a marker, the marker
+   * is the only answer.
+   */
+  it("takes the ballot under this device's uid for its own only while it has no marker", () => {
+    const ballots = [ballot("anon-x", [1]), ballot("anon-y", [0])];
+    assert.equal(myBallot(ballots, null, "anon-x")?.options[0], 1);
+    assert.equal(myBallot(ballots, "b-1", "anon-x"), null);
+    assert.equal(myBallot(ballots, null, "anon-z"), null);
   });
 
   it("counts the devices that said something", () => {
     assert.equal(voterCount([ballot("a", [0]), ballot("b", [])]), 1);
+  });
+});
+
+describe("markerKnown", () => {
+  it("waits for the marker, and for the marker of this session", () => {
+    // The votación comes out of the cache before the marker does: until it
+    // answers, "no ballot" is not known, it is just not heard yet.
+    assert.equal(markerKnown(null, "anon-x"), false);
+    assert.equal(markerKnown({ uid: "anon-x" }, null), false);
+    assert.equal(markerKnown({ uid: "anon-x" }, "anon-x"), true);
+    // Signed in with Google since: an answer about the throwaway session is
+    // no answer about this one.
+    assert.equal(markerKnown({ uid: "anon-x" }, "google-uid"), false);
   });
 });
 
@@ -387,9 +414,9 @@ describe("normalizePick", () => {
 
 describe("normalizeBallot", () => {
   it("keeps the options that exist, sorted and once each", () => {
-    const back = normalizeBallot("dev", { options: [2, 0, 2] }, "at", 3);
+    const back = normalizeBallot("b-1", { options: [2, 0, 2] }, "at", 3);
     assert.deepEqual(back?.options, [0, 2]);
-    assert.equal(back?.uid, "dev");
+    assert.equal(back?.id, "b-1");
     assert.equal(back?.at, "at");
   });
 

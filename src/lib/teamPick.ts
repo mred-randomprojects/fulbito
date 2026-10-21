@@ -47,18 +47,23 @@ import type { Random } from "./random.js";
  *
  * 4. **Nobody signs in.** The page mints an anonymous session like la lista's,
  *    because this happens in the ten minutes before kick-off and a Google
- *    dialog in that window is a vote nobody casts. One ballot per device, at
- *    `ballots/{uid}`, rewritable by its own device: somebody changing their
- *    mind is answering once. A device that clears its storage is a new device
- *    — the same hole la lista has, with the same answer: the link lives in a
- *    private grupo, the counts are shared back into the same chat, and the
- *    organiser can take the whole thing down.
+ *    dialog in that window is a vote nobody casts. One ballot per device,
+ *    rewritable by its own device: somebody changing their mind is answering
+ *    once. A device that clears its storage is a new device — the same hole
+ *    la lista has, with the same answer: the link lives in a private grupo,
+ *    the counts are shared back into the same chat, and the organiser can
+ *    take the whole thing down.
  *
- * 5. **Nothing here is attributed, and nothing needs to be.** There is no
+ * 5. **Nothing here is attributed, and nothing can be traced.** There is no
  *    name on a ballot and no `identities` collection: a vote for an
  *    arrangement of ten people is not something anybody has to answer for,
- *    unlike a sentence about one of them. The uid in the path is a device, not
- *    a person, and no address is written down anywhere.
+ *    unlike a sentence about one of them. And no uid either. Ballots used to
+ *    be filed at `ballots/{uid}`, which the page's "nadie ve quién votó qué"
+ *    did not survive: the organiser votes from their own Google session and
+ *    `ownerUid` is on the votación, and every other device's uid sits beside
+ *    its name in la lista. So a ballot is filed under a random id, and the
+ *    only thing tying it to a device is `voters/{uid}`, a marker nobody else
+ *    may read — the encuesta's arrangement, see `cloud/picks.ts`.
  *
  * 6. **The options can never change under the ballots.** A votación is
  *    published once: there is no republish, and `firestore.rules` refuses an
@@ -150,10 +155,14 @@ export interface PickDocument {
   createdAt: string;
 }
 
-/** One device's ballot: the options it is happy with. Filed at `ballots/{uid}`. */
+/** One device's ballot: the options it is happy with. Filed at `ballots/{id}`. */
 export interface PickBallot {
-  /** The device that sent it. Not a person, and not written down anywhere else. */
-  uid: string;
+  /**
+   * The ballot's own id: random, named by its device's marker and by nothing
+   * else. A ballot from a build before the marker carries the device's uid
+   * here instead — still counted, and taken down the next time it votes.
+   */
+  id: string;
   /** Indices into `TeamPick.options`, deduplicated and in range. */
   options: number[];
   /** ISO, the server's clock. */
@@ -369,10 +378,42 @@ export function drawWinner(candidates: readonly number[], roll: Random): number 
   return candidates[index];
 }
 
-/** This device's ballot, if it sent one. */
-export function myBallot(ballots: readonly PickBallot[], uid: string | null): PickBallot | null {
-  if (uid === null) return null;
-  return ballots.find((ballot) => ballot.uid === uid) ?? null;
+/**
+ * This device's ballot, if it sent one: the one its marker names — or, for a
+ * device with no marker, the one a build from before the marker filed under
+ * its uid, so somebody who voted the day before the change still sees their
+ * ticks. Voting again moves it under a marker and takes the old one down in
+ * the same write.
+ *
+ * Only that device can have filed a ballot under its uid: the rules take one
+ * there from that uid alone, and only while it has no marker, and a marker
+ * may only name an id `generateId` makes — always with a dash, which a uid
+ * never has. So a ballot under your uid is yours, and nobody can plant one
+ * there to tell you that you voted.
+ *
+ * `ballotId` is what the marker said (`null` for no marker) and `uid` is the
+ * device; pass `null` for both until the marker has answered.
+ */
+export function myBallot(
+  ballots: readonly PickBallot[],
+  ballotId: string | null,
+  uid: string | null,
+): PickBallot | null {
+  const id = ballotId ?? uid;
+  if (id === null) return null;
+  return ballots.find((ballot) => ballot.id === id) ?? null;
+}
+
+/**
+ * Whether the page has heard back about this device's marker — the same
+ * question `ballotKnown` answers for el tercer tiempo, for the same reasons.
+ * The votación arrives out of the persistent cache before the marker does, so
+ * a draft seeded in that gap would open a returning voter's page on nothing;
+ * and the page swaps its anonymous uid for a Google one on sign-in, so an
+ * answer about one uid is no answer about the other.
+ */
+export function markerKnown(marker: { uid: string } | null, uid: string | null): boolean {
+  return marker !== null && uid !== null && marker.uid === uid;
 }
 
 /** How many devices voted at all. A ballot with nothing ticked is not stored. */
@@ -550,7 +591,7 @@ export function normalizePick(
  * and `voterCount` would otherwise count it as somebody who voted.
  */
 export function normalizeBallot(
-  uid: string,
+  id: string,
   raw: unknown,
   at: string,
   optionCount: number,
@@ -564,7 +605,7 @@ export function normalizeBallot(
     seen.add(entry);
   }
   if (seen.size === 0) return null;
-  return { uid, options: [...seen].sort((a, b) => a - b), at };
+  return { id, options: [...seen].sort((a, b) => a - b), at };
 }
 
 /* ------------------------------------------------------------------ */

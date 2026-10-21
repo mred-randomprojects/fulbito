@@ -5,9 +5,18 @@ import { Button } from "@/components/ui/button";
 import { StaticAvatar } from "@/components/PlayerAvatar";
 import { useCloudAuth } from "@/cloud/auth";
 import { loadCloud } from "@/cloud/firebase";
-import { clearMyBallot, ensureAnyUid, setMyBallot, watchPick, type PickSnapshot } from "@/cloud/picks";
+import {
+  clearMyBallot,
+  ensureAnyUid,
+  fetchMyPickBallotId,
+  newPickBallotId,
+  setMyBallot,
+  watchPick,
+  type PickSnapshot,
+} from "@/cloud/picks";
 import { formatMatchDate } from "@/lib/dates";
 import {
+  markerKnown,
   myBallot,
   pickText,
   tallyVotes,
@@ -33,7 +42,8 @@ import { useCopy } from "@/useCopy";
  * answered to itself: the device is signed in anonymously the moment the page
  * opens, so voting is one tap from a WhatsApp link, and no name is ever shown
  * beside a ballot because a vote for an arrangement of ten people is nobody's
- * confession.
+ * confession. Nor is a uid stored with one: a ballot sits under a random id,
+ * and the page finds its own by asking its marker, once, when it opens.
  *
  * Two decisions show up as screens rather than as data.
  *
@@ -67,6 +77,12 @@ export function VotePage() {
   const [draft, setDraft] = useState<number[] | null>(null);
   /** Which uid the draft was seeded for. See the effect that fills it. */
   const [seededFor, setSeededFor] = useState<string | null>(null);
+  /**
+   * What this device's marker says, and which uid it was asked about: the
+   * ballot id it named, or `null` for none. `null` as a whole until it has
+   * answered — see `markerKnown`.
+   */
+  const [marker, setMarker] = useState<{ uid: string; ballotId: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { copied, copy: copyToClipboard } = useCopy();
@@ -134,9 +150,41 @@ export function VotePage() {
     if (user !== null) setUid(user.uid);
   }, [user]);
 
+  /**
+   * Which of the ballots is this device's: the one its marker names. Asked
+   * once per uid, because a ballot carries no uid to find it by, and a new
+   * session — the anonymous one replaced by a sign-in — is a new question.
+   */
+  useEffect(() => {
+    if (uid === null || matchId === undefined) return;
+    let live = true;
+    void (async () => {
+      try {
+        const { db } = await loadCloud();
+        const found = await fetchMyPickBallotId(db, matchId, uid);
+        if (live) setMarker({ uid, ballotId: found });
+      } catch {
+        // No marker, no permission, no signal: nothing filed under this
+        // device, which is an empty page — what it showed before. Answered
+        // either way, because the draft waits for an answer.
+        if (live) setMarker({ uid, ballotId: null });
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [uid, matchId]);
+
   const pick = snapshot?.pick ?? null;
   const ballots = useMemo(() => snapshot?.ballots ?? [], [snapshot]);
-  const mine = useMemo(() => myBallot(ballots, uid), [ballots, uid]);
+  // Nothing is this device's until its marker has answered: see `markerKnown`.
+  const heard = markerKnown(marker, uid);
+  const myBallotId = heard ? (marker?.ballotId ?? null) : null;
+  const legacyUid = heard ? uid : null;
+  const mine = useMemo(
+    () => myBallot(ballots, myBallotId, legacyUid),
+    [ballots, myBallotId, legacyUid],
+  );
   const counts = useMemo(
     () => tallyVotes(pick?.options.length ?? 0, ballots),
     [pick?.options.length, ballots],
@@ -152,14 +200,15 @@ export function VotePage() {
    *
    * Seeded once per uid rather than on every snapshot, or a tap would be
    * overwritten by the echo of the write before it — and only once a snapshot
-   * has landed, or "this device has not voted" would be read off a page that
-   * simply had not heard back yet.
+   * has landed *and* the marker has answered, or "this device has not voted"
+   * would be read off a page that simply had not heard back yet. The cached
+   * votación arrives first on a reload, so the marker is the one to wait for.
    */
   useEffect(() => {
-    if (uid === null || snapshot === null || seededFor === uid) return;
+    if (uid === null || snapshot === null || seededFor === uid || !markerKnown(marker, uid)) return;
     setDraft(mine === null ? [] : [...mine.options]);
     setSeededFor(uid);
-  }, [uid, snapshot, mine, seededFor]);
+  }, [uid, snapshot, mine, seededFor, marker]);
 
   /* ---------------------------------------------------------------- */
   /* Doing                                                             */
@@ -175,17 +224,29 @@ export function VotePage() {
   };
 
   const send = async () => {
-    if (draft === null || uid === null || matchId === undefined) return;
+    if (draft === null || uid === null || matchId === undefined || !markerKnown(marker, uid)) return;
+    const known = marker?.ballotId ?? null;
     setBusy(true);
     setError(null);
     try {
       const { db } = await loadCloud();
       // Ticking nothing is not a vote: the ballot comes down rather than being
       // stored empty, so the count of who voted stays honest.
-      if (draft.length === 0) await clearMyBallot(db, matchId, uid);
-      else await setMyBallot(db, matchId, uid, draft);
+      if (draft.length === 0) {
+        await clearMyBallot(db, matchId, uid, known);
+      } else {
+        const target = known ?? newPickBallotId();
+        // This device's from the moment it is sent: the snapshot carrying it
+        // arrives before the server answers, and offline it is all there is.
+        if (known === null) setMarker({ uid, ballotId: target });
+        const landed = await setMyBallot(db, matchId, uid, target, known === null, draft);
+        if (landed !== target) setMarker({ uid, ballotId: landed });
+      }
       track({ name: "vote_cast", options: draft.length });
     } catch {
+      // A first vote that did not land left no marker behind — the batch is
+      // all or nothing — so the page is back to not having voted.
+      if (known === null) setMarker({ uid, ballotId: null });
       setError("No se pudo mandar tu voto. Probá de nuevo.");
     } finally {
       setBusy(false);

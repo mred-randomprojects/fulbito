@@ -1444,7 +1444,8 @@ page mounted beside `App`:
 picks/{matchId}                      { ownerUid, title, date, options,
                                        createdAt, closed?, chosen?, drawn? }
 picks/{matchId}/players/{playerId}   { ownerUid, name, avatar }
-picks/{matchId}/ballots/{uid}        { options, at }
+picks/{matchId}/voters/{uid}         { ballotId }
+picks/{matchId}/ballots/{ballotId}   { options, at }
 ```
 
 - **It publishes the options, and nothing that scores them.** The six splits
@@ -1466,7 +1467,15 @@ picks/{matchId}/ballots/{uid}        { options, at }
 - **Nobody signs in and nothing is attributed.** The page mints an anonymous
   session like la lista's, because this happens in the ten minutes before
   kick-off and a Google dialog in that window is a vote nobody casts. One
-  ballot per device at `ballots/{uid}`, rewritable by its own device. There is
+  ballot per device, rewritable by its own device, filed under a random id
+  that only the device's marker (`voters/{uid}`, readable by that device
+  alone) names — the encuesta's arrangement, except that the first vote sends
+  marker and ballot in one batch. Until October 2026 a ballot sat at
+  `ballots/{uid}`, which broke the page's "nadie ve quién votó qué": the
+  organiser's uid is on the votación for anybody to read, and every other
+  device's uid is beside its name in la lista. A page still on that build may
+  keep filing under its uid until it reloads (only while that device has no
+  marker), and the next vote from a current build moves it. There is
   no name on a ballot and **no `identities` collection at all**, unlike a
   recap's: a sentence about one player is something to answer for, and a
   preference between two arrangements of ten people is not. A device that

@@ -184,9 +184,9 @@ describe("a puntaje is secret: the server", () => {
    */
   it("keeps every name off el tercer tiempo's ballots", () => {
     const block = rulesBody(rules, "match /ballots/{ballotId}");
-    // Two blocks are called that — a poll's and a recap's. The recap's is the
-    // one that lets anybody read, so pick it by that and fail loudly if the
-    // shape ever changes under this test.
+    // Three blocks are called that — a poll's, a recap's and a votación's —
+    // so pick the recap's by its parent and fail loudly if the shape ever
+    // changes under this test.
     const recapBallots = rules
       .split("match /recaps/{recapId}")[1]
       .split("match /ballots/{ballotId}")[1];

@@ -35,8 +35,9 @@ rules_version = '2';
 //      Stamping your own uid on it is not enough — see `canWriteFace()`.
 //   b. A voter's marker names a ballot nobody has written yet. Ballot ids are
 //      not secret — `ignored` on a poll or a recap lists the ones set aside,
-//      to whoever holds the link — so a marker pointed at an existing one
-//      would hand somebody else's puntajes to a fresh account.
+//      to whoever holds the link, and la votación's are all public — so a
+//      marker pointed at an existing one would hand somebody else's ballot to
+//      a fresh account.
 //   c. One match id, one organiser. `lists`, `recaps` and `picks` are all
 //      filed under the match's id, so every link handed out names the id of
 //      the other two — see `siblingIsMineOrAbsent()`. And owning any of
@@ -675,7 +676,9 @@ service cloud.firestore {
           && (!('mvp' in request.resource.data) || request.resource.data.mvp is string)
           && request.resource.data.players is map
           && request.resource.data.at == request.time;
-        allow delete: if claims(ballotId) || isRecapOwner();
+        // A voter takes their own back only while the thread is open: once
+        // the owner shuts it, what was said stays said. The owner, any time.
+        allow delete: if (claims(ballotId) && isOpen()) || isRecapOwner();
       }
 
       match /voters/{voterId} {
@@ -764,9 +767,28 @@ service cloud.firestore {
     //     counts back until you have voted — that is manners, not a wall, and
     //     it is there so the first three votes do not decide the rest.
     //
-    //   - **One ballot per device, by shape.** It lives at `ballots/{uid}`,
-    //     writable by that uid alone and rewritable by it: somebody who ticks a
-    //     fourth option is still answering once.
+    //   - **One ballot per device, by marker, and no uid on it.** The page
+    //     promises "nadie ve quién votó qué", and a ballot filed at
+    //     `ballots/{uid}` broke it: the organiser votes from their own Google
+    //     session, `ownerUid` is on the pick for anybody to read, and every
+    //     other device's uid sits beside its name in la lista and in the
+    //     tercer tiempo's comments. So it is the encuesta's dance: the device
+    //     creates `voters/{uid}` naming one random ballot id — create-only,
+    //     readable by nobody else, never listable — and may write only the
+    //     ballot that id names, as often as it changes its mind. `getAfter`
+    //     rather than `get` here, so the first vote is one batch: the marker
+    //     and the ballot it names go together, and a second ballot in the same
+    //     batch still names an id the marker does not.
+    //
+    //     A build from before this files the ballot at `ballots/{uid}`, and a
+    //     page left open across the deploy must still be able to vote, so
+    //     that is still accepted — from that uid alone, and only while it has
+    //     no marker, so one device is never two ballots. Such a ballot is
+    //     counted like any other, and the first vote from a current build
+    //     takes it down in the same batch that files the new one.
+    //
+    //   - **A vote is taken back only while the vote is open**, so the count
+    //     the organiser chose on stays the count the page shows.
     //
     //   - **`options` can never change.** `allow update` lets the organiser
     //     touch the title, the date and their own words about the vote —
@@ -838,18 +860,57 @@ service cloud.firestore {
           && (resource.data.ownerUid == request.auth.uid || isPickOwner());
       }
 
-      match /ballots/{voterId} {
+      match /ballots/{ballotId} {
+        function markerPath() {
+          return /databases/$(database)/documents/picks/$(pickId)/voters/$(request.auth.uid);
+        }
+        // As the write leaves it, so the marker can come in the same batch.
+        function claims(id) {
+          return request.auth != null
+            && existsAfter(markerPath())
+            && getAfter(markerPath()).data.ballotId == id;
+        }
+        // The shape a build from before the marker writes: the device's own
+        // uid as the id, and no marker — see the header of this block.
+        function isOwnUidFiled(id) {
+          return request.auth != null
+            && request.auth.uid == id
+            && !existsAfter(markerPath());
+        }
+
         allow read: if request.auth != null;
-        allow create, update: if request.auth != null
-          && request.auth.uid == voterId
+        allow create, update: if (claims(ballotId) || isOwnUidFiled(ballotId))
           && isOpen()
           && request.resource.data.keys().hasOnly(['options', 'at'])
           && request.resource.data.options is list
           && request.resource.data.options.size() > 0
           && request.resource.data.options.size() <= 8
           && request.resource.data.at == request.time;
-        allow delete: if request.auth != null
-          && (request.auth.uid == voterId || isPickOwner());
+        // A device takes its own back while the vote is open: the one its
+        // marker names, or the one an older build filed under its uid. The
+        // organiser, any time.
+        allow delete: if ((claims(ballotId)
+              || (request.auth != null && request.auth.uid == ballotId))
+            && isOpen())
+          || isPickOwner();
+      }
+
+      match /voters/{voterId} {
+        // The door that stays shut, the same one an encuesta and a tercer
+        // tiempo have: a uid beside every ballot is what this replaced.
+        allow get: if request.auth != null && request.auth.uid == voterId;
+        allow list: if false;
+        // Any session — this page signs devices in anonymously, on purpose —
+        // naming a ballot nobody has written yet, (b) at the top, with an id
+        // `generateId()` made: never a uid, which would be `ballots/{uid}`
+        // all over again.
+        allow create: if request.auth != null
+          && request.auth.uid == voterId
+          && request.resource.data.keys().hasOnly(['ballotId'])
+          && isGeneratedId(request.resource.data.ballotId)
+          && !exists(/databases/$(database)/documents/picks/$(pickId)/ballots/$(request.resource.data.ballotId));
+        // Never re-pointed: that is what makes one marker mean one ballot.
+        allow update, delete: if false;
       }
     }
 

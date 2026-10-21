@@ -1,6 +1,6 @@
 import type { Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
-import type { Player } from "@/types";
+import { generateId, type Player } from "@/types";
 import { faceAvatar } from "@/lib/avatarBytes";
 import {
   normalizeBallot,
@@ -20,7 +20,8 @@ import {
  * picks/{matchId}                      { ownerUid, title, date, options,
  *                                        createdAt, closed?, chosen?, drawn? }
  * picks/{matchId}/players/{playerId}   { ownerUid, name, avatar }
- * picks/{matchId}/ballots/{uid}        { options, at }
+ * picks/{matchId}/voters/{uid}         { ballotId }
+ * picks/{matchId}/ballots/{ballotId}   { options, at }
  * ```
  *
  * The fourth collection outside `users/{uid}`. `firestore.rules` is the real
@@ -45,17 +46,28 @@ import {
  * device looked at — see decision 6 in `lib/teamPick.ts`. Changing the options
  * means `deletePick` and another vote.
  *
- * **A ballot carries no name and no address.** There is no `identities`
- * collection here, unlike a recap's: a vote for an arrangement of ten people
- * is not something anybody has to answer for. The uid in the path is the
- * device the page signed in anonymously, which is what makes one ballot per
- * device the shape rather than a rule, and what lets a device change its own
- * mind and nobody else's.
+ * **A ballot carries no name, no address and no uid.** There is no
+ * `identities` collection here, unlike a recap's: a vote for an arrangement
+ * of ten people is not something anybody has to answer for. And the page says
+ * "nadie ve quién votó qué", which a ballot at `ballots/{uid}` — the first
+ * shape — did not keep: the organiser votes from their own Google session,
+ * `ownerUid` is on the votación for anybody to read, and every device's uid
+ * sits beside its name in la lista. So it is the encuesta's arrangement: the
+ * device's marker at `voters/{uid}` names one random ballot id, nobody else
+ * may read it, and the rules let a device write only the ballot its marker
+ * names. The difference is that the first vote is a single batch — marker and
+ * ballot together, which the rules read as the batch leaves them — because
+ * this page is opened ten minutes before kick-off.
+ *
+ * A ballot an older build filed under its uid is still counted. Every vote
+ * from this one takes that document down in the same batch, so a device that
+ * voted before the change and votes again is counted once.
  */
 
 const PICKS = "picks";
 const PLAYERS = "players";
 const BALLOTS = "ballots";
+const VOTERS = "voters";
 
 /** Firestore caps a batch at 500; leave room rather than court it. */
 const BATCH_LIMIT = 400;
@@ -226,7 +238,7 @@ export async function watchPick(
 
   let meta: unknown | null | undefined;
   let faces: unknown[] | undefined;
-  let raw: { uid: string; data: unknown; at: string }[] | undefined;
+  let raw: { id: string; data: unknown; at: string }[] | undefined;
 
   const emit = () => {
     if (meta === undefined || faces === undefined || raw === undefined) return;
@@ -238,7 +250,7 @@ export async function watchPick(
     // The votación's own option count is the authority over what a ballot may
     // say — see `normalizeBallot`, and the same decision in `lib/poll.ts`.
     const ballots = raw.flatMap((entry) => {
-      const parsed = normalizeBallot(entry.uid, entry.data, entry.at, pick.options.length);
+      const parsed = normalizeBallot(entry.id, entry.data, entry.at, pick.options.length);
       return parsed === null ? [] : [parsed];
     });
     onChange({ pick, ballots });
@@ -271,7 +283,7 @@ export async function watchPick(
         // A write from this device the server has not stamped yet: estimate,
         // so somebody sees their own tick land without the round trip.
         const data: unknown = entry.data({ serverTimestamps: "estimate" });
-        return { uid: entry.id, data, at: timestampOf(data) };
+        return { id: entry.id, data, at: timestampOf(data) };
       });
       emit();
     },
@@ -286,27 +298,95 @@ export async function watchPick(
 }
 
 /**
- * This device's ballot, written whole.
+ * Which ballot is this device's, **without claiming one**: the id its marker
+ * names, or `null` when it has not voted here. What the page asks on open, so
+ * it can find its own ticks in a pile of ballots that carry no uid.
+ */
+export async function fetchMyPickBallotId(
+  db: Firestore,
+  id: string,
+  uid: string,
+): Promise<string | null> {
+  const { doc, getDoc } = await import("firebase/firestore");
+  const snap = await getDoc(doc(db, PICKS, id, VOTERS, uid));
+  if (!snap.exists()) return null;
+  const data: unknown = snap.data();
+  const ballotId = isRecord(data) && typeof data.ballotId === "string" ? data.ballotId : "";
+  return ballotId === "" ? null : ballotId;
+}
+
+/** A ballot id for a device that has not voted here yet. Its marker will name it. */
+export function newPickBallotId(): string {
+  return generateId();
+}
+
+/**
+ * This device's ballot, written whole. Resolves to the id that holds it.
  *
- * One document at `ballots/{uid}`, rewritable by its own device: somebody who
- * ticks a fourth option is still answering once, and a vote nobody can change
- * is a vote people are careful with rather than honest about.
+ * `ballotId` is the one this device's marker names, or — with `claim` — a
+ * fresh one from `newPickBallotId`, and then the marker naming it goes in the
+ * same batch, so the first vote costs no extra round trip. The caller picks
+ * the id rather than this function so the page can recognise its own ballot
+ * in the next snapshot, which arrives before the server has answered and,
+ * offline, long before. Rewritable as often as the device changes its mind:
+ * somebody who ticks a fourth option is still answering once, and a vote
+ * nobody can change is a vote people are careful with rather than honest
+ * about.
+ *
+ * Losing a race is not an error worth showing. A marker is create-only, so a
+ * refused first vote can mean another tab of this same device claimed one an
+ * instant earlier; that marker is the one that counts, and the vote is sent
+ * again under the id it names — which is what this resolves to then.
  */
 export async function setMyBallot(
   db: Firestore,
   id: string,
   uid: string,
+  ballotId: string,
+  claim: boolean,
   options: readonly number[],
-): Promise<void> {
-  const { doc, serverTimestamp, setDoc } = await import("firebase/firestore");
-  await setDoc(doc(db, PICKS, id, BALLOTS, uid), {
-    options: [...new Set(options)].sort((a, b) => a - b),
-    at: serverTimestamp(),
-  });
+): Promise<string> {
+  const { doc, serverTimestamp, writeBatch } = await import("firebase/firestore");
+  const send = async (target: string, withMarker: boolean) => {
+    const batch = writeBatch(db);
+    if (withMarker) batch.set(doc(db, PICKS, id, VOTERS, uid), { ballotId: target });
+    batch.set(doc(db, PICKS, id, BALLOTS, target), {
+      options: [...new Set(options)].sort((a, b) => a - b),
+      at: serverTimestamp(),
+    });
+    // Where a build before the marker filed this device's ballot. Gone with
+    // the first vote from this one, so nobody is counted twice; a delete of
+    // nothing costs nothing.
+    batch.delete(doc(db, PICKS, id, BALLOTS, uid));
+    await batch.commit();
+    return target;
+  };
+  if (!claim) return send(ballotId, false);
+  try {
+    return await send(ballotId, true);
+  } catch (error) {
+    const claimed = await fetchMyPickBallotId(db, id, uid).catch(() => null);
+    if (claimed === null) throw error;
+    // The batch is all or nothing, so a marker naming this very id means it
+    // landed and only the answer got lost on the way back.
+    if (claimed === ballotId) return ballotId;
+    return send(claimed, false);
+  }
 }
 
-/** Take this device's ballot back down. Ticking nothing is not a vote. */
-export async function clearMyBallot(db: Firestore, id: string, uid: string): Promise<void> {
-  const { deleteDoc, doc } = await import("firebase/firestore");
-  await deleteDoc(doc(db, PICKS, id, BALLOTS, uid));
+/**
+ * Take this device's ballot back down. Ticking nothing is not a vote. Takes
+ * the old uid-filed one with it, for the same reason `setMyBallot` does.
+ */
+export async function clearMyBallot(
+  db: Firestore,
+  id: string,
+  uid: string,
+  ballotId: string | null,
+): Promise<void> {
+  const { doc, writeBatch } = await import("firebase/firestore");
+  const batch = writeBatch(db);
+  if (ballotId !== null) batch.delete(doc(db, PICKS, id, BALLOTS, ballotId));
+  batch.delete(doc(db, PICKS, id, BALLOTS, uid));
+  await batch.commit();
 }

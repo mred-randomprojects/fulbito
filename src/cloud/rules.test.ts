@@ -46,6 +46,7 @@ import {
   claimRecapBallotId,
   deleteComment,
   deleteRecap,
+  deleteRecapBallot,
   fetchMyRecapBallotId,
   fetchOwnRatings,
   fetchOwnRecapBallot,
@@ -60,6 +61,8 @@ import {
   choosePickOption,
   clearMyBallot,
   deletePick,
+  fetchMyPickBallotId,
+  newPickBallotId,
   publishPick,
   setMyBallot,
   setPickClosed,
@@ -1111,6 +1114,18 @@ describe("recaps", () => {
     assert.notEqual(await claimRecapBallotId(db, id, "stranger"), ballotId);
   });
 
+  it("lets a voter take their ballot back while the thread is open, and not after", async () => {
+    const id = await publish();
+    const db = as(VOTER);
+    const ballotId = await claimRecapBallotId(db, id, "voter-1");
+    await submitRecapBallot(db, id, ballotId, { players: { [MAXI]: { score: 60 } } });
+    await deleteRecapBallot(db, id, ballotId);
+    await submitRecapBallot(db, id, ballotId, { players: { [MAXI]: { score: 61 } } });
+    await setRecapClosed(as(OWNER), id, true);
+    await denied(deleteRecapBallot(db, id, ballotId));
+    await deleteRecapBallot(as(OWNER), id, ballotId);
+  });
+
   it("lets only the owner take the recap down", async () => {
     const id = await publish();
     await denied(deleteRecap(as(STRANGER), id));
@@ -1185,6 +1200,19 @@ describe("picks", () => {
     const outcome = await publishPick(as(OWNER), "owner-1", match, options, roster());
     assert.equal(outcome, "published");
     return match.id;
+  }
+
+  /**
+   * What `VotePage` does with a tap on "Votar": ask the marker, claim one
+   * with the first vote if there is none, and send. Resolves to the ballot id.
+   */
+  async function vote(db: Firestore, id: string, uid: string, ticked: number[]): Promise<string> {
+    const known = await fetchMyPickBallotId(db, id, uid);
+    return setMyBallot(db, id, uid, known ?? newPickBallotId(), known === null, ticked);
+  }
+
+  async function unvote(db: Firestore, id: string, uid: string): Promise<void> {
+    await clearMyBallot(db, id, uid, await fetchMyPickBallotId(db, id, uid));
   }
 
   it("lets whoever holds the link read it, with no account at all", async () => {
@@ -1295,26 +1323,71 @@ describe("picks", () => {
 
   it("takes a ballot from a device with no account, and shows the count to everybody", async () => {
     const id = await open();
-    await setMyBallot(as(DEVICE_A), id, "anon-a", [0, 1]);
-    await setMyBallot(as(DEVICE_B), id, "anon-b", [1]);
+    await vote(as(DEVICE_A), id, "anon-a", [0, 1]);
+    await vote(as(DEVICE_B), id, "anon-b", [1]);
     const seen = await getDocs(collection(as(DEVICE_A), "picks", id, "ballots"));
     assert.equal(seen.size, 2);
     // No name and no address on it: nothing here is attributed. Decision 5.
     assert.deepEqual(Object.keys(seen.docs[0].data()).sort(), ["at", "options"]);
   });
 
+  /**
+   * "Nadie ve quién votó qué", as the page says. A ballot used to sit at
+   * `ballots/{uid}`, and the organiser's uid is on the votación for anybody to
+   * read — so anybody could read how the organiser voted, and every other
+   * device's uid is beside its name in la lista.
+   */
+  it("files nobody's ballot under their uid, the organiser's included", async () => {
+    const id = await open();
+    const mine = await vote(as(OWNER), id, "owner-1", [1]);
+    await vote(as(DEVICE_A), id, "anon-a", [0]);
+    const ids = (await getDocs(collection(as(DEVICE_B), "picks", id, "ballots"))).docs.map((d) => d.id);
+    assert.equal(ids.length, 2);
+    assert.equal(ids.includes("owner-1"), false);
+    assert.equal(ids.includes("anon-a"), false);
+    // Which one is the organiser's is behind a door only they can open.
+    await denied(getDoc(doc(as(DEVICE_B), "picks", id, "voters", "owner-1")));
+    await denied(getDocs(collection(as(OWNER), "picks", id, "voters")));
+    assert.equal(await fetchMyPickBallotId(as(OWNER), id, "owner-1"), mine);
+  });
+
   it("keeps one device out of another's ballot", async () => {
     const id = await open();
-    await setMyBallot(as(DEVICE_A), id, "anon-a", [0]);
-    await denied(setMyBallot(as(DEVICE_B), id, "anon-a", [1]));
-    await denied(clearMyBallot(as(DEVICE_B), id, "anon-a"));
+    const theirs = await vote(as(DEVICE_A), id, "anon-a", [0]);
+    // Not by writing it, not by taking it down, not by pointing a marker at it.
+    await denied(setMyBallot(as(DEVICE_B), id, "anon-b", theirs, false, [1]));
+    await denied(clearMyBallot(as(DEVICE_B), id, "anon-b", theirs));
+    await denied(setDoc(doc(as(DEVICE_B), "picks", id, "voters", "anon-b"), { ballotId: theirs }));
+    // Nor by a marker naming a uid, which is where an older build filed one.
+    await denied(setDoc(doc(as(DEVICE_B), "picks", id, "voters", "anon-b"), { ballotId: "anonA0000000000000000000000z" }));
     // Its own, as many times as it changes its mind.
-    await setMyBallot(as(DEVICE_A), id, "anon-a", [1]);
+    assert.equal(await vote(as(DEVICE_A), id, "anon-a", [1]), theirs);
     assert.deepEqual(
-      (await getDoc(doc(as(DEVICE_A), "picks", id, "ballots", "anon-a"))).data()?.options,
+      (await getDoc(doc(as(DEVICE_A), "picks", id, "ballots", theirs))).data()?.options,
       [1],
     );
-    await clearMyBallot(as(DEVICE_A), id, "anon-a");
+    await unvote(as(DEVICE_A), id, "anon-a");
+    assert.equal((await getDoc(doc(as(DEVICE_A), "picks", id, "ballots", theirs))).exists(), false);
+  });
+
+  /**
+   * A page opened before the deploy still files its ballot under its uid. It
+   * has to keep working until it is reloaded — and that device's first vote
+   * from the new build moves it, so it is never counted twice.
+   */
+  it("still takes a vote from a page left open on the build before, and moves it on the next", async () => {
+    const id = await open();
+    const legacy = doc(as(DEVICE_A), "picks", id, "ballots", "anon-a");
+    await setDoc(legacy, { options: [0], at: serverTimestamp() });
+    await setDoc(legacy, { options: [0, 1], at: serverTimestamp() });
+    // Somebody else's uid is still nobody's to write.
+    await denied(setDoc(doc(as(DEVICE_B), "picks", id, "ballots", "anon-a"), { options: [1], at: serverTimestamp() }));
+
+    const moved = await vote(as(DEVICE_A), id, "anon-a", [1]);
+    const ids = (await getDocs(collection(as(DEVICE_B), "picks", id, "ballots"))).docs.map((d) => d.id);
+    assert.deepEqual(ids, [moved]);
+    // With a marker, the old shape is closed to that device: one device, one ballot.
+    await denied(setDoc(legacy, { options: [0], at: serverTimestamp() }));
   });
 
   it("refuses a ballot stamped with the phone's own clock", async () => {
@@ -1339,20 +1412,24 @@ describe("picks", () => {
 
   it("stops new ballots once the vote is shut, and everything stays readable", async () => {
     const id = await open();
+    await vote(as(DEVICE_B), id, "anon-b", [1]);
     await setPickClosed(as(OWNER), id, true);
-    await denied(setMyBallot(as(DEVICE_A), id, "anon-a", [0]));
+    await denied(vote(as(DEVICE_A), id, "anon-a", [0]));
+    // Nor is one taken back: the count the organiser chose on stays.
+    await denied(unvote(as(DEVICE_B), id, "anon-b"));
     assert.equal((await getDoc(doc(as(DEVICE_B), "picks", id))).exists(), true);
+    assert.equal((await getDocs(collection(as(DEVICE_A), "picks", id, "ballots"))).size, 1);
   });
 
   it("shuts the vote in the same write that picks the teams", async () => {
     const id = await open();
-    await setMyBallot(as(DEVICE_A), id, "anon-a", [1]);
+    await vote(as(DEVICE_A), id, "anon-a", [1]);
     await choosePickOption(as(OWNER), id, 1, true);
     const back = (await getDoc(doc(as(DEVICE_A), "picks", id))).data();
     assert.equal(back?.chosen, 1);
     assert.equal(back?.drawn, true);
     assert.equal(back?.closed, true);
-    await denied(setMyBallot(as(DEVICE_B), id, "anon-b", [0]));
+    await denied(vote(as(DEVICE_B), id, "anon-b", [0]));
   });
 
   it("lets only the organiser close it, pick the teams, or take it down", async () => {
@@ -1360,11 +1437,11 @@ describe("picks", () => {
     await denied(setPickClosed(as(DEVICE_A), id, true));
     await denied(choosePickOption(as(STRANGER), id, 0, false));
     await denied(deletePick(as(DEVICE_A), id));
-    await setMyBallot(as(DEVICE_A), id, "anon-a", [0]);
+    const ballotId = await vote(as(DEVICE_A), id, "anon-a", [0]);
     await deletePick(as(OWNER), id);
     assert.equal((await getDoc(doc(as(OWNER), "picks", id))).exists(), false);
     assert.equal(
-      (await getDoc(doc(as(DEVICE_A), "picks", id, "ballots", "anon-a"))).exists(),
+      (await getDoc(doc(as(DEVICE_A), "picks", id, "ballots", ballotId))).exists(),
       false,
     );
   });
