@@ -68,8 +68,10 @@ const pickBallot = (options: number[]): Data => ({ options, at: TIME });
 /**
  * One world for everything: what exists, and what is known not to. Match ids:
  *   M1  the organiser's lista, tercer tiempo and votación, all up
+ *   M3  the organiser's lista, and a votación a stranger squatted before
  *   M4  the organiser's votación only
  *   M5  the organiser's lista only — its link is the one in the grupo
+ *   M6  a tercer tiempo and a votación squatted before the hardening
  *   M7  the organiser's tercer tiempo only
  *   M8  nothing yet
  */
@@ -95,12 +97,18 @@ const W: World = {
   "recaps/M1/ballots/rb-ignored": recapBallot,
   "recaps/M1/ballots/rb-fresh": null,
 
+  "lists/M3": lst,
+  "recaps/M3": null,
+  "picks/M3": { ...pick, ownerUid: "stranger" },
   "lists/M4": null,
   "recaps/M4": null,
   "picks/M4": pick,
   "lists/M5": lst,
   "recaps/M5": null,
   "picks/M5": null,
+  "lists/M6": null,
+  "recaps/M6": { ...recap, ownerUid: "anon-x" },
+  "picks/M6": { ...pick, ownerUid: "anon-x" },
   "lists/M7": null,
   "recaps/M7": recap,
   "picks/M7": null,
@@ -356,4 +364,27 @@ const MARKERS: Row[] = [
   deny("A-M7", "a marker naming an id longer than any the app makes", { who: STRANGER, method: "create", path: "recaps/M1/voters/stranger", data: { ballotId: `a-${"x".repeat(63)}` } }, "ALLOW"),
 ];
 
-export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES, ...MARKERS];
+/* ------------------------------------------------------------------ */
+/* One match id, one organiser; owning anything wants a Google account. */
+/* ------------------------------------------------------------------ */
+
+const SQUATS: Row[] = [
+  deny("A-Q1", "anon squats the list of a match whose tercer tiempo is up", { who: ANON, method: "create", path: "lists/M7", data: { ...lst, ownerUid: "anon-x" } }, "ALLOW"),
+  deny("A-Q2", "Google stranger squats the list of a match whose tercer tiempo is up", { who: STRANGER, method: "create", path: "lists/M7", data: { ...lst, ownerUid: "stranger" } }, "ALLOW"),
+  deny("A-Q3", "Google stranger squats the list of a match whose votación is up", { who: STRANGER, method: "create", path: "lists/M4", data: { ...lst, ownerUid: "stranger" } }, "ALLOW"),
+  deny("A-Q4", "anon makes a list at all", { who: ANON, method: "create", path: "lists/M8", data: { ...lst, ownerUid: "anon-x" } }, "ALLOW"),
+  deny("A-Q5", "anon queues a name on a list that is not up yet", { who: ANON, method: "create", path: "lists/M8/entries/e1", data: entry("anon-x") }, "ALLOW"),
+  deny("A-Q6", "anon squats the tercer tiempo of a match whose lista is out", { who: ANON, method: "create", path: "recaps/M5", data: { ...recap, ownerUid: "anon-x" } }, "ALLOW"),
+  deny("A-Q7", "Google stranger squats the tercer tiempo of a match whose lista is out", { who: STRANGER, method: "create", path: "recaps/M5", data: { ...recap, ownerUid: "stranger" } }, "ALLOW"),
+  deny("A-Q8", "Google stranger squats the tercer tiempo of a match whose votación is out", { who: STRANGER, method: "create", path: "recaps/M4", data: { ...recap, ownerUid: "stranger" } }, "ALLOW"),
+  deny("A-Q9", "site owner (Ver como) publishes at somebody's match id", { who: SITE_OWNER, method: "create", path: "recaps/M5", data: { ...recap, ownerUid: "admin-1" } }, "ALLOW"),
+  deny("A-Q10", "owner publishes where a stranger squatted the votación", { who: OWNER, method: "create", path: "recaps/M3", data: recap }, "ALLOW"),
+  deny("A-Q11", "owner republishes over a recap squatted before the hardening (still theirs: delete it by hand)", { who: OWNER, method: "update", path: "recaps/M6", data: recap, existing: { ...recap, ownerUid: "anon-x" } }),
+  deny("A-Q12", "owner deletes a recap squatted before the hardening", { who: OWNER, method: "delete", path: "recaps/M6", existing: { ...recap, ownerUid: "anon-x" } }),
+  deny("A-Q13", "anon squats the votación of a match whose lista is out", { who: ANON, method: "create", path: "picks/M5", data: { ...pick, ownerUid: "anon-x" } }, "ALLOW"),
+  deny("A-Q14", "Google stranger squats the votación of a match whose tercer tiempo is up", { who: STRANGER, method: "create", path: "picks/M7", data: { ...pick, ownerUid: "stranger" } }, "ALLOW"),
+  deny("A-Q15", "owner deletes a votación squatted before the hardening", { who: OWNER, method: "delete", path: "picks/M6", existing: { ...pick, ownerUid: "anon-x" } }),
+  deny("A-Q16", "anon sends a poll", { who: ANON, method: "create", path: "polls/P2", data: { ownerUid: "anon-x", title: "x", createdAt: SEEN } }, "ALLOW"),
+];
+
+export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES, ...MARKERS, ...SQUATS];

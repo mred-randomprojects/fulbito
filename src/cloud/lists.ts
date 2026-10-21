@@ -18,8 +18,10 @@ import { normalizeEntry, normalizeLista, type ListEntry, type Lista } from "@/li
  * **The list's id is the match's id.** One match, one list, no query and no
  * stored pointer on the match — the organiser's screen looks up
  * `lists/{match.id}` and either it exists or it does not. A match id is
- * random, so nobody can squat on one they were not sent, and the link
- * carrying it gives away nothing else: `users/{uid}` is a wall.
+ * random, but this link hands it to the whole grupo, so the rules refuse a
+ * list, a recap or a votación at an id where one of the others is somebody
+ * else's (`siblingIsMineOrAbsent`). The link gives away nothing else:
+ * `users/{uid}` is a wall.
  *
  * **Whoever writes an entry is signed in anonymously.** No Google, no popup:
  * `signInAnonymously` hands the device a uid on the spot, which is what lets

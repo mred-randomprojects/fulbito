@@ -29,8 +29,10 @@ import {
  *
  * **The votación's id is the match's id.** One match, one vote, no query and
  * no pointer field on the match — the trick `cloud/lists.ts` and
- * `cloud/recaps.ts` both play. A match id is random, so nobody squats on one
- * they were not sent, and the link gives away nothing else.
+ * `cloud/recaps.ts` both play. A match id is random, but la lista's link
+ * hands it to the grupo, so the rules refuse a votación at an id where the
+ * lista or the recap is somebody else's (`siblingIsMineOrAbsent`). The link
+ * gives away nothing else.
  *
  * **What goes out is decided in `lib/teamPick.ts`, not here.** `publishPick`
  * calls `pickFromOptions` and writes what it is handed. That is the whole

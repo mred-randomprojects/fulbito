@@ -35,6 +35,11 @@ rules_version = '2';
 //      not secret — `ignored` on a poll or a recap lists the ones set aside,
 //      to whoever holds the link — so a marker pointed at an existing one
 //      would hand somebody else's puntajes to a fresh account.
+//   c. One match id, one organiser. `lists`, `recaps` and `picks` are all
+//      filed under the match's id, so every link handed out names the id of
+//      the other two — see `siblingIsMineOrAbsent()`. And owning any of
+//      those, or a poll, wants a Google account (`isPerson()`): the app only
+//      ever creates them from the organiser's own session.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -114,6 +119,20 @@ service cloud.firestore {
       return id is string
         && id.size() <= 64
         && id.matches('[A-Za-z0-9]+(-[A-Za-z0-9]+)+');
+    }
+
+    // `lists`, `recaps` and `picks` are all filed under the match's id, so a
+    // link to any one of them hands the other two's id to whoever holds it —
+    // la lista's goes to the whole grupo, and to anonymous devices. Creating
+    // one is fine only while the siblings at that id are absent or yours:
+    // otherwise anybody holding la lista could publish that match's tercer
+    // tiempo or votación first, and the organiser's own would be refused for
+    // good — an update of a document somebody else owns. (Requiring the match
+    // in the creator's island would prove nothing: anybody may write their
+    // own island, and an organiser who never turned sync on has none.)
+    function siblingIsMineOrAbsent(coll, id) {
+      let path = /databases/$(database)/documents/$(coll)/$(id);
+      return !exists(path) || get(path).data.ownerUid == request.auth.uid;
     }
 
     // What a face is: the three fields every publisher has always written,
@@ -257,7 +276,8 @@ service cloud.firestore {
       // query for their polls. Not the super admins — see `isSuperAdmin()`.
       allow list: if (request.auth != null && resource.data.ownerUid == request.auth.uid)
         || isSiteOwner();
-      allow create: if request.auth != null
+      // Sent by a Google account — (c) at the top.
+      allow create: if isPerson()
         && request.resource.data.ownerUid == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.ownerUid == request.auth.uid
@@ -353,14 +373,18 @@ service cloud.firestore {
     //   - `at` is the server's clock. Arrival order decides who is on the
     //     banco, and a phone with a fast clock would otherwise jump the queue.
     //
-    // The list's id is the match's id — random, so nobody squats on one they
-    // were not sent, and one match has at most one list without a query.
+    // The list's id is the match's id, so one match has at most one list
+    // without a query. Random, so nobody guesses one — but every link to the
+    // match's tercer tiempo or votación carries it, which is why creating one
+    // wants a Google account and the siblings at that id absent or yours (c).
     //
     // Not defended: a device that clears its storage is a new device, and a
     // troll with the link can put names on the list. The link lives in a
     // private grupo, the organiser can take names off, and the list is
     // shared back into the same chat where everybody can see who did what.
-    // That is the same accountability the numbered message always had.
+    // That is the same accountability the numbered message always had. Names
+    // go only on a list that exists, though: nobody holding a sibling link
+    // gets to queue at the front of a list the organiser has not opened yet.
     // ------------------------------------------------------------------
     match /lists/{listId} {
       function list() {
@@ -375,8 +399,10 @@ service cloud.firestore {
 
       allow get: if request.auth != null;
       allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
-      allow create: if request.auth != null
+      allow create: if isPerson()
         && request.resource.data.ownerUid == request.auth.uid
+        && siblingIsMineOrAbsent('recaps', listId)
+        && siblingIsMineOrAbsent('picks', listId)
         && request.resource.data.keys().hasOnly(['ownerUid', 'title', 'date', 'cap', 'createdAt'])
         && request.resource.data.cap is int
         && request.resource.data.cap >= 2
@@ -393,6 +419,7 @@ service cloud.firestore {
       match /entries/{entryId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null
+          && exists(/databases/$(database)/documents/lists/$(listId))
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.keys().hasOnly(['name', 'uid', 'at'])
           && validName(request.resource.data.name)
@@ -499,8 +526,14 @@ service cloud.firestore {
       // "Ver como" can see somebody's own matches as they see them.
       allow list: if (request.auth != null && resource.data.ownerUid == request.auth.uid)
         || isSiteOwner();
-      allow create: if request.auth != null
+      // The organiser's Google session, and the match id not already
+      // somebody else's — see (c) at the top. Without the second, whoever
+      // holds la lista could publish this match's tercer tiempo first, and the
+      // organiser's own publish would be refused for good.
+      allow create: if isPerson()
         && request.resource.data.ownerUid == request.auth.uid
+        && siblingIsMineOrAbsent('lists', recapId)
+        && siblingIsMineOrAbsent('picks', recapId)
         && request.resource.data.keys().hasOnly(
              ['ownerUid', 'title', 'date', 'goalsA', 'goalsB', 'a', 'b',
               'videos', 'pollId', 'createdAt', 'closed', 'ignored'])
@@ -741,8 +774,12 @@ service cloud.firestore {
       // "Ver como" sees somebody's own matches as they see them.
       allow list: if (request.auth != null && resource.data.ownerUid == request.auth.uid)
         || isSiteOwner();
-      allow create: if request.auth != null
+      // The organiser's Google session, and the match id not already
+      // somebody else's — see (c) at the top.
+      allow create: if isPerson()
         && request.resource.data.ownerUid == request.auth.uid
+        && siblingIsMineOrAbsent('lists', pickId)
+        && siblingIsMineOrAbsent('recaps', pickId)
         && request.resource.data.keys().hasOnly(
              ['ownerUid', 'title', 'date', 'options', 'createdAt'])
         && request.resource.data.title is string

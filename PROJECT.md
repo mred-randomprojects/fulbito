@@ -1146,9 +1146,15 @@ four decisions follow from the difference.
   roster under an account that evaporates.
 - **The list's id is the match's id.** One match, one list, no query, no
   field on the match: `ListPanel` watches `lists/{match.id}` and it either
-  exists or it does not. A match id is random, so nobody squats on one they
-  were not sent, and the link gives away nothing else — `users/{uid}` is a
-  wall. Renaming or re-dating the partido after the link went out rewrites
+  exists or it does not. A match id is random, so nobody guesses one — but
+  la lista's link hands it to the whole grupo, and the tercer tiempo and the
+  votación are filed under the same id. So the rules let somebody create a
+  lista, a recap or a votación only from a Google account and only while the
+  other two at that id are absent or theirs (`siblingIsMineOrAbsent`): until
+  October 2026 anybody holding la lista could take the match's tercer tiempo
+  first, and the organiser's own publish was refused for good. Names go only
+  on a lista that exists. The link gives away nothing else — `users/{uid}` is
+  a wall. Renaming or re-dating the partido after the link went out rewrites
   the list's title and date, so the page in the grupo never announces last
   week's name.
 - **Arrival order is the server's clock.** Who is tenth and who is on the

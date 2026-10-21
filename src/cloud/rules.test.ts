@@ -1481,3 +1481,70 @@ describe("faces", () => {
     assert.equal((await getDocs(collection(as(OWNER), "recaps", recapId, "players"))).size, 0);
   });
 });
+
+/**
+ * `lists`, `recaps` and `picks` share the match's id, so la lista's link —
+ * the one that goes to the whole grupo, anonymous devices included — names
+ * the id of the tercer tiempo and the votación too. Whoever created one of
+ * those first used to own it for good, and the organiser's own publish was
+ * then an update of somebody else's document.
+ */
+describe("one match id, one organiser", () => {
+  const ID = "match-squat" as MatchId;
+  const lista = { id: ID, title: "Jueves", date: "2026-10-16", cap: 10 };
+  const side = (players: string[]) => ({ name: "A", kit: "light", players });
+  const recapDoc = (ownerUid: string) => ({
+    ownerUid,
+    title: "Jueves",
+    date: "2026-10-16",
+    goalsA: 1,
+    goalsB: 0,
+    a: side(["p1"]),
+    b: side(["p2"]),
+    videos: [],
+    createdAt: "now",
+  });
+  const pickDoc = (ownerUid: string) => ({
+    ownerUid,
+    title: "Jueves",
+    date: "2026-10-16",
+    options: [
+      { a: side(["p1"]), b: side(["p2"]) },
+      { a: side(["p2"]), b: side(["p1"]) },
+    ],
+    createdAt: "now",
+  });
+
+  it("stops whoever holds la lista from taking the match's tercer tiempo or votación first", async () => {
+    await createList(as(OWNER), "owner-1", lista);
+    for (const who of [STRANGER, DEVICE_A]) {
+      if (who === null) continue;
+      await denied(setDoc(doc(as(who), "recaps", ID), recapDoc(who.uid)));
+      await denied(setDoc(doc(as(who), "picks", ID), pickDoc(who.uid)));
+    }
+    // The organiser's own, beside their own lista, still go up.
+    await setDoc(doc(as(OWNER), "recaps", ID), recapDoc("owner-1"));
+    await setDoc(doc(as(OWNER), "picks", ID), pickDoc("owner-1"));
+  });
+
+  it("stops whoever holds the tercer tiempo from taking the match's lista", async () => {
+    await setDoc(doc(as(OWNER), "recaps", ID), recapDoc("owner-1"));
+    await denied(createList(as(STRANGER), "stranger", lista));
+    await createList(as(OWNER), "owner-1", lista);
+  });
+
+  it("wants a Google account to open a lista, a tercer tiempo, a votación or an encuesta", async () => {
+    const db = as(DEVICE_A);
+    await denied(createList(db, "anon-a", lista));
+    await denied(setDoc(doc(db, "recaps", ID), recapDoc("anon-a")));
+    await denied(setDoc(doc(db, "picks", ID), pickDoc("anon-a")));
+    await denied(createPoll(db, "anon-a", { title: "x", players: [] }));
+  });
+
+  it("takes names only on a lista that is up", async () => {
+    await denied(joinList(as(DEVICE_A), ID, "anon-a", "Maxi"));
+    await createList(as(OWNER), "owner-1", lista);
+    await joinList(as(DEVICE_A), ID, "anon-a", "Maxi");
+  });
+});
+

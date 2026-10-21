@@ -36,8 +36,10 @@ import {
  *
  * **The recap's id is the match's id.** One match, one recap, no query and no
  * pointer field on the match — the same trick `cloud/lists.ts` plays. A match
- * id is random, so nobody squats on one they were not sent, and the link
- * gives away nothing else: `users/{uid}` is still a wall.
+ * id is random, but la lista's link hands it to the grupo, so the rules
+ * refuse a recap at an id where the lista or the votación is somebody else's
+ * (`siblingIsMineOrAbsent`). The link gives away nothing else: `users/{uid}`
+ * is still a wall.
  *
  * **What goes out is decided in `lib/recap.ts`, not here.** `publishRecap`
  * calls `recapFromMatch` and writes what it is handed. That is the whole
