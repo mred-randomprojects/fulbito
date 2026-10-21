@@ -366,7 +366,10 @@ npm run check   # typecheck + lint + tests in one go: the gate the deploy runs
 The whole app state — players, photos, matches, teams, ratings — is one JSON
 blob in `localStorage`, exported and imported from the "Tus datos" screen. Import
 *merges* on per-record timestamps rather than replacing, so restoring an older
-file cannot wipe players added since (`src/mergeAppData.ts`).
+file cannot wipe players added since (`src/mergeAppData.ts`). A delete wins
+that merge, so the import then names what the file has that you deleted here
+since and brings it back if you say so. Deleting a match, a player or a team
+asks nothing, and for ten seconds afterwards "Deshacer" puts it back.
 
 **Sync is optional.** Sign in with Google from "Tus datos" — after a consent
 dialog that says plainly what gets uploaded — and the same roster follows you
