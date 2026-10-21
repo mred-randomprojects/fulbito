@@ -226,6 +226,26 @@ describe("users/{uid}", () => {
     assert.equal(back.exists(), true);
   });
 
+  /**
+   * The app syncs a roster for a Google account and nobody else, in four
+   * shapes. An island open to any session was free storage for anybody with
+   * the public API key, and junk under `meta` would land in Ver como's list.
+   */
+  it("holds only what the app writes, for a Google account only", async () => {
+    await denied(setDoc(doc(as(DEVICE_A), "users", "anon-a", "players", "p1"), { firstName: "x" }));
+    await denied(getDocs(collection(as(DEVICE_A), "users", "anon-a", "players")));
+    const db = as(OWNER);
+    for (const sub of ["players", "matches", "teams"]) {
+      await setDoc(doc(db, "users", "owner-1", sub, "x1"), { id: "x1" });
+      await deleteDoc(doc(db, "users", "owner-1", sub, "x1"));
+    }
+    await setDoc(doc(db, "users", "owner-1", "meta", "tombstones"), { deletedPlayers: [] });
+    await setDoc(doc(db, "users", "owner-1", "meta", "sync"), { enabled: true });
+    await denied(setDoc(doc(db, "users", "owner-1", "junk", "j1"), { blob: "x" }));
+    await denied(setDoc(doc(db, "users", "owner-1", "meta", "anything"), { blob: "x" }));
+    await denied(setDoc(doc(db, "users", "owner-1", "players", "p1", "deeper", "d1"), { blob: "x" }));
+  });
+
   it("keeps everybody else out, signed in or not", async () => {
     await setDoc(doc(as(OWNER), "users", "owner-1", "players", "p1"), { firstName: "Maxi" });
     await denied(getDoc(doc(as(STRANGER), "users", "owner-1", "players", "p1")));
@@ -583,6 +603,21 @@ describe("polls", () => {
     );
     // A fresh one is still theirs to claim.
     assert.notEqual(await claimBallotId(db, pollId, "voter-2"), ballotId);
+  });
+
+  it("is sent in the shape the app writes, and takes ballots that are a map of votes", async () => {
+    await denied(
+      setDoc(doc(as(OWNER), "polls", "made-by-hand"), {
+        ownerUid: "owner-1",
+        title: "x",
+        createdAt: "now",
+        blob: "anything else",
+      }),
+    );
+    const pollId = await createPoll(as(OWNER), "owner-1", draft);
+    const db = as(VOTER);
+    const ballotId = await claimBallotId(db, pollId, "voter-1");
+    await denied(setDoc(doc(db, "polls", pollId, "ballots", ballotId), { votes: "x".repeat(1000) }));
   });
 
   it("refuses an identity whose address is not the token's", async () => {

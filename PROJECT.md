@@ -891,6 +891,12 @@ stop saving somewhere around forty or fifty players with photos. And marking
 who paid, on phone data at the cancha, has to send a few hundred bytes rather
 than re-uploading every photo in the roster.
 
+The rules let a Google account write its own island in exactly those shapes —
+`players`, `matches`, `teams`, and `meta/tombstones` or `meta/sync`, one level
+deep — and nothing else, and an anonymous session not at all: the app never
+syncs one, and an island open to any session was free storage on the
+project's shared free quota for anybody holding the public API key.
+
 The engine is two triggers and one pure function, `planSync`:
 
 ```

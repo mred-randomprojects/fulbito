@@ -10,7 +10,9 @@ rules_version = '2';
 // Four things are enforced here:
 //
 //   1. You can only ever touch documents under your own uid. That is what
-//      makes an open sign-up safe: every account is an island.
+//      makes an open sign-up safe: every account is an island. An island is
+//      a Google account's, never an anonymous session's, and holds only the
+//      shapes the app writes — see `isAllowedUser()` and the `users` blocks.
 //   2. Optionally, an email allowlist. Leave `allowedEmails()` empty to let
 //      anybody with a Google account sync their own roster — the default, and
 //      what Fulbito is deployed as. Fill it in to make the app invitational,
@@ -45,13 +47,18 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Keep in sync with the VITE_ALLOWED_EMAILS GitHub secret.
-    // Empty list = anybody signed in may sync their own data.
+    // Empty list = anybody signed in with Google may sync their own data.
     function allowedEmails() {
       return [];
     }
 
+    // A Google account, never an anonymous session: the app only ever syncs
+    // a roster for somebody signed in as themselves (`CloudAuthProvider`
+    // treats an anonymous session as nobody), and an island open to any
+    // session was free storage for anybody holding the public API key — on
+    // a free plan whose daily quota every grupo shares.
     function isAllowedUser() {
-      return request.auth != null
+      return isPerson()
         && (allowedEmails().size() == 0
             || request.auth.token.email in allowedEmails());
     }
@@ -201,8 +208,19 @@ service cloud.firestore {
     //   users/{uid}/meta/tombstones
     //   users/{uid}/meta/sync
     match /users/{userId}/{sub}/{document=**} {
-      allow read, write: if isAllowedUser() && request.auth.uid == userId;
+      allow read: if isAllowedUser() && request.auth.uid == userId;
       allow read: if isSiteOwner();
+    }
+
+    // Written only in those shapes: one level deep, three collections and two
+    // named `meta` documents. Anything else under an island is nothing the app
+    // ever wrote, and the site owner's directory — every `meta`, in one query,
+    // below — should list accounts rather than whatever somebody parked there.
+    match /users/{userId}/{sub}/{docId} {
+      allow write: if isAllowedUser()
+        && request.auth.uid == userId
+        && sub in ['players', 'matches', 'teams', 'meta']
+        && (sub != 'meta' || docId in ['tombstones', 'sync']);
     }
 
     // Every account's `meta`, in one query: the owner's directory of who
@@ -285,9 +303,12 @@ service cloud.firestore {
       // query for their polls. Not the super admins — see `isSuperAdmin()`.
       allow list: if (request.auth != null && resource.data.ownerUid == request.auth.uid)
         || isSiteOwner();
-      // Sent by a Google account — (c) at the top.
+      // Sent by a Google account — (c) at the top — in the shape `createPoll`
+      // has always written. `ignored` arrives later, by update.
       allow create: if isPerson()
-        && request.resource.data.ownerUid == request.auth.uid;
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['ownerUid', 'title', 'createdAt', 'ignored'])
+        && request.resource.data.title is string;
       allow update: if request.auth != null
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid;
@@ -309,7 +330,8 @@ service cloud.firestore {
         allow list: if isOwner() || isSuperAdmin() || isSiteOwner();
         allow get: if isOwner() || isSuperAdmin() || isSiteOwner() || claims(ballotId);
         allow create, update: if claims(ballotId)
-          && request.resource.data.keys().hasOnly(['votes']);
+          && request.resource.data.keys().hasOnly(['votes'])
+          && request.resource.data.votes is map;
         allow delete: if isOwner();
       }
 

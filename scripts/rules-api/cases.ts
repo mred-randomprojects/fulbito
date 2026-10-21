@@ -35,6 +35,7 @@ const SEEN = "2026-10-16 12:00";
 /** A photo the size `lib/image.ts` makes: up to 60 KB decoded, so ~80 KB of base64. */
 const BIG_AVATAR = `data:image/jpeg;base64,${"/9j/".repeat(20_000)}`;
 const AVATAR = `data:image/jpeg;base64,${"QUFB".repeat(50)}`;
+const BLOB = "x".repeat(50_000);
 
 const face = (ownerUid: string, avatar = AVATAR): Data => ({ ownerUid, name: "Maxi", avatar });
 
@@ -404,4 +405,23 @@ const ADMINS: Row[] = [
   deny("A-S7", "unverified token with a super admin's address reads a ballot", { who: ADMIN_EMAIL_UNVERIFIED, method: "get", path: "polls/P1/ballots/pb1", existing: { votes: {} }, world: { ...W, "polls/P1/voters/fake-3": null } }, "ALLOW"),
 ];
 
-export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES, ...MARKERS, ...SQUATS, ...ADMINS];
+/* ------------------------------------------------------------------ */
+/* Only the shapes the app writes, and islands for Google accounts.    */
+/* ------------------------------------------------------------------ */
+
+const SHAPES: Row[] = [
+  deny("A-U1", "anon parks 50 KB of junk under its own uid", { who: ANON, method: "create", path: "users/anon-x/junk/j1", data: { blob: BLOB } }, "ALLOW"),
+  deny("A-U2", "anon writes a roster of its own", { who: ANON, method: "create", path: "users/anon-x/players/p1", data: { blob: BLOB } }, "ALLOW"),
+  deny("A-U3", "anon plants a meta/sync (it would show in the Ver como directory)", { who: ANON, method: "create", path: "users/anon-x/meta/sync", data: { enabled: true } }, "ALLOW"),
+  deny("A-U4", "anon reads an island of its own", { who: ANON, method: "list", path: "users/anon-x/players/p1", existing: { blob: "x" } }, "ALLOW"),
+  deny("A-U5", "Google account writes a collection the app never writes", { who: STRANGER, method: "create", path: "users/stranger/junk/j1", data: { blob: BLOB } }, "ALLOW"),
+  deny("A-U6", "Google account writes four levels deep", { who: STRANGER, method: "create", path: "users/stranger/players/p1/x/y", data: { blob: BLOB } }, "ALLOW"),
+  deny("A-U7", "Google account writes meta/<anything>", { who: STRANGER, method: "create", path: "users/stranger/meta/zzz", data: { blob: BLOB } }, "ALLOW"),
+  deny("A-U11", "anon writes a profile", { who: ANON, method: "create", path: "users/anon-x", data: { email: "a@b.c", name: "x", seenAt: SEEN } }),
+  deny("A-U12", "a profile claiming somebody else's address", { who: OWNER, method: "create", path: "users/owner-1", data: { email: "maxiredigonda@gmail.com", name: "x", seenAt: SEEN } }),
+  deny("A-U13", "a profile carrying anything else", { who: OWNER, method: "create", path: "users/owner-1", data: { email: "owner@example.com", name: "x", seenAt: SEEN, admin: true } }),
+  deny("A-P13", "a poll carrying anything else", { who: OWNER, method: "create", path: "polls/P2", data: { ownerUid: "owner-1", title: "x", createdAt: SEEN, blob: BLOB } }, "ALLOW"),
+  deny("A-P16", "a ballot whose votes is not a map", { who: VOTER, method: "create", path: "polls/P1/ballots/pb1", data: { votes: BLOB } }, "ALLOW"),
+];
+
+export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES, ...MARKERS, ...SQUATS, ...ADMINS, ...SHAPES];
