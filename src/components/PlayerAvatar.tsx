@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { avatarSrc } from "@/lib/avatarBytes";
 import { initialsColor } from "@/lib/image";
 import { playerInitials, type Player } from "@/types";
 
@@ -29,10 +30,11 @@ export function PlayerAvatar({
     boxShadow: ring != null ? `0 0 0 ${ringWidth}px ${ring}` : undefined,
   };
 
-  if (player.avatar !== "") {
+  const src = avatarSrc(player.avatar);
+  if (src !== null) {
     return (
       <img
-        src={player.avatar}
+        src={src}
         alt=""
         style={style}
         className={cn("shrink-0 rounded-full object-cover", className)}
@@ -85,10 +87,11 @@ export function StaticAvatar({
     boxShadow: ring != null ? `0 0 0 ${ringWidth}px ${ring}` : undefined,
   };
 
-  if (avatar !== "") {
+  const src = avatarSrc(avatar);
+  if (src !== null) {
     return (
       <img
-        src={avatar}
+        src={src}
         alt=""
         style={style}
         className={cn("shrink-0 rounded-full object-cover", className)}

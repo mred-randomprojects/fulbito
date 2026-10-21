@@ -41,3 +41,17 @@ export function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   }
   return true;
 }
+
+/**
+ * The photo to put in an `<img src>`, or `null` to draw the monogram.
+ *
+ * Every photo this app makes is a data URL (`lib/image.ts`), so anything else
+ * in the field did not come from here: a hand edit, an imported file, or
+ * somebody else's account — a face on a published link, or a whole roster
+ * through Ver como. An `<img>` runs no script, but a remote one tells whoever
+ * chose the address that this browser opened the screen, and when; so only an
+ * inline image is shown, and the stored text is left exactly as it was.
+ */
+export function avatarSrc(avatar: string): string | null {
+  return /^data:image\//i.test(avatar) ? avatar : null;
+}

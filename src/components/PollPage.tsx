@@ -14,6 +14,7 @@ import {
   type Voter,
 } from "@/cloud/polls";
 import { isCancelledSignIn, isPopupBlocked } from "@/lib/authErrors";
+import { avatarSrc } from "@/lib/avatarBytes";
 import { browserClock } from "@/lib/browserClock";
 import {
   ATTRIBUTE_LABELS,
@@ -530,10 +531,11 @@ function Shell({ children }: { children: React.ReactNode }) {
  */
 function Face({ player, size = 96 }: { player: PollPlayer; size?: number }) {
   const style = { width: size, height: size };
-  if (player.avatar !== "") {
+  const src = avatarSrc(player.avatar);
+  if (src !== null) {
     return (
       <img
-        src={player.avatar}
+        src={src}
         alt=""
         style={style}
         className="shrink-0 rounded-full object-cover"

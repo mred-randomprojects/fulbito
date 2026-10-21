@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decodeAvatarDataUrl, sameBytes } from "./avatarBytes.js";
+import { avatarSrc, decodeAvatarDataUrl, sameBytes } from "./avatarBytes.js";
 
 test("decodes a base64 avatar without changing its bytes", () => {
   const decoded = decodeAvatarDataUrl("data:image/jpeg;base64,AP+AAQI=");
@@ -26,4 +26,23 @@ test("compares every byte rather than only the size", () => {
   assert.equal(sameBytes(new Uint8Array([1, 2]), new Uint8Array([1, 2])), true);
   assert.equal(sameBytes(new Uint8Array([1, 2]), new Uint8Array([1, 3])), false);
   assert.equal(sameBytes(new Uint8Array([1]), new Uint8Array([1, 0])), false);
+});
+
+test("shows a photo only when it is an inline image", () => {
+  // What `lib/image.ts` makes, and what an imported file may carry.
+  assert.equal(avatarSrc("data:image/jpeg;base64,AP+AAQI="), "data:image/jpeg;base64,AP+AAQI=");
+  assert.equal(avatarSrc("DATA:image/png;base64,AA=="), "DATA:image/png;base64,AA==");
+  assert.equal(avatarSrc("data:image/svg+xml,%3Csvg%3E%3C/svg%3E"), "data:image/svg+xml,%3Csvg%3E%3C/svg%3E");
+  // What nothing here makes: somebody else's account choosing an address
+  // that every viewer's browser would then fetch.
+  for (const stored of [
+    "",
+    "https://evil.example/pixel.gif",
+    "//evil.example/pixel.gif",
+    "javascript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    " data:image/png;base64,AA==",
+  ]) {
+    assert.equal(avatarSrc(stored), null, JSON.stringify(stored));
+  }
 });

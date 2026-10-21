@@ -1,4 +1,5 @@
 import type { Player } from "../types.js";
+import { avatarSrc } from "./avatarBytes.js";
 import { initialsColor } from "./image.js";
 
 /**
@@ -43,7 +44,7 @@ export async function loadPhotos(
 ): Promise<Map<string, HTMLImageElement>> {
   const entries = await Promise.all(
     players
-      .filter((p) => p.avatar !== "")
+      .filter((p) => avatarSrc(p.avatar) !== null)
       .map(
         (p) =>
           new Promise<[string, HTMLImageElement] | null>((resolve) => {

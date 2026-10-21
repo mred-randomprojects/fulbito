@@ -115,7 +115,12 @@ enters the app without going through `normalizeAppData` — a hand-edited
 
 - **`Player`** — name, nickname, avatar (a data URL, centre-cropped and
   re-encoded on upload), one required `rating`, optional `roleRatings` and
-  `attributes`, `avoid`, `tags`, notes, `ratingScale`, `updatedAt`.
+  `attributes`, `avoid`, `tags`, notes, `ratingScale`, `updatedAt`. A photo is
+  only ever drawn when it is an inline `data:image/` URL (`avatarSrc` in
+  `lib/avatarBytes.ts`); anything else in the field — a hand edit, an imported
+  file, another account's roster under Ver como — shows the monogram and is
+  left as stored, because a remote address in an `<img>` reports every viewer
+  to whoever chose it.
 - **Ratings run 0 to 100**, and they used to run 1 to 10. The reason is the
   encuesta: the median of ten people's integers lands on a 7 or a 7.5 and
   nothing in between, so a room that thinks somebody is a notch above the other
