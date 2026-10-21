@@ -11,6 +11,7 @@ import {
   getFirestore,
   query,
   serverTimestamp,
+  deleteDoc,
   setDoc,
   updateDoc,
   where,
@@ -31,6 +32,7 @@ import {
 import {
   claimBallotId,
   createPoll,
+  deletePoll,
   fetchBallot,
   fetchBallotEntries,
   fetchMyBallotId,
@@ -142,6 +144,24 @@ async function denied(work: Promise<unknown>): Promise<void> {
     throw e;
   }
   assert.fail("expected the rules to refuse this");
+}
+
+/**
+ * A document written straight into the emulator, past the rules — the way
+ * a face somebody stamped before a rule existed is still sitting there. The
+ * emulator lets `Bearer owner` through; nothing in the app can do this.
+ */
+async function seed(path: string, data: Record<string, string>): Promise<void> {
+  const fields = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, { stringValue: v }]));
+  const res = await fetch(
+    `http://${HOST}:${PORT}/v1/projects/${PROJECT}/databases/(default)/documents/${path}`,
+    {
+      method: "PATCH",
+      headers: { Authorization: "Bearer owner", "Content-Type": "application/json" },
+      body: JSON.stringify({ fields }),
+    },
+  );
+  assert.equal(res.status, 200, await res.text());
 }
 
 /** One reading of a live list, then stop watching. */
@@ -1246,5 +1266,177 @@ describe("picks", () => {
     const id = await open();
     await denied(getDoc(doc(as(DEVICE_A), "users", "owner-1", "players", MAXI)));
     await denied(getDoc(doc(as(DEVICE_A), "users", "owner-1", "matches", id)));
+  });
+});
+
+/**
+ * The faces on an encuesta, a tercer tiempo and a votación: a name and a
+ * photo per player, one document each, readable by whoever holds the link.
+ * They used to be writable by anybody who stamped their own uid on one, so
+ * the link alone — an anonymous session — was enough to rename, re-photo,
+ * add or delete them. They are the organiser's now, and only the organiser's.
+ */
+describe("faces", () => {
+  function person(id: string, avatar = ""): Player {
+    return {
+      id: id as PlayerId,
+      firstName: id,
+      lastName: "",
+      nickname: "",
+      avatar,
+      ratingScale: 100 as const,
+      rating: 70,
+      roleRatings: {},
+      attributes: {},
+      avoid: [],
+      together: [],
+      tags: [],
+      notes: "",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+  }
+
+  /** Twenty-five, so a publish is more document accesses than the ceiling of twenty. */
+  const crowd = Array.from({ length: 25 }, (_, i) => person(`p${i}`));
+  const ids = crowd.map((p) => p.id);
+  const PHOTO = `data:image/jpeg;base64,${"QUFB".repeat(50)}`;
+
+  const recapMatch = {
+    id: "match-faces" as MatchId,
+    name: "Martes",
+    date: "2026-03-10",
+    teamA: { name: "Claros", kit: "light" as const, formationId: "f" },
+    teamB: { name: "Oscuros", kit: "dark" as const, formationId: "f" },
+    result: { goalsA: 3, goalsB: 2 },
+    squad: ids,
+    lineupA: ids.slice(0, 13),
+    lineupB: ids.slice(13),
+    videos: [],
+  };
+  const pickMatch = {
+    id: "match-faces-pick" as MatchId,
+    name: "Martes",
+    date: "2026-03-10",
+    teamA: { name: "Claros", kit: "light" as const, formationId: "f" },
+    teamB: { name: "Oscuros", kit: "dark" as const, formationId: "f" },
+    squad: ids,
+  };
+  const pickOptions = [
+    { a: ids.slice(0, 13), b: ids.slice(13) },
+    { a: ids.slice(12), b: ids.slice(0, 12) },
+  ];
+
+  async function poll(): Promise<string> {
+    return createPoll(as(OWNER), "owner-1", {
+      title: "Ranking",
+      players: crowd.map((p) => ({ id: p.id, name: p.firstName, avatar: PHOTO })),
+    });
+  }
+  async function recap(): Promise<string> {
+    assert.equal(await publishRecap(as(OWNER), "owner-1", recapMatch, crowd), true);
+    return recapMatch.id;
+  }
+  async function pick(): Promise<string> {
+    assert.equal(await publishPick(as(OWNER), "owner-1", pickMatch, pickOptions, crowd), "published");
+    return pickMatch.id;
+  }
+
+  it("publishes twenty-five of them in one batch, under every kind of link", async () => {
+    const reader = as(STRANGER);
+    const pollId = await poll();
+    assert.equal((await getDocs(collection(reader, "polls", pollId, "players"))).size, 25);
+    assert.equal((await getDocs(collection(reader, "recaps", await recap(), "players"))).size, 25);
+    assert.equal((await getDocs(collection(reader, "picks", await pick(), "players"))).size, 25);
+  });
+
+  it("lets nobody else rename, re-photo, add or delete one, anonymous or signed in", async () => {
+    const pollId = await poll();
+    const recapId = await recap();
+    const pickId = await pick();
+    const targets: [string, string][] = [
+      ["polls", pollId],
+      ["recaps", recapId],
+      ["picks", pickId],
+    ];
+    for (const [coll, id] of targets) {
+      for (const who of [DEVICE_A, STRANGER]) {
+        if (who === null) continue;
+        const db = as(who);
+        const hacked = { ownerUid: who.uid, name: "Hackeado", avatar: "" };
+        await denied(setDoc(doc(db, coll, id, "players", "p1"), hacked));
+        await denied(setDoc(doc(db, coll, id, "players", "nuevo"), hacked));
+        await denied(deleteDoc(doc(db, coll, id, "players", "p1")));
+      }
+    }
+    // And a face under a parent that is not there is nobody's to write.
+    await denied(
+      setDoc(doc(as(STRANGER), "recaps", "nothing-here", "players", "p1"), {
+        ownerUid: "stranger",
+        name: "x",
+        avatar: "",
+      }),
+    );
+  });
+
+  it("refuses the organiser's own face when its photo is an address or it carries anything else", async () => {
+    const recapId = await recap();
+    const db = as(OWNER);
+    await denied(
+      setDoc(doc(db, "recaps", recapId, "players", "p1"), {
+        ownerUid: "owner-1",
+        name: "Maxi",
+        avatar: "https://evil.example/pixel.gif",
+      }),
+    );
+    await denied(
+      setDoc(doc(db, "recaps", recapId, "players", "p1"), {
+        ownerUid: "owner-1",
+        name: "Maxi",
+        avatar: "",
+        rating: 77,
+      }),
+    );
+  });
+
+  it("publishes a player whose stored photo is not an inline image, without the photo", async () => {
+    const odd = [person("p0", "https://evil.example/pixel.gif"), ...crowd.slice(1)];
+    assert.equal(await publishRecap(as(OWNER), "owner-1", recapMatch, odd), true);
+    const face = await getDoc(doc(as(DEVICE_A), "recaps", recapMatch.id, "players", "p0"));
+    assert.equal(face.data()?.avatar, "");
+  });
+
+  /**
+   * A face somebody else stamped while the old rules let them: the
+   * organiser takes it back on the next publish, or down with the rest, and
+   * whoever stamped it cannot touch it again.
+   */
+  it("gives the organiser back a face somebody stamped before these rules", async () => {
+    const recapId = await recap();
+    await seed(`recaps/${recapId}/players/p1`, { ownerUid: "stranger", name: "Hackeado", avatar: "" });
+    await denied(
+      setDoc(doc(as(STRANGER), "recaps", recapId, "players", "p1"), {
+        ownerUid: "stranger",
+        name: "Otra vez",
+        avatar: "",
+      }),
+    );
+    assert.equal(await publishRecap(as(OWNER), "owner-1", recapMatch, crowd), true);
+    const back = await getDoc(doc(as(DEVICE_A), "recaps", recapId, "players", "p1"));
+    assert.equal(back.data()?.ownerUid, "owner-1");
+    assert.equal(back.data()?.name, "p1");
+
+    const pollId = await poll();
+    await seed(`polls/${pollId}/players/intruso`, { ownerUid: "anon-a", name: "Intruso", avatar: "" });
+    await deletePoll(as(OWNER), pollId);
+    assert.equal((await getDocs(collection(as(OWNER), "polls", pollId, "players"))).size, 0);
+
+    const pickId = await pick();
+    await seed(`picks/${pickId}/players/intruso`, { ownerUid: "anon-a", name: "Intruso", avatar: "" });
+    await deletePick(as(OWNER), pickId);
+    assert.equal((await getDocs(collection(as(OWNER), "picks", pickId, "players"))).size, 0);
+
+    await seed(`recaps/${recapId}/players/intruso`, { ownerUid: "anon-a", name: "Intruso", avatar: "" });
+    await deleteRecap(as(OWNER), recapId);
+    assert.equal((await getDocs(collection(as(OWNER), "recaps", recapId, "players"))).size, 0);
   });
 });

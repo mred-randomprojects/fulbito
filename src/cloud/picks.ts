@@ -1,6 +1,7 @@
 import type { Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
 import type { Player } from "@/types";
+import { faceAvatar } from "@/lib/avatarBytes";
 import {
   normalizeBallot,
   normalizePick,
@@ -113,7 +114,7 @@ export async function publishPick(
     batch.set(doc(collection(pickRef, PLAYERS), face.id), {
       ownerUid,
       name: face.name,
-      avatar: face.avatar,
+      avatar: faceAvatar(face.avatar),
     });
   }
   await batch.commit();

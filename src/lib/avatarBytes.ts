@@ -55,3 +55,15 @@ export function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 export function avatarSrc(avatar: string): string | null {
   return /^data:image\//i.test(avatar) ? avatar : null;
 }
+
+/**
+ * The photo a published face carries: the inline image, or none.
+ *
+ * `firestore.rules` accepts a face whose avatar is empty or a `data:image/`
+ * URL and nothing else, and a face is written in one batch with its poll,
+ * recap or votación — so one stray address on one player would refuse the
+ * whole publish. Better to send that one player without a photo.
+ */
+export function faceAvatar(avatar: string): string {
+  return avatarSrc(avatar) ?? "";
+}

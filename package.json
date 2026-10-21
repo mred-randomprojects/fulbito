@@ -10,7 +10,8 @@
     "check": "tsc -b && eslint . && npm test",
     "test": "rm -rf .tmp/test-dist && tsc -p tsconfig.test.json && node --test $(find .tmp/test-dist/src -name '*.test.js')",
     "preview": "vite preview",
-    "test:rules": "npx --yes firebase-tools@15.33.0 emulators:exec --only firestore --project demo-fulbito \"TSX_TSCONFIG_PATH=tsconfig.app.json node --import tsx --test src/cloud/rules.test.ts\""
+    "test:rules": "npx --yes firebase-tools@15.33.0 emulators:exec --only firestore --project demo-fulbito \"TSX_TSCONFIG_PATH=tsconfig.app.json node --import tsx --test src/cloud/rules.test.ts\"",
+    "test:rules:api": "node scripts/rules-api/run.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",

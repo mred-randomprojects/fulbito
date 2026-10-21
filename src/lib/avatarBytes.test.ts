@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { avatarSrc, decodeAvatarDataUrl, sameBytes } from "./avatarBytes.js";
+import { avatarSrc, decodeAvatarDataUrl, faceAvatar, sameBytes } from "./avatarBytes.js";
 
 test("decodes a base64 avatar without changing its bytes", () => {
   const decoded = decodeAvatarDataUrl("data:image/jpeg;base64,AP+AAQI=");
@@ -45,4 +45,13 @@ test("shows a photo only when it is an inline image", () => {
   ]) {
     assert.equal(avatarSrc(stored), null, JSON.stringify(stored));
   }
+});
+
+test("publishes a face with its inline photo, or with none at all", () => {
+  // The rules refuse a face carrying anything else, and refuse the whole
+  // batch with it: one odd avatar must not stop a recap from going up.
+  assert.equal(faceAvatar("data:image/jpeg;base64,AP+AAQI="), "data:image/jpeg;base64,AP+AAQI=");
+  assert.equal(faceAvatar(""), "");
+  assert.equal(faceAvatar("https://evil.example/pixel.gif"), "");
+  assert.equal(faceAvatar("javascript:alert(1)"), "");
 });

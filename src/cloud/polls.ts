@@ -1,5 +1,6 @@
 import type { Firestore } from "firebase/firestore";
 import { generateId, type PlayerId } from "@/types";
+import { faceAvatar } from "@/lib/avatarBytes";
 import {
   normalizeBallot,
   normalizeIdentity,
@@ -99,7 +100,7 @@ export async function createPoll(
     batch.set(doc(collection(pollRef, PLAYERS), player.id), {
       ownerUid,
       name: player.name,
-      avatar: player.avatar,
+      avatar: faceAvatar(player.avatar),
     });
   }
   await batch.commit();

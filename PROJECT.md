@@ -990,7 +990,12 @@ it differs.)
   and ruin the number you are asking for — and no notes, tags or avoid lists,
   because a link is readable by whoever holds it. The faces are one document
   each for the same reason the roster is: an avatar is an inline data URL of
-  up to 60 KB, and twenty on one document cross Firestore's 1 MiB cap.
+  up to 60 KB, and twenty on one document cross Firestore's 1 MiB cap. A face
+  is the poll owner's to write — the rules check the parent poll, as the batch
+  leaves it — and its photo is an inline `data:image/` URL or nothing; the same
+  holds for the faces under a tercer tiempo and a votación. Until October 2026
+  stamping your own uid on a face was enough, so anybody holding the link could
+  rename, re-photo, add or delete them.
 - **A ballot carries no uid.** The medians are worked out in the owner's
   browser, because there is no server here to do it; a uid on the ballot would
   put "who gave El Gordo a 4" one tap away, and nobody would answer honestly
@@ -2084,6 +2089,17 @@ it on every push before the build, and a rules edit that breaks a promise
 never deploys. With a service account secret, CI also publishes the rules
 after the site (`FIREBASE_SETUP.md`, step 6); without one they are pasted by
 hand, as before.
+
+`npm run test:rules:api` is the other half, and needs no Java: every request
+the app makes and every attack worth naming (`scripts/rules-api/cases.ts`),
+evaluated by the Firebase Rules API `:test` endpoint against this checkout's
+`firestore.rules`. It deploys nothing and reads no data — every document a
+rule looks at is a mock — and it needs `gcloud auth login` as somebody who may
+test rules on the project. `-- --before <file>` runs the same cases against
+another ruleset and checks what each one used to answer, which is how a fix
+shows the hole it closed. What it cannot see is anything that spans a request
+— a batch's twenty-access ceiling, the per-request document cache — and that
+is what the emulator suite is for.
 
 `syncRoundTrip.test.ts` is the exception to the "one module, one test file"
 shape, and deliberately so. Every piece of the sync engine has its own tests

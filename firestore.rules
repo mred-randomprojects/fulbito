@@ -23,6 +23,14 @@ rules_version = '2';
 //      not you has to read them: `polls` (an encuesta), `lists` (la lista),
 //      `recaps` (el tercer tiempo) and `picks` (la votación de los equipos).
 //      Each block says what it pays for that with.
+//
+// Anonymous sign-in is on in this project, so "a session" is something
+// anybody can mint with the public API key, from a script, as often as they
+// like. Every write below that is open to a mere session says why that is
+// fine. And outside the wall:
+//
+//   a. A face belongs to whoever owns the poll, recap or pick it sits under.
+//      Stamping your own uid on it is not enough — see `canWriteFace()`.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -95,6 +103,41 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    // What a face is: the three fields every publisher has always written,
+    // stamped with the writer's uid, and a photo that is an inline image or
+    // nothing — never an address, which would report every viewer of the link
+    // to whoever chose it. A prefix rather than a pattern over the whole
+    // photo: `lib/avatarBytes.ts` accepts a percent-encoded data URL out of a
+    // hand-edited backup, and a face that will not publish is worse than one
+    // that is not base64.
+    function isFace() {
+      let face = request.resource.data;
+      return face.keys().hasOnly(['ownerUid', 'name', 'avatar'])
+        && face.ownerUid == request.auth.uid
+        && (!('name' in face) || face.name is string)
+        && (!('avatar' in face)
+            || (face.avatar is string
+                && (face.avatar == ''
+                    || (face.avatar.size() > 11 && face.avatar[0:11] == 'data:image/'))));
+    }
+
+    // A face is written by the account that owns the poll, recap or pick it
+    // sits under, *as the batch leaves it* — which is what lets `createPoll`,
+    // `publishRecap` and `publishPick` write the parent and its faces in one
+    // batch. It used to be enough to stamp your own uid on one, so whoever
+    // held the link — an anonymous session included — could rename, re-photo,
+    // add or delete the faces of somebody else's encuesta, tercer tiempo or
+    // votación. `getAfter` of the parent is the same document for every face
+    // in a batch and is read once: `rules.test.ts` publishes twenty-five faces
+    // in one batch to keep that true, against the twenty-access ceiling. A
+    // parent that is not there after the batch is null, `.data` on null is an
+    // error, and an error is a refusal.
+    function canWriteFace(parentPath) {
+      return isPerson()
+        && isFace()
+        && getAfter(parentPath).data.ownerUid == request.auth.uid;
+    }
+
     // The account itself: who it says it is, so the owner's "Ver como" has a
     // name to put on a uid. Written by the account's own syncing session and
     // nobody else's, and the address is pinned to the token — a profile
@@ -139,9 +182,8 @@ service cloud.firestore {
     // The faces are a subcollection rather than an array on the poll itself,
     // for the same reason the roster is one document per player: an avatar is
     // an inline data URL of up to 60 KB, and twenty of them walk straight
-    // into Firestore's 1 MiB document cap. Each one carries `ownerUid` so
-    // that writing twenty in one batch costs no rule reads at all — a `get`
-    // of the parent poll per document would hit the twenty-access ceiling.
+    // into Firestore's 1 MiB document cap. They are the poll owner's to write
+    // and nobody else's — see (a) at the top and `canWriteFace()`.
     //
     // A ballot is one person's answers, and it is stored with **no uid on
     // it**. That is not tidiness. The owner has to read every ballot to work
@@ -205,11 +247,13 @@ service cloud.firestore {
         && request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
 
+      // The owner may also take down a face somebody else stamped before
+      // these rules, which is what keeps `deletePoll` from failing on one.
       match /players/{playerId} {
         allow read: if isPerson();
-        allow create, update: if request.auth != null
-          && request.resource.data.ownerUid == request.auth.uid;
-        allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+        allow create, update: if canWriteFace(/databases/$(database)/documents/polls/$(pollId));
+        allow delete: if request.auth != null
+          && (resource.data.ownerUid == request.auth.uid || isOwner());
       }
 
       match /ballots/{ballotId} {
@@ -462,12 +506,14 @@ service cloud.firestore {
       // poll's owner, the super admins, and the account that wrote it.
       //
       // The faces, one document each: an avatar is an inline data URL of up
-      // to 60 KB and twenty on one document cross Firestore's 1 MiB cap.
+      // to 60 KB and twenty on one document cross Firestore's 1 MiB cap. They
+      // are the recap owner's — see (a) at the top — and the owner may take
+      // down one somebody else stamped before these rules.
       match /players/{playerId} {
         allow read: if request.auth != null;
-        allow create, update: if request.auth != null
-          && request.resource.data.ownerUid == request.auth.uid;
-        allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+        allow create, update: if canWriteFace(/databases/$(database)/documents/recaps/$(recapId));
+        allow delete: if request.auth != null
+          && (resource.data.ownerUid == request.auth.uid || isRecapOwner());
       }
 
       match /comments/{commentId} {
@@ -691,12 +737,15 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
 
       // The faces, one document each: an avatar is an inline data URL of up
-      // to 60 KB and twenty on one document cross Firestore's 1 MiB cap.
+      // to 60 KB and twenty on one document cross Firestore's 1 MiB cap. They
+      // are the organiser's — see (a) at the top. A votación is published
+      // once, so a face somebody else rewrote could never be put back by
+      // republishing; now nobody else can rewrite one.
       match /players/{playerId} {
         allow read: if request.auth != null;
-        allow create, update: if request.auth != null
-          && request.resource.data.ownerUid == request.auth.uid;
-        allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+        allow create, update: if canWriteFace(/databases/$(database)/documents/picks/$(pickId));
+        allow delete: if request.auth != null
+          && (resource.data.ownerUid == request.auth.uid || isPickOwner());
       }
 
       match /ballots/{voterId} {

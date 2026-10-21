@@ -1,6 +1,7 @@
 import type { Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
 import { generateId, toCurrentScale, type Player, type PlayerId } from "@/types";
+import { faceAvatar } from "@/lib/avatarBytes";
 import {
   normalizeBallot,
   normalizeComment,
@@ -161,7 +162,7 @@ export async function publishRecap(
     batch.set(doc(collection(recapRef, PLAYERS), face.id), {
       ownerUid,
       name: face.name,
-      avatar: face.avatar,
+      avatar: faceAvatar(face.avatar),
     });
   }
   await batch.commit();
