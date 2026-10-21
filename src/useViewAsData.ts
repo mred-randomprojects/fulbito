@@ -8,6 +8,7 @@ import { mergeAppData } from "./mergeAppData";
 import { sameVersions } from "./lib/syncPlan";
 import { errorCode } from "./lib/authErrors";
 import { normalizeAppData } from "./types";
+import type { RemovedRecords } from "./lib/removed";
 import { loadCloud } from "./cloud/firebase";
 import { subscribeCloud } from "./cloud/firestore";
 import {
@@ -15,6 +16,7 @@ import {
   removeMatches,
   removePlayer,
   removeTeam,
+  restoreRecords,
   upsertMatch,
   upsertMatches,
   upsertPlayer,
@@ -164,6 +166,11 @@ export function useViewAsData(target: ViewAsTarget | null): ViewAsData {
       deleteMatches: (ids: readonly MatchId[]) => change((c) => removeMatches(c, ids, now())),
       saveTeam: (team: Team) => change((c) => upsertTeam(c, team, now())),
       deleteTeam: (id: TeamId) => change((c) => removeTeam(c, id, now())),
+      // Somebody else's app, read-only: nothing here is offered to undo.
+      lastRemoved: null,
+      undoRemove: () => {},
+      dismissRemoved: () => {},
+      restoreRemoved: (records: RemovedRecords) => change((c) => restoreRecords(c, records, now())),
       getPlayer: (id: PlayerId) => playersById.get(id),
       getMatch: (id: MatchId) => matchesById.get(id),
       importData: (incoming: AppData) =>

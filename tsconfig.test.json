@@ -23,6 +23,8 @@
     "src/mergeAppData.test.ts",
     "src/appDataOps.ts",
     "src/appDataOps.test.ts",
+    "src/lib/removed.ts",
+    "src/lib/removed.test.ts",
     "src/lib/rating.ts",
     "src/lib/rating.test.ts",
     "src/lib/formations.ts",

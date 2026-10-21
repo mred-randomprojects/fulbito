@@ -13,6 +13,7 @@ import { TournamentPage, TournamentsPage } from "./components/TournamentsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { PollsPage } from "./components/PollsPage";
 import { SaveIndicator } from "./components/SaveIndicator";
+import { UndoBar } from "./components/UndoBar";
 import { ViewAsBanner } from "./components/ViewAsBanner";
 import { ViewAsProvider, useViewAs } from "./viewAs";
 import { useViewAsData } from "./useViewAsData";
@@ -220,6 +221,7 @@ function AppBody() {
               <SettingsPage
                 data={app.data}
                 onImport={app.importData}
+                onRestore={app.restoreRemoved}
                 cloud={ownCloud}
                 avatarStorage={app.avatarStorage}
               />
@@ -230,6 +232,12 @@ function AppBody() {
         )}
       </main>
 
+      {/* Your own deletes only: Ver como is somebody else's app, read-only. */}
+      <UndoBar
+        last={viewAs.target === null ? own.lastRemoved : null}
+        onUndo={own.undoRemove}
+        onDismiss={own.dismissRemoved}
+      />
       <SaveIndicator status={app.saveStatus} cloud={cloud} />
     </div>
   );

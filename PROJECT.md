@@ -318,6 +318,15 @@ enters the app without going through `normalizeAppData` — a hand-edited
   versions it is at least as new as, at the door (`normalizeAppData`) as in the
   merge; saving a record again takes its id's tombstone away, so a record
   brought back is not dropped on the next load.
+- **A delete can be taken back.** Every delete is one tap and syncs, so for
+  ten seconds after one `UndoBar` says what went ("Borraste el partido
+  «Martes»") and offers Deshacer: `useAppData` keeps the removed records in
+  memory — never in `localStorage`, photos and all — and `restoreRecords`
+  puts them back stamped after their own delete, tombstone gone, so they win
+  on every device. Later than that, the backup file: an import still merges
+  (a delete beats every older copy, which is what a deliberate delete needs),
+  and then names what the file has that was deleted here since
+  (`lib/removed.ts`) and brings it back on "Traer de vuelta".
 
 Structured storage lives in `src/storage.ts`: one primary key, a rolling backup
 written before each save, and a corrupt-blob stash that loading falls back
@@ -427,6 +436,7 @@ gate, including tooltips and charts.
 | `lib/browserClock.ts` | The one place `window.setTimeout` is reached for |
 | `share.ts`, `useCopy.ts` | The clipboard and the file download, once; and a copy button's two seconds of "Copiado" |
 | `lib/stamp.ts` | A timestamp that beats the version it replaces, however wrong the clock is |
+| `lib/removed.ts` | What a delete took out, what a backup file has that was deleted here since, and how to say either in a few words |
 | `lib/poll.ts` | What an encuesta puts to somebody else, and what one person's answers add up to |
 | `lib/crowd.ts` | What a pile of answers says a player is worth, and when there are enough of them |
 | `lib/pollAudit.ts` | The same answers with the senders attached — one row per ballot, the same pile turned sideways onto one player, and which ballots the owner set aside |
@@ -501,7 +511,8 @@ reason, and is where somebody with the link puts their name down. `VotePage`
 (Votación) is the fourth of those, mounted the same way again: the six splits,
 a tick on each one somebody would be happy with, and the counts once they have
 answered — `VotePanel`, on the Cancha tab beside the analysis, is the
-organiser's side of it. `SaveIndicator` floats over all the others. `ErrorBoundary` sits under
+organiser's side of it. `SaveIndicator` floats over all the others, and
+`UndoBar` just above it for ten seconds after a delete. `ErrorBoundary` sits under
 everything in `main.tsx`: a screen that throws gets "Se rompió algo", the
 backup straight off `localStorage`, and a reload, instead of a white page. `SquadPicker` is shared by
 the match screen and Repartir, and is deliberately ignorant of *which* teams

@@ -8,6 +8,7 @@ import type {
   TeamId,
 } from "./types.js";
 import { stampAfter, stampAtLeast } from "./lib/stamp.js";
+import type { RemovedRecords } from "./lib/removed.js";
 import { byMatchOrder } from "./lib/matchOrder.js";
 import { syncMatchWithTeam } from "./lib/teamLinks.js";
 
@@ -175,6 +176,35 @@ export function removeTeam(data: AppData, id: TeamId, now: string): AppData {
       { id, deletedAt: at },
     ],
   };
+}
+
+/**
+ * Puts back what a delete took out: the undo after a tap on the trash, and
+ * the records a backup file has that were deleted here.
+ *
+ * Each one is stamped after its own delete and loses its tombstone, so it
+ * beats the delete in every merge — on this device and, once sync carries
+ * it, on every other — and survives the next load. A team goes back as it
+ * was, without `upsertTeam`'s pass over the matches: removing it touched no
+ * match, so bringing it back touches none either.
+ */
+export function restoreRecords(data: AppData, records: RemovedRecords, now: string): AppData {
+  let next = data;
+  for (const player of records.players) next = upsertPlayer(next, player, now);
+  for (const match of records.matches) next = upsertMatch(next, match, now);
+  for (const team of records.teams) {
+    const previous = next.teams.find((t) => t.id === team.id);
+    const stamped: Team = {
+      ...team,
+      updatedAt: stampAfter(now, previous?.updatedAt, deletedAtFor(next.deletedTeams, team.id)),
+    };
+    next = {
+      ...next,
+      teams: [...next.teams.filter((t) => t.id !== team.id), stamped].sort(byTeamName),
+      deletedTeams: withoutTombstone(next.deletedTeams, team.id),
+    };
+  }
+  return next;
 }
 
 function byTeamName(a: Team, b: Team): number {

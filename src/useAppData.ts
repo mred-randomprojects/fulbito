@@ -19,12 +19,14 @@ import {
   removeMatches,
   removePlayer,
   removeTeam,
+  restoreRecords,
   upsertMatch,
   upsertMatches,
   upsertPlayer,
   upsertTeam,
 } from "./appDataOps";
 import { track } from "./lib/track";
+import { nothingRemoved, removedBetween, type RemovedRecords } from "./lib/removed";
 import {
   mirrorAndVerifyAvatars,
   type AvatarStorageStatus,
@@ -60,6 +62,15 @@ export interface AppDataApi {
   deleteMatches: (ids: readonly MatchId[]) => void;
   saveTeam: (team: Team) => void;
   deleteTeam: (id: TeamId) => void;
+  /**
+   * What the last delete took out, while it can still be taken back with
+   * `undoRemove` — `null` once it has been, or dismissed. Memory only.
+   */
+  lastRemoved: LastRemoved | null;
+  undoRemove: () => void;
+  dismissRemoved: () => void;
+  /** Put records back: what a backup file has that was deleted here. */
+  restoreRemoved: (records: RemovedRecords) => void;
   getPlayer: (id: PlayerId) => Player | undefined;
   getMatch: (id: MatchId) => Match | undefined;
   importData: (data: AppData) => void;
@@ -80,6 +91,12 @@ export interface AppDataApi {
    * lands in `localStorage`, which stays the copy the app actually reads.
    */
   mergeRemote: (incoming: AppData) => void;
+}
+
+/** One delete that can still be undone. `key` tells two of them apart. */
+export interface LastRemoved {
+  key: number;
+  records: RemovedRecords;
 }
 
 /**
@@ -187,9 +204,42 @@ export function useAppData(): AppDataApi {
     [persist],
   );
 
-  const deletePlayer = useCallback(
-    (id: PlayerId) => persist((current) => removePlayer(current, id, now())),
+  /**
+   * Every delete is one tap and syncs everywhere, so each one keeps what it
+   * took out for `undoRemove`. In memory, never in `localStorage`: a player
+   * carries their photo, and the 5 MB belong to every app on the site.
+   */
+  const [lastRemoved, setLastRemoved] = useState<LastRemoved | null>(null);
+  const removalKey = useRef(0);
+  const remove = useCallback(
+    (mutate: (current: AppData) => AppData) => {
+      const before = latest.current;
+      persist(mutate);
+      const records = removedBetween(before, latest.current);
+      if (nothingRemoved(records)) return;
+      removalKey.current += 1;
+      setLastRemoved({ key: removalKey.current, records });
+    },
     [persist],
+  );
+
+  const undoRemove = useCallback(() => {
+    if (lastRemoved === null) return;
+    const { records } = lastRemoved;
+    setLastRemoved(null);
+    persist((current) => restoreRecords(current, records, now()));
+  }, [lastRemoved, persist]);
+
+  const dismissRemoved = useCallback(() => setLastRemoved(null), []);
+
+  const restoreRemoved = useCallback(
+    (records: RemovedRecords) => persist((current) => restoreRecords(current, records, now())),
+    [persist],
+  );
+
+  const deletePlayer = useCallback(
+    (id: PlayerId) => remove((current) => removePlayer(current, id, now())),
+    [remove],
   );
 
   const saveMatch = useCallback(
@@ -204,13 +254,13 @@ export function useAppData(): AppDataApi {
   );
 
   const deleteMatch = useCallback(
-    (id: MatchId) => persist((current) => removeMatch(current, id, now())),
-    [persist],
+    (id: MatchId) => remove((current) => removeMatch(current, id, now())),
+    [remove],
   );
 
   const deleteMatches = useCallback(
-    (ids: readonly MatchId[]) => persist((current) => removeMatches(current, ids, now())),
-    [persist],
+    (ids: readonly MatchId[]) => remove((current) => removeMatches(current, ids, now())),
+    [remove],
   );
 
   const saveTeam = useCallback(
@@ -219,8 +269,8 @@ export function useAppData(): AppDataApi {
   );
 
   const deleteTeam = useCallback(
-    (id: TeamId) => persist((current) => removeTeam(current, id, now())),
-    [persist],
+    (id: TeamId) => remove((current) => removeTeam(current, id, now())),
+    [remove],
   );
 
   /**
@@ -313,6 +363,10 @@ export function useAppData(): AppDataApi {
     deleteMatches,
     saveTeam,
     deleteTeam,
+    lastRemoved,
+    undoRemove,
+    dismissRemoved,
+    restoreRemoved,
     getPlayer,
     getMatch,
     importData,

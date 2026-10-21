@@ -4,6 +4,7 @@ import { Download, HardDrive, Info, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getStorageUsage } from "@/storage";
 import { normalizeAppData, type AppData } from "@/types";
+import { deletedInFile, describeRemoved, nothingRemoved, type RemovedRecords } from "@/lib/removed";
 import { allRubrics } from "@/lib/scales";
 import { todayIso } from "@/lib/dates";
 import { AdminPanel } from "./AdminPanel";
@@ -19,14 +20,22 @@ import type { AvatarStorageStatus } from "@/avatarStorage";
 interface Props {
   data: AppData;
   onImport: (data: AppData) => void;
+  /** Bring back what a backup file has that was deleted here. */
+  onRestore: (records: RemovedRecords) => void;
   cloud: CloudState;
   avatarStorage: AvatarStorageStatus;
 }
 
-export function SettingsPage({ data, onImport, cloud, avatarStorage }: Props) {
+export function SettingsPage({ data, onImport, onRestore, cloud, avatarStorage }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * What the file last imported has that was deleted here after the file was
+   * made. The merge keeps those deleted — a delete beats every older copy —
+   * so they come back only when asked.
+   */
+  const [deletedSince, setDeletedSince] = useState<RemovedRecords | null>(null);
   const usage = getStorageUsage();
   const usedPercent = Math.min(100, (usage.usedBytes / usage.quotaBytes) * 100);
   const withPhotos = data.players.filter((p) => p.avatar !== "").length;
@@ -43,10 +52,13 @@ export function SettingsPage({ data, onImport, cloud, avatarStorage }: Props) {
     if (file === undefined) return;
     setMessage(null);
     setError(null);
+    setDeletedSince(null);
     try {
       const parsed = normalizeAppData(JSON.parse(await file.text()));
       const before = data.players.length;
+      const gone = deletedInFile(data, parsed);
       onImport(parsed);
+      if (!nothingRemoved(gone)) setDeletedSince(gone);
       track({ name: "backup_imported" });
       setMessage(
         `Listo. Vinieron ${parsed.players.length} jugador${parsed.players.length === 1 ? "" : "es"}, ${parsed.matches.length} partido${parsed.matches.length === 1 ? "" : "s"} y ${parsed.teams.length} equipo${parsed.teams.length === 1 ? "" : "s"}. Antes tenías ${before}.`,
@@ -86,7 +98,8 @@ export function SettingsPage({ data, onImport, cloud, avatarStorage }: Props) {
           niveles. Ese
           mismo archivo lo subís en otra compu, en el celu, o acá mismo si
           alguna vez se borra el navegador. Al subirlo se junta con lo que ya
-          tengas en vez de pisarlo, así que no se pierde nada.
+          tengas en vez de pisarlo, y si trae algo que borraste acá, te
+          pregunta si lo querés de vuelta.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button onClick={exportData} disabled={data.players.length === 0}>
@@ -107,6 +120,25 @@ export function SettingsPage({ data, onImport, cloud, avatarStorage }: Props) {
         </div>
         {message != null && (
           <p className="mt-3 text-sm text-emerald-400">{message}</p>
+        )}
+        {deletedSince !== null && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">
+              El archivo también trae {describeRemoved(deletedSince)}, que borraste
+              acá después de bajarlo.
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                onRestore(deletedSince);
+                setMessage("Listo, ya está de vuelta.");
+                setDeletedSince(null);
+              }}
+            >
+              Traer de vuelta
+            </Button>
+          </div>
         )}
         {error != null && <p className="mt-3 text-sm text-destructive">{error}</p>}
         {data.players.length === 0 && (
