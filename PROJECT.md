@@ -895,7 +895,12 @@ store. Two consequences, one practical and one that matters:
 - **Quota:** `localStorage`'s ~5 MB is per origin, so it is shared with every
   sibling. `fulbito-data` and its full `fulbito-data-backup` copy hold the whole
   plantel, photos included, twice — Fulbito is the likeliest app to fill it, and
-  a `StorageQuotaError` here may be another app's bytes, not ours.
+  a `StorageQuotaError` here may be another app's bytes, not ours. So nothing
+  here counts the origin as Fulbito's: `storageUsage` in `storage.ts` splits
+  the bytes into `fulbito-*` keys and everybody else's (PostHog's `ph_*`
+  included), Tus datos → Lugar usado shows both, and the quota error says both
+  and only tells somebody to delete photos or matches when Fulbito holds at
+  least half (`quotaMessage`, pinned in `storage.test.ts`).
 - **Secrecy:** every app on this origin can read `fulbito-data` — every rating
   in the plantel — and Fulbito's Firebase session out of IndexedDB. Today that
   is all the same author's code, so no extra *person* can read a puntaje; but a

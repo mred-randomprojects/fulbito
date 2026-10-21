@@ -2,7 +2,7 @@ import { ScorePrivacyPanel } from "./ScorePrivacy";
 import { useRef, useState } from "react";
 import { Download, HardDrive, Info, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getStorageUsage } from "@/storage";
+import { formatBytes, ORIGIN_QUOTA_BYTES, storageUsage } from "@/storage";
 import { normalizeAppData, type AppData } from "@/types";
 import { deletedInFile, describeRemoved, nothingRemoved, type RemovedRecords } from "@/lib/removed";
 import { allRubrics } from "@/lib/scales";
@@ -36,8 +36,11 @@ export function SettingsPage({ data, onImport, onRestore, cloud, avatarStorage }
    * so they come back only when asked.
    */
   const [deletedSince, setDeletedSince] = useState<RemovedRecords | null>(null);
-  const usage = getStorageUsage();
-  const usedPercent = Math.min(100, (usage.usedBytes / usage.quotaBytes) * 100);
+  // Split by owner: the ~5 MB belongs to every app on the site, and a total
+  // alone would pin a sibling's bytes on fulbito.
+  const usage = storageUsage();
+  const minePercent = Math.min(100, (usage.mine / ORIGIN_QUOTA_BYTES) * 100);
+  const othersPercent = Math.min(100 - minePercent, (usage.others / ORIGIN_QUOTA_BYTES) * 100);
   const withPhotos = data.players.filter((p) => p.avatar !== "").length;
 
   const exportData = () => {
@@ -153,15 +156,21 @@ export function SettingsPage({ data, onImport, onRestore, cloud, avatarStorage }
           <HardDrive className="h-4 w-4" />
           Lugar usado
         </h2>
-        <div className="h-2 overflow-hidden rounded-full bg-secondary">
+        <div className="flex h-2 overflow-hidden rounded-full bg-secondary">
           <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${usedPercent}%` }}
+            className="h-full bg-primary transition-all"
+            style={{ width: `${minePercent}%` }}
+          />
+          <div
+            className="h-full bg-muted-foreground/40 transition-all"
+            style={{ width: `${othersPercent}%` }}
           />
         </div>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          {(usage.usedBytes / 1024).toFixed(0)} KB de unos{" "}
-          {(usage.quotaBytes / 1024 / 1024).toFixed(0)} MB.{" "}
+          Fulbito ocupa {formatBytes(usage.mine)} y otras apps de este sitio{" "}
+          {formatBytes(usage.others)}, de unos{" "}
+          {(ORIGIN_QUOTA_BYTES / 1024 / 1024).toFixed(0)} MB que el navegador
+          les da a todas juntas.{" "}
           {withPhotos === 0
             ? "Todavía no subiste ninguna foto."
             : `${withPhotos} foto${withPhotos === 1 ? "" : "s"} guardada${withPhotos === 1 ? "" : "s"}. Se achican al subirlas, pero igual son lo que más ocupa.`}{" "}

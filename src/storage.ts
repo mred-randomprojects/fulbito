@@ -6,6 +6,8 @@ import { normalizeAppData, type AppData, EMPTY_APP_DATA } from "./types.js";
  * browser. Every function defaults to the real `localStorage`.
  */
 export interface AppDataStorage {
+  readonly length: number;
+  key(index: number): string | null;
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
@@ -19,11 +21,76 @@ export const STORAGE_KEY = "fulbito-data";
 const BACKUP_KEY = "fulbito-data-backup";
 const CORRUPT_RECOVERY_KEY = "fulbito-data-corrupt-recovery";
 
+/** Every app on mred-randomprojects.github.io shares one ~5 MB localStorage. */
+export const ORIGIN_QUOTA_BYTES = 5 * 1024 * 1024; // the meters count UTF-16: chars × 2
+
+/**
+ * Fulbito's own keys. Everything else in this localStorage belongs to a
+ * sibling app on the same origin — or to PostHog, whose `ph_*` keys are not
+ * prefixed and are counted with the others.
+ */
+export function isFulbitoKey(key: string): boolean {
+  return key.startsWith("fulbito-");
+}
+
+export function isQuotaError(e: unknown): boolean {
+  return (
+    e instanceof DOMException &&
+    (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22)
+  );
+}
+
+export interface StorageUsage {
+  mine: number;
+  others: number;
+}
+
+/**
+ * This app's bytes against everybody else's on the origin. The quota is the
+ * whole site's, so a total alone would blame fulbito for a sibling's data.
+ */
+export function storageUsage(
+  isMine: (key: string) => boolean = isFulbitoKey,
+  storage: AppDataStorage = localStorage,
+): StorageUsage {
+  let mine = 0;
+  let others = 0;
+  try {
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (key === null) continue;
+      const bytes = (key.length + (storage.getItem(key)?.length ?? 0)) * 2;
+      if (isMine(key)) mine += bytes;
+      else others += bytes;
+    }
+  } catch {
+    /* storage blocked */
+  }
+  return { mine, others };
+}
+
+/** "812 KB", "1,4 MB": the way the screens say an amount of storage. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+}
+
+/**
+ * What to say when a save does not fit. Deleting photos or matches is only
+ * worth suggesting when fulbito holds at least half of what is there; when the
+ * other apps hold more, that advice would cost somebody their data and free
+ * almost nothing.
+ */
+export function quotaMessage({ mine, others }: StorageUsage): string {
+  const where = `No queda lugar en este navegador. Ese espacio (unos 5 MB) lo comparten todas las apps de mred-randomprojects.github.io: esta usa ${formatBytes(mine)}, las demás ${formatBytes(others)}.`;
+  return mine >= others
+    ? `${where} Borrá algunas fotos o partidos viejos, o bajate el backup desde Tus datos y arrancá de nuevo.`
+    : `${where} Lo que más ocupa es de las otras apps, así que el lugar se libera ahí. Mientras tanto, bajate el backup desde Tus datos antes de cerrar la pestaña.`;
+}
+
 export class StorageQuotaError extends Error {
-  constructor() {
-    super(
-      "Se llenó el navegador y no entra más nada. Borrá algunas fotos o partidos viejos, o bajate el backup desde Tus datos y arrancá de nuevo.",
-    );
+  constructor(usage: StorageUsage) {
+    super(quotaMessage(usage));
     this.name = "StorageQuotaError";
   }
 }
@@ -32,12 +99,7 @@ function safeSetItem(storage: AppDataStorage, key: string, value: string): void 
   try {
     storage.setItem(key, value);
   } catch (e: unknown) {
-    if (
-      e instanceof DOMException &&
-      (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED")
-    ) {
-      throw new StorageQuotaError();
-    }
+    if (isQuotaError(e)) throw new StorageQuotaError(storageUsage(isFulbitoKey, storage));
     throw e;
   }
 }
@@ -94,14 +156,4 @@ export function saveAppData(data: AppData, storage: AppDataStorage = localStorag
     }
   }
   safeSetItem(storage, STORAGE_KEY, JSON.stringify(data));
-}
-
-export function getStorageUsage(): { usedBytes: number; quotaBytes: number } {
-  let usedBytes = 0;
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key == null) continue;
-    usedBytes += (key.length + (localStorage.getItem(key)?.length ?? 0)) * 2;
-  }
-  return { usedBytes, quotaBytes: 5 * 1024 * 1024 };
 }

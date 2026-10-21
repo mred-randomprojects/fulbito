@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  formatBytes,
+  isFulbitoKey,
+  isQuotaError,
   loadAppData,
+  quotaMessage,
   saveAppData,
   STORAGE_KEY,
   StorageQuotaError,
+  storageUsage,
   type AppDataStorage,
 } from "./storage.js";
 import { normalizeAppData, type AppData } from "./types.js";
@@ -20,6 +25,10 @@ function fakeStorage(initial: Record<string, string> = {}, quota = Infinity) {
   const values = new Map(Object.entries(initial));
   const size = () => [...values].reduce((sum, [k, v]) => sum + k.length + v.length, 0);
   const storage: AppDataStorage = {
+    get length() {
+      return values.size;
+    },
+    key: (index) => [...values.keys()][index] ?? null,
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => {
       const without = size() - (values.has(key) ? key.length + (values.get(key)?.length ?? 0) : 0);
@@ -99,6 +108,8 @@ describe("saving", () => {
 
   it("rethrows any other storage failure as it came", () => {
     const storage: AppDataStorage = {
+      length: 0,
+      key: () => null,
       getItem: () => null,
       setItem: () => {
         throw new DOMException("Storage is disabled.", "SecurityError");
@@ -127,5 +138,85 @@ describe("saving", () => {
 
     assert.equal(values.get(BACKUP_KEY), good);
     assert.deepEqual(names(loadAppData(storage)), ["Gordo", "Colo", "Pato"]);
+  });
+});
+
+describe("the space fulbito shares with every app on the site", () => {
+  it("counts fulbito's keys apart from everybody else's, in UTF-16 bytes", () => {
+    const { storage } = fakeStorage({
+      "fulbito-data": "x".repeat(100),
+      "fulbito-hide-scores": "1",
+      "nutriapp-data": "y".repeat(300),
+      ph_abc_posthog: "{}",
+    });
+
+    assert.deepEqual(storageUsage(isFulbitoKey, storage), {
+      mine: ("fulbito-data".length + 100 + "fulbito-hide-scores".length + 1) * 2,
+      others: ("nutriapp-data".length + 300 + "ph_abc_posthog".length + 2) * 2,
+    });
+  });
+
+  it("reads nothing, and says nothing, when the storage refuses", () => {
+    const storage: AppDataStorage = {
+      get length(): number {
+        throw new DOMException("Storage is disabled.", "SecurityError");
+      },
+      key: () => null,
+      getItem: () => null,
+      setItem: () => {},
+    };
+    assert.deepEqual(storageUsage(isFulbitoKey, storage), { mine: 0, others: 0 });
+  });
+
+  it("only owns keys that start with fulbito-", () => {
+    assert.equal(isFulbitoKey("fulbito-data"), true);
+    assert.equal(isFulbitoKey("fulbito-split-draft-v1"), true);
+    assert.equal(isFulbitoKey("fulbito"), false);
+    assert.equal(isFulbitoKey("nutriapp-data"), false);
+    assert.equal(isFulbitoKey("ph_phc_x_posthog"), false);
+  });
+
+  it("writes an amount in KB below a megabyte and in MB with a comma above", () => {
+    assert.equal(formatBytes(0), "0 KB");
+    assert.equal(formatBytes(1536), "2 KB");
+    assert.equal(formatBytes(1.5 * 1024 * 1024), "1,5 MB");
+  });
+
+  it("tells a quota error apart from any other failure", () => {
+    assert.equal(isQuotaError(new DOMException("full", "QuotaExceededError")), true);
+    assert.equal(isQuotaError(new DOMException("full", "NS_ERROR_DOM_QUOTA_REACHED")), true);
+    assert.equal(isQuotaError(new DOMException("no", "SecurityError")), false);
+    assert.equal(isQuotaError(new Error("QuotaExceededError")), false);
+  });
+});
+
+describe("what a full browser says", () => {
+  const MB = 1024 * 1024;
+
+  it("suggests clearing fulbito's own photos and matches when fulbito holds the most", () => {
+    const message = quotaMessage({ mine: 3 * MB, others: 2 * MB });
+    assert.match(message, /esta usa 3,0 MB, las demás 2,0 MB/);
+    assert.match(message, /Borrá algunas fotos o partidos viejos/);
+  });
+
+  it("does not, when the other apps hold the most", () => {
+    const message = quotaMessage({ mine: 400 * 1024, others: 4.5 * MB });
+    assert.match(message, /esta usa 400 KB, las demás 4,5 MB/);
+    assert.doesNotMatch(message, /Borrá|arrancá de nuevo/);
+    assert.match(message, /otras apps/);
+    assert.match(message, /bajate el backup/);
+  });
+
+  it("is what a save that does not fit throws, measured on the storage that refused it", () => {
+    const sibling = "z".repeat(2000);
+    const { storage } = fakeStorage({ "dineros-data": sibling }, "dineros-data".length + sibling.length + 50);
+
+    assert.throws(
+      () => saveAppData(blob("Gordo", "Colo"), storage),
+      (e: unknown) =>
+        e instanceof StorageQuotaError &&
+        e.message.includes("las demás 4 KB") &&
+        !e.message.includes("Borrá"),
+    );
   });
 });
