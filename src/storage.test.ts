@@ -9,6 +9,7 @@ import {
   saveAppData,
   STORAGE_KEY,
   StorageQuotaError,
+  storageChange,
   storageUsage,
   type AppDataStorage,
 } from "./storage.js";
@@ -66,6 +67,48 @@ describe("loading the stored data", () => {
   it("starts empty only when neither copy parses", () => {
     const { storage } = fakeStorage({ [STORAGE_KEY]: CORRUPT, [BACKUP_KEY]: CORRUPT });
     assert.deepEqual(loadAppData(storage).players, []);
+  });
+});
+
+/**
+ * The primary gone while the backup is still there: devtools, a storage
+ * cleaner, a sibling app's tidy-up. Loading used to start empty, and the
+ * second save then rolled that empty primary over the only good copy.
+ */
+describe("a primary that is not there at all", () => {
+  it("loads the backup, and the next saves keep it", () => {
+    const { storage, values } = fakeStorage({ [BACKUP_KEY]: JSON.stringify(blob("Gordo", "Colo")) });
+    const loaded = loadAppData(storage);
+    assert.deepEqual(names(loaded), ["Gordo", "Colo"]);
+    saveAppData(loaded, storage);
+    saveAppData(loaded, storage);
+    assert.deepEqual(names(loadAppData(storage)), ["Gordo", "Colo"]);
+    assert.deepEqual(names(normalizeAppData(JSON.parse(values.get(BACKUP_KEY) ?? "{}"))), ["Gordo", "Colo"]);
+  });
+
+  it("starts empty on a first visit, and with a backup that is not the app's data", () => {
+    assert.deepEqual(names(loadAppData(fakeStorage().storage)), []);
+    assert.deepEqual(names(loadAppData(fakeStorage({ [BACKUP_KEY]: CORRUPT }).storage)), []);
+    assert.deepEqual(names(loadAppData(fakeStorage({ [BACKUP_KEY]: "[1,2]" }).storage)), []);
+  });
+});
+
+describe("what another tab's write means for this one", () => {
+  it("writes this tab's copy back when the data is taken out from under it", () => {
+    assert.deepEqual(storageChange({ key: null, newValue: null }), { kind: "rewrite" });
+    assert.deepEqual(storageChange({ key: STORAGE_KEY, newValue: null }), { kind: "rewrite" });
+  });
+
+  it("merges what the other tab wrote, read off the event", () => {
+    const change = storageChange({ key: STORAGE_KEY, newValue: JSON.stringify(blob("Pato")) });
+    assert.equal(change.kind, "merge");
+    assert.deepEqual(change.kind === "merge" ? names(change.data) : [], ["Pato"]);
+  });
+
+  it("ignores everybody else's keys, and a write it cannot read", () => {
+    assert.deepEqual(storageChange({ key: "nutriapp-data", newValue: null }), { kind: "ignore" });
+    assert.deepEqual(storageChange({ key: BACKUP_KEY, newValue: null }), { kind: "ignore" });
+    assert.deepEqual(storageChange({ key: STORAGE_KEY, newValue: CORRUPT }), { kind: "ignore" });
   });
 });
 

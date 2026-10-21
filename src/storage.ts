@@ -106,7 +106,14 @@ function safeSetItem(storage: AppDataStorage, key: string, value: string): void 
 
 export function loadAppData(storage: AppDataStorage = localStorage): AppData {
   const raw = storage.getItem(STORAGE_KEY);
-  if (raw == null) return { ...EMPTY_APP_DATA };
+  if (raw == null) {
+    // No primary at all is a first visit — or somebody took the key: devtools,
+    // a storage cleaner, a sibling app on this origin tidying up. Then the
+    // backup is the newest copy there is, and starting empty would let the
+    // second save roll the empty primary over it.
+    const backup = storage.getItem(BACKUP_KEY);
+    return (backup === null ? null : parseAppData(backup)) ?? { ...EMPTY_APP_DATA };
+  }
 
   try {
     return normalizeAppData(JSON.parse(raw));
@@ -128,6 +135,36 @@ export function loadAppData(storage: AppDataStorage = localStorage): AppData {
     }
     return { ...EMPTY_APP_DATA };
   }
+}
+
+/** A stored blob as the app's data, or `null` when it is not one. */
+export function parseAppData(raw: string): AppData | null {
+  if (!isRestorable(raw)) return null;
+  return normalizeAppData(JSON.parse(raw));
+}
+
+/**
+ * What another tab's write to this origin means for this one.
+ *
+ * - `ignore`: a key that is not ours, or a primary that does not parse.
+ * - `rewrite`: our data is gone from storage — the whole store cleared (`key`
+ *   null) or the primary removed — while this tab still holds all of it in
+ *   memory, so it writes it straight back. Merging "nothing" changed nothing,
+ *   which used to leave the data in memory only, one closed tab from gone.
+ * - `merge`: another tab saved; merge what it wrote, read off the event
+ *   rather than re-read from storage, where a third write may already have
+ *   replaced it.
+ */
+export type StorageChange =
+  | { kind: "ignore" }
+  | { kind: "rewrite" }
+  | { kind: "merge"; data: AppData };
+
+export function storageChange(event: { key: string | null; newValue: string | null }): StorageChange {
+  if (event.key !== null && event.key !== STORAGE_KEY) return { kind: "ignore" };
+  if (event.key === null || event.newValue === null) return { kind: "rewrite" };
+  const data = parseAppData(event.newValue);
+  return data === null ? { kind: "ignore" } : { kind: "merge", data };
 }
 
 /**

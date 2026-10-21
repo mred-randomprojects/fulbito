@@ -9,7 +9,7 @@ import type {
   TeamId,
 } from "./types";
 import { normalizeAppData } from "./types";
-import { loadAppData, saveAppData, STORAGE_KEY, StorageQuotaError } from "./storage";
+import { loadAppData, saveAppData, storageChange, StorageQuotaError } from "./storage";
 import { mergeAppData } from "./mergeAppData";
 import { browserClock } from "./lib/browserClock";
 import { createSaveNotifier, type SaveStatus } from "./lib/saveStatus";
@@ -322,15 +322,20 @@ export function useAppData(): AppDataApi {
   useEffect(() => {
     function onStorage(event: StorageEvent): void {
       // `key` is null when the whole store was cleared, which is also our news.
-      if (event.key !== null && event.key !== STORAGE_KEY) return;
+      const change = storageChange(event);
+      if (change.kind === "rewrite") {
+        write(latest.current);
+        return;
+      }
+      if (change.kind !== "merge") return;
       persist((current) => {
-        const merged = mergeAppData(current, loadAppData());
+        const merged = mergeAppData(current, change.data);
         return sameVersions(merged, current) ? current : merged;
       });
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [persist]);
+  }, [persist, write]);
 
   const playersById = useMemo(
     () => new Map(data.players.map((p) => [p.id, p])),

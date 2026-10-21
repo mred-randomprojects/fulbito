@@ -337,8 +337,11 @@ written before each save, and a corrupt-blob stash that loading falls back
 through. The roll into the backup only takes a primary that still parses:
 right after loading has fallen back past a corrupt one, copying it over would
 replace the only good copy with the bad one, and a full origin failing the
-next write would then leave nothing to load. `storage.test.ts` pins that,
-with the storage handed in as a plain object.
+next write would then leave nothing to load. A primary that is not there at
+all, beside a backup that is, loads the backup — somebody took the key
+(devtools, a cleaner, a sibling app), and starting empty used to let the
+second save roll the empty primary over the last good copy. `storage.test.ts`
+pins all of it, with the storage handed in as a plain object.
 
 Avatar migration is deliberately staged. `src/avatarStorage.ts` currently
 writes every photo as a binary `Blob` to IndexedDB and reads it back to verify
@@ -1764,8 +1767,11 @@ something.
   in memory and writes the whole blob back, so without the `storage` listener
   in `useAppData` the last tab to save silently overwrites the other one's
   work — on one device, with no network involved, where sync cannot help. It
-  merges through the same `mergeAppData` a cloud snapshot does, and settles in
-  two hops because `persist` drops the resulting no-op.
+  merges through the same `mergeAppData` a cloud snapshot does, reading what
+  the other tab wrote off the event, and settles in two hops because
+  `persist` drops the resulting no-op. When the data is taken out from under
+  a tab — the store cleared, the primary removed — the tab writes its copy
+  straight back (`storageChange` in `storage.ts` decides which).
 - **Looking at somebody is not signing them up.** Creating a player from the
   match screen anota them, and from Equipos adds them to the side being
   edited — and neither may happen for merely opening somebody's ficha, because
