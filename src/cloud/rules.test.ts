@@ -91,8 +91,8 @@ type Who = {
   email?: string;
   anonymous?: boolean;
   unverified?: boolean;
-  /** `sign_in_provider` when it is neither Google nor anonymous, e.g. `password`. */
-  provider?: string;
+  /** `sign_in_provider` when it is neither Google nor anonymous. */
+  provider?: "password";
 } | null;
 
 const apps: FirebaseApp[] = [];
