@@ -300,8 +300,13 @@ enters the app without going through `normalizeAppData` — a hand-edited
   from the start because the venue hands over one file per half, and a
   string that became a list later would be a migration of every stored
   match. The address is trimmed; the label is stored as typed, like `notes`.
-  Which addresses get a player inside the match and which are kept as a
-  link is `lib/video.ts`'s call, on the way out. Unlike everything else
+  An entry whose address is not `http(s)` is dropped on the way in
+  (`isVideoAddress`, the test `addVideo` stores with, so nothing the form ever
+  wrote is lost), and the tile only ever links to what `videoTarget` hands out:
+  this is the door for another account's matches under Ver como too, in the
+  owner's browser, and a `javascript:` "video" there was a script on the
+  shared origin one click away. Which addresses get a player inside the match
+  and which are kept as a link is `lib/video.ts`'s call, on the way out. Unlike everything else
   written on a match, this one **does** go in the shared text — see the
   invariant below.
 - **`Match.courtCost` / `Match.payments`** — what the pitch cost in whole

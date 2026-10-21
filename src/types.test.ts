@@ -8,6 +8,7 @@ import {
   normalizeAppData,
   type PlayerId,
 } from "./types.js";
+import { addVideo } from "./lib/video.js";
 
 /**
  * `normalizeAppData` is the only door into the app's data, so the interesting
@@ -190,6 +191,47 @@ describe("normalizing the videos", () => {
         .videos,
       [{ url: "https://a.b/c", label: "uno" }],
     );
+  });
+
+  /**
+   * The door every match comes through — this device's, an imported file,
+   * and another account's under Ver como, rendered in the owner's browser on
+   * an origin six apps share. The first entry is the one that got through:
+   * `parseVideoUrl` finds the YouTube link inside it, so the tile drew it as
+   * a video and put the whole string in an `href`.
+   */
+  it("drops an address that is not http(s), however it is dressed up", () => {
+    const hostile = [
+      "javascript:alert(document.domain)//https://youtu.be/dQw4w9WgXcQ",
+      "javascript:alert(1)",
+      "JaVaScRiPt:alert(1)",
+      "java\nscript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "vbscript:msgbox(1)",
+      "el video lo tiene Juan",
+    ];
+    assert.deepEqual(
+      withMatch({ videos: [...hostile.map((url) => ({ url, label: "x" })), { url: "https://youtu.be/dQw4w9WgXcQ", label: "" }] })
+        .videos,
+      [{ url: "https://youtu.be/dQw4w9WgXcQ", label: "" }],
+    );
+  });
+
+  it("loses nothing the form can store", () => {
+    // `addVideo` is the only writer, and the guard is its own test, so every
+    // address it accepts must come back through the door unchanged.
+    for (const pasted of [
+      "https://youtu.be/dQw4w9WgXcQ",
+      "youtu.be/dQw4w9WgXcQ",
+      "HTTPS://WWW.YOUTUBE.COM/watch?v=dQw4w9WgXcQ",
+      "http:example.com/partido.mp4",
+      "acá está el video https://vimeo.com/123456 del jueves",
+      "https://app.lacancha.com.ar/v/9f8e?t=1",
+    ]) {
+      const stored = addVideo([], pasted);
+      assert.equal(stored.length, 1, pasted);
+      assert.deepEqual(withMatch({ videos: stored }).videos, stored, pasted);
+    }
   });
 });
 

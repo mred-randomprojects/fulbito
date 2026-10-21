@@ -13,6 +13,7 @@ import {
   setVideoLabel,
   thumbnailUrl,
   videoSource,
+  videoTarget,
   videoTitle,
   type MatchVideo,
   type VideoEmbed,
@@ -179,9 +180,12 @@ function AddForm({
 /**
  * One recording: the tile, the label, the way out, and the player when open.
  *
- * A stored address that is not one — a hand-edited blob is the only way —
- * gets a dead tile and no way out: an `<a href="no es un link">` would be a
- * link into this app, and nobody meant that.
+ * A stored address that is not one — a hand-edited blob, or somebody else's
+ * synced match seen through Ver como — gets a dead tile and no way out: an
+ * `<a href="no es un link">` would be a link into this app, and an
+ * `<a href="javascript:…">` a script on this origin. `videoTarget` is the
+ * only thing that hands out an `href` here, and it checks the stored text
+ * itself rather than whatever link `parseVideoUrl` finds inside it.
  */
 function VideoTile({
   video,
@@ -196,7 +200,8 @@ function VideoTile({
   onLabel: (label: string) => void;
   onRemove: () => void;
 }) {
-  const embed = parseVideoUrl(video.url);
+  const target = videoTarget(video.url);
+  const embed = target?.embed ?? null;
   const title = embed === null ? "Link roto" : videoTitle(video, embed);
   const playable = embed !== null && embed.kind !== "link";
   // 16:9, and small: on a phone the label beside it has to survive two icon
@@ -228,12 +233,12 @@ function VideoTile({
               />
             )}
           </button>
-        ) : embed !== null ? (
+        ) : target !== null ? (
           // Nothing to play in place: the tile is the way out, same as the
           // icon on the right, because a play button that opens a tab is a
           // lie and a tile that does nothing is worse.
           <a
-            href={video.url}
+            href={target.href}
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Abrir el video en otra pestaña"
@@ -258,9 +263,9 @@ function VideoTile({
             {embed === null ? `Link roto: ${video.url}` : videoSource(embed)}
           </p>
         </div>
-        {embed !== null && (
+        {target !== null && (
           <Button variant="ghost" size="icon" asChild className="h-8 w-8 shrink-0 text-muted-foreground">
-            <a href={video.url} target="_blank" rel="noopener noreferrer" aria-label="Abrir en otra pestaña">
+            <a href={target.href} target="_blank" rel="noopener noreferrer" aria-label="Abrir en otra pestaña">
               <ExternalLink className="h-4 w-4" />
             </a>
           </Button>

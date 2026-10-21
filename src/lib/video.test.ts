@@ -5,6 +5,7 @@ import {
   embedUrl,
   extractAddress,
   hasVideo,
+  isVideoAddress,
   parseTimestamp,
   parseVideoUrl,
   removeVideo,
@@ -12,6 +13,7 @@ import {
   thumbnailUrl,
   videoLines,
   videoSource,
+  videoTarget,
   videoTitle,
   type MatchVideo,
   type VideoEmbed,
@@ -276,5 +278,66 @@ describe("the lines for the chat", () => {
     // in it would be the chat's problem to work out.
     assert.deepEqual(videoLines([{ url: "no es un link", label: "x" }]), []);
     assert.deepEqual(videoLines([]), []);
+  });
+
+  it("skips one that only has a link inside it", () => {
+    assert.deepEqual(
+      videoLines([{ url: "javascript:alert(1)//https://youtu.be/dQw4w9WgXcQ", label: "" }]),
+      [],
+    );
+  });
+});
+
+describe("what a stored video links to", () => {
+  /**
+   * The case that got through: what the recogniser makes of the text is a
+   * perfectly good YouTube video, and the tile used to link to the *text*.
+   */
+  it("is nothing when the stored text is not itself an address", () => {
+    const smuggled = "javascript:alert(document.domain)//https://youtu.be/dQw4w9WgXcQ";
+    assert.deepEqual(parseVideoUrl(smuggled), YT);
+    assert.equal(videoTarget(smuggled), null);
+    assert.equal(isVideoAddress(smuggled), false);
+    for (const raw of [
+      "javascript:alert(1)",
+      "JaVaScRiPt:alert(1)",
+      " javascript:alert(1)",
+      "java\nscript:alert(1)",
+      "java\tscript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "vbscript:msgbox(1)",
+      "file:///etc/passwd",
+      "youtu.be/dQw4w9WgXcQ",
+      "no es un link",
+      "",
+    ]) {
+      assert.equal(videoTarget(raw), null, JSON.stringify(raw));
+      assert.equal(isVideoAddress(raw), false, JSON.stringify(raw));
+    }
+  });
+
+  it("links to the address as the browser reads it, and plays what it plays", () => {
+    assert.deepEqual(videoTarget("https://youtu.be/dQw4w9WgXcQ"), {
+      href: "https://youtu.be/dQw4w9WgXcQ",
+      embed: YT,
+    });
+    // A scheme with no slashes is still `http`, to the browser and to us.
+    assert.equal(videoTarget("http:example.com/x.mp4")?.href, "http://example.com/x.mp4");
+    assert.equal(videoTarget("http:example.com/x.mp4")?.embed.kind, "file");
+    assert.equal(videoTarget("https://app.lacancha.com.ar/v/1")?.embed.kind, "link");
+  });
+
+  it("hands out an http(s) href and nothing else, for every address the form stores", () => {
+    for (const pasted of [
+      "https://youtu.be/dQw4w9WgXcQ",
+      "youtu.be/dQw4w9WgXcQ",
+      "http:example.com/partido.mp4",
+      "mirá https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view",
+    ]) {
+      const [stored] = addVideo([], pasted);
+      const target = videoTarget(stored.url);
+      assert.notEqual(target, null, pasted);
+      assert.match(target?.href ?? "", /^https?:\/\//, pasted);
+    }
   });
 });

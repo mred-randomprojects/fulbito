@@ -9,7 +9,7 @@
 
 import { clampCourtCost, type PaymentBook } from "./lib/court.js";
 import type { ReviewBook } from "./lib/reviews.js";
-import type { MatchVideo } from "./lib/video.js";
+import { isVideoAddress, type MatchVideo } from "./lib/video.js";
 import { normalizeTagList } from "./lib/tags.js";
 import { byMatchOrder } from "./lib/matchOrder.js";
 import { todayIso } from "./lib/dates.js";
@@ -860,10 +860,15 @@ function normalizeReviews(value: unknown): ReviewBook {
  * An entry with no address is dropped rather than kept as a blank tile: an
  * address is the whole of what a video *is* here, and `addVideo` never
  * writes one without. The label is kept as typed, like `notes`; the address
- * is trimmed, because it was never prose. Whether the address is one at all
- * is `lib/video.ts`'s call on the way out, the same way `hasNote` is for the
- * note — a blob from a hand edit keeps its line, and the screen shows it as
- * a link that goes nowhere rather than silently losing it.
+ * is trimmed, because it was never prose.
+ *
+ * So is an entry whose address is not an `http(s)` one, by the same test
+ * `addVideo` stores with (`isVideoAddress`), so nothing the form ever wrote
+ * is lost. It used to be kept, for the screen to show as a link that goes
+ * nowhere — but this is the door for every match this app reads, another
+ * account's included when the owner uses Ver como, and a `javascript:`
+ * "video" there is a script on this origin one click away. The recap's own
+ * reader has always dropped them the same way.
  */
 function normalizeVideos(value: unknown): MatchVideo[] {
   if (!Array.isArray(value)) return [];
@@ -874,7 +879,7 @@ function normalizeVideos(value: unknown): MatchVideo[] {
     const url = str(entry.url).trim();
     // The same address twice is once — `addVideo` never writes it, and the
     // screen keys its tiles on the address.
-    if (url === "" || seen.has(url)) continue;
+    if (url === "" || seen.has(url) || !isVideoAddress(url)) continue;
     seen.add(url);
     out.push({ url, label: str(entry.label) });
   }

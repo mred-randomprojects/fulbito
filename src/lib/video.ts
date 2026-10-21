@@ -103,6 +103,34 @@ function isAddress(candidate: string): boolean {
 }
 
 /**
+ * Whether a stored address is one: `http` or `https`, by the same parser the
+ * browser will use on it. Every address `addVideo` has ever stored passes —
+ * it stores nothing else — so this is the test for what arrives from
+ * anywhere *but* the form: a hand-edited blob, an imported file, or another
+ * account's synced match seen through Ver como, on this origin, in the
+ * owner's browser.
+ */
+export function isVideoAddress(stored: string): boolean {
+  return isAddress(stored);
+}
+
+/**
+ * What a stored video is on screen: the address a link may point at, and
+ * what it plays as — or `null` when the stored text is not an address at
+ * all, which the tile shows as a dead link.
+ *
+ * Checked on the stored text itself, not on what `parseVideoUrl` digs out of
+ * it: that would find the `https://` inside `javascript:…//https://youtu.be/…`
+ * and the link would then point at the whole string. The `href` is the
+ * address as the browser parses it, so what is checked is what is followed.
+ */
+export function videoTarget(stored: string): { href: string; embed: VideoEmbed } | null {
+  if (!isAddress(stored)) return null;
+  const embed = parseVideoUrl(stored);
+  return embed === null ? null : { href: new URL(stored).href, embed };
+}
+
+/**
  * The address in what was pasted, as it should be stored, or `null` when
  * there is none: the text itself, the text with a scheme put on (decision
  * 2), or the first link inside it (decision 5) — in that order, so a link
@@ -365,7 +393,7 @@ export function setVideoLabel(videos: MatchVideo[], index: number, label: string
 export function videoLines(videos: readonly MatchVideo[]): string[] {
   const lines: string[] = [];
   for (const video of videos) {
-    if (parseVideoUrl(video.url) === null) continue;
+    if (videoTarget(video.url) === null) continue;
     lines.push(hasLabel(video) ? `🎥 ${video.label.trim()}: ${video.url}` : `🎥 ${video.url}`);
   }
   return lines;
