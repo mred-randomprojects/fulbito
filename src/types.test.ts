@@ -363,6 +363,44 @@ describe("normalizing teams", () => {
     assert.deepEqual(data.teams[0].players, ["gone"]);
   });
 
+  /**
+   * The merge's rule, at the door: a tombstone deletes the versions it is at
+   * least as new as. A record edited after its delete — an undo, a restore,
+   * an edit on a device that had not heard of the delete — is live, and used
+   * to be dropped here on sight: gone on the next reload, and hidden from
+   * every device that read it out of the cloud.
+   */
+  it("drops a record only when its tombstone is at least as new", () => {
+    const data = normalizeAppData({
+      players: [
+        { id: "back", firstName: "Volvió", updatedAt: "2026-03-01T00:00:00.000Z" },
+        { id: "gone", firstName: "Se fue", updatedAt: "2026-01-01T00:00:00.000Z" },
+        { id: "tie", firstName: "Empate", updatedAt: "2026-02-01T00:00:00.000Z" },
+      ],
+      matches: [{ id: "m-back", updatedAt: "2026-03-01T00:00:00.000Z" }],
+      teams: [{ id: "t-back", name: "Los Pibes", updatedAt: "2026-03-01T00:00:00.000Z" }],
+      deletedPlayers: [
+        { id: "back", deletedAt: "2026-02-01T00:00:00.000Z" },
+        { id: "gone", deletedAt: "2026-02-01T00:00:00.000Z" },
+        { id: "tie", deletedAt: "2026-02-01T00:00:00.000Z" },
+      ],
+      deletedMatches: [{ id: "m-back", deletedAt: "2026-02-01T00:00:00.000Z" }],
+      deletedTeams: [{ id: "t-back", deletedAt: "2026-02-01T00:00:00.000Z" }],
+    });
+    assert.deepEqual(
+      data.players.map((p) => p.id),
+      ["back"],
+    );
+    assert.deepEqual(
+      data.matches.map((m) => m.id),
+      ["m-back"],
+    );
+    assert.deepEqual(
+      data.teams.map((t) => t.id),
+      ["t-back"],
+    );
+  });
+
   it("honours a tombstone for the team itself", () => {
     const data = normalizeAppData({
       teams: [{ id: "t1", name: "Los Pibes" }],

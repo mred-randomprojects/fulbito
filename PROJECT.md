@@ -314,7 +314,10 @@ enters the app without going through `normalizeAppData` — a hand-edited
   put it in, `"comped"` means we bancamos them. Per match rather than global —
   the Tuesday cancha and the Saturday one are two prices. See `lib/court.ts`.
 - **`AppData`** — players, matches, teams, and tombstones for all three, so a
-  delete survives a merge with an older backup.
+  delete survives a merge with an older backup. A tombstone deletes the
+  versions it is at least as new as, at the door (`normalizeAppData`) as in the
+  merge; saving a record again takes its id's tombstone away, so a record
+  brought back is not dropped on the next load.
 
 Structured storage lives in `src/storage.ts`: one primary key, a rolling backup
 written before each save, and a corrupt-blob stash that loading falls back

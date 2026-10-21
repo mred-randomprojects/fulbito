@@ -40,6 +40,21 @@ function deletedAtFor(
   return entries.find((entry) => entry.id === id)?.deletedAt;
 }
 
+/**
+ * The tombstones minus this id's, or the very same array when it has none —
+ * so an ordinary edit hands back the list it was given, and `persist` and the
+ * sync plan still see "nothing about deletions changed".
+ *
+ * An upsert is stamped after any tombstone for its id, so the record wins
+ * every merge already; leaving the tombstone beside it was the state in which
+ * `normalizeAppData` used to drop the record on the next reload.
+ */
+function withoutTombstone<T extends { id: string }>(entries: T[], id: string): T[] {
+  return entries.some((entry) => entry.id === id)
+    ? entries.filter((entry) => entry.id !== id)
+    : entries;
+}
+
 export function upsertPlayer(data: AppData, player: Player, now: string): AppData {
   const previous = data.players.find((p) => p.id === player.id);
   const stamped: Player = {
@@ -50,7 +65,11 @@ export function upsertPlayer(data: AppData, player: Player, now: string): AppDat
   const players = exists
     ? data.players.map((p) => (p.id === stamped.id ? stamped : p))
     : [...data.players, stamped];
-  return { ...data, players: players.sort(byDisplayOrder) };
+  return {
+    ...data,
+    players: players.sort(byDisplayOrder),
+    deletedPlayers: withoutTombstone(data.deletedPlayers, player.id),
+  };
 }
 
 export function removePlayer(data: AppData, id: PlayerId, now: string): AppData {
@@ -79,7 +98,11 @@ export function upsertMatch(data: AppData, match: Match, now: string): AppData {
   const matches = exists
     ? data.matches.map((m) => (m.id === stamped.id ? stamped : m))
     : [stamped, ...data.matches];
-  return { ...data, matches: matches.sort(byMatchOrder) };
+  return {
+    ...data,
+    matches: matches.sort(byMatchOrder),
+    deletedMatches: withoutTombstone(data.deletedMatches, match.id),
+  };
 }
 
 /** One user action that creates a whole fixture should be one storage write. */
@@ -114,7 +137,11 @@ export function upsertTeam(data: AppData, team: Team, now: string): AppData {
   const teams = exists
     ? data.teams.map((t) => (t.id === stamped.id ? stamped : t))
     : [...data.teams, stamped];
-  const next = { ...data, teams: teams.sort(byTeamName) };
+  const next = {
+    ...data,
+    teams: teams.sort(byTeamName),
+    deletedTeams: withoutTombstone(data.deletedTeams, team.id),
+  };
 
   // Every match this team plays in follows it, in the same write. See
   // `lib/teamLinks.ts` for what "follows" means on a game already played.

@@ -1010,33 +1010,49 @@ function normalizeDeletedEntries(value: unknown): DeletedEntry[] {
   return out;
 }
 
+/** Whether a record is deleted by one of these tombstones: one at least as new. */
+function goneBy(
+  tombstones: readonly DeletedEntry[],
+): (record: { id: string; updatedAt: string }) => boolean {
+  const deletedAt = new Map(tombstones.map((entry) => [entry.id, entry.deletedAt]));
+  return (record) => {
+    const at = deletedAt.get(record.id);
+    return at !== undefined && at >= record.updatedAt;
+  };
+}
+
 export function normalizeAppData(raw: unknown): AppData {
   if (!isRecord(raw)) return { ...EMPTY_APP_DATA };
 
   const deletedPlayers = normalizeDeletedEntries(raw.deletedPlayers);
   const deletedMatches = normalizeDeletedEntries(raw.deletedMatches);
   const deletedTeams = normalizeDeletedEntries(raw.deletedTeams);
-  const deletedPlayerIds = new Set(deletedPlayers.map((entry) => entry.id));
-  const deletedMatchIds = new Set(deletedMatches.map((entry) => entry.id));
-  const deletedTeamIds = new Set(deletedTeams.map((entry) => entry.id));
+  // A record is gone only if its tombstone is at least as new as it is — the
+  // merge's rule (`mergeAppData.ts`). A record edited after its delete is a
+  // record brought back on purpose: an undo, a restore, or an edit on another
+  // device that the delete never saw. Dropping it on sight used to make it
+  // vanish on the next reload, or hide a newer cloud copy from every device.
+  const playerGone = goneBy(deletedPlayers);
+  const matchGone = goneBy(deletedMatches);
+  const teamGone = goneBy(deletedTeams);
 
   const players = (Array.isArray(raw.players) ? raw.players : [])
     .map(normalizePlayer)
-    .filter((p): p is Player => p != null && !deletedPlayerIds.has(p.id));
+    .filter((p): p is Player => p != null && !playerGone(p));
 
   // Sorted here rather than trusted from the blob: this is the only door in,
   // and the order a stored blob happens to be in is the order the writes that
   // built it left behind. See `lib/matchOrder.ts`.
   const matches = (Array.isArray(raw.matches) ? raw.matches : [])
     .map(normalizeMatch)
-    .filter((m): m is Match => m != null && !deletedMatchIds.has(m.id))
+    .filter((m): m is Match => m != null && !matchGone(m))
     .sort(byMatchOrder);
 
   // Absent on every blob written before teams existed, which is the same state
   // as an account that has not made one yet.
   const teams = (Array.isArray(raw.teams) ? raw.teams : [])
     .map(normalizeTeam)
-    .filter((t): t is Team => t != null && !deletedTeamIds.has(t.id));
+    .filter((t): t is Team => t != null && !teamGone(t));
 
   return { players, matches, teams, deletedPlayers, deletedMatches, deletedTeams };
 }

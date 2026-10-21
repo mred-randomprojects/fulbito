@@ -21,7 +21,7 @@ import {
   upsertPlayer,
   upsertTeam,
 } from "./appDataOps.js";
-import { RATING_SCALE } from "./types.js";
+import { RATING_SCALE, normalizeAppData } from "./types.js";
 
 function player(id: string, firstName = id): Player {
   return {
@@ -166,6 +166,31 @@ describe("deleting", () => {
     const data = removeMatch(upsertMatch(EMPTY, match("m1"), NOW), "m1" as MatchId, NOW);
     assert.deepEqual(data.matches, []);
     assert.deepEqual(data.deletedMatches, [{ id: "m1", deletedAt: NOW }]);
+  });
+  /**
+   * Bringing a record back is an upsert after its delete, and the tombstone
+   * goes with it — otherwise the pair "live record + its tombstone" is what
+   * gets saved, and the record is dropped the next time the app loads.
+   */
+  it("takes the tombstone away when a deleted record is saved again, and it survives a reload", () => {
+    const LATER = "2026-06-01T12:05:00.000Z";
+    let data = removePlayer(upsertPlayer(EMPTY, player("p1"), NOW), "p1" as PlayerId, NOW);
+    data = upsertPlayer(data, player("p1"), LATER);
+    data = removeMatch(upsertMatch(data, match("m1"), NOW), "m1" as MatchId, NOW);
+    data = upsertMatch(data, match("m1"), LATER);
+    data = removeTeam(upsertTeam(data, team("t1", "Los Pibes"), NOW), "t1" as TeamId, NOW);
+    data = upsertTeam(data, team("t1", "Los Pibes"), LATER);
+    assert.deepEqual([data.deletedPlayers, data.deletedMatches, data.deletedTeams], [[], [], []]);
+    const reloaded = normalizeAppData(JSON.parse(JSON.stringify(data)));
+    assert.deepEqual(reloaded.players.map((p) => p.id), ["p1"]);
+    assert.deepEqual(reloaded.matches.map((m) => m.id), ["m1"]);
+    assert.deepEqual(reloaded.teams.map((t) => t.id), ["t1"]);
+  });
+
+  it("hands back the same tombstone list when there was nothing of this id in it", () => {
+    const data = removePlayer(upsertPlayer(EMPTY, player("p1"), NOW), "p1" as PlayerId, NOW);
+    const next = upsertPlayer(data, player("p2"), NOW);
+    assert.equal(next.deletedPlayers, data.deletedPlayers);
   });
 });
 
