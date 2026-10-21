@@ -16,6 +16,14 @@ import type { TrackSink } from "@/lib/track";
  * **It is never initialised without a key.** `trackingGate` is answered
  * before this module is even fetched; a fork without the secret gets the app
  * that existed before analytics, exactly.
+ *
+ * **It never fetches a script at run time.** The ordinary build of the SDK
+ * injects more JavaScript from PostHog's asset host as it goes — the replay
+ * recorder, the remote config, exception and dead-click capture — as
+ * `<script>` tags no hash can pin. On this origin that is code from a third
+ * party running beside every sibling app's Firebase session. The
+ * `full.no-external` build carries all of those inside the bundle this site
+ * serves, and the remote config arrives as JSON instead.
  */
 
 export const POSTHOG_KEY: string | undefined = import.meta.env.VITE_POSTHOG_KEY;
@@ -42,9 +50,12 @@ export function loadPostHogSink(): Promise<TrackSink> {
   const key = POSTHOG_KEY;
   if (pending === null) {
     pending = (async (): Promise<TrackSink> => {
-      const { default: posthog } = await import("posthog-js");
+      const { default: posthog } = await import("posthog-js/dist/module.full.no-external");
       posthog.init(key, {
         api_host: POSTHOG_HOST,
+        // The bundle above has every extension already; this makes sure no
+        // code path asks for one from the network anyway. See the header.
+        disable_external_dependency_loading: true,
         // A dated snapshot of the SDK's recommended defaults, pinned on
         // purpose. Do not bump it without reading what the newer date flips:
         // 2026-06-25 turns on `disable_capture_url_hashes`, and this app's

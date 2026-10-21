@@ -1553,7 +1553,7 @@ features is finding out which of them anybody uses. PostHog is the vendor:
 which screen is open, which buttons are tapped (autocapture, with the text of
 the button — they say what they do in Spanish, so a session reads as a story
 with no wiring), a session recording, and a short list of events the app
-sends on purpose. Four things about it are deliberate.
+sends on purpose. Five things about it are deliberate.
 
 - **The events are a closed list, and the vendor is one file.** `TrackEvent`
   in `lib/track.ts` is the contract: `match_created`, `tournament_created`,
@@ -1572,6 +1572,13 @@ sends on purpose. Four things about it are deliberate.
   dead. Meanwhile the tracker holds what happened, in order, and hands it
   over when the sink arrives; told nothing is coming, it drops the lot.
   `track.test.ts` pins that.
+- **It runs no script it fetched at run time.** The SDK is the
+  `posthog-js/dist/module.full.no-external` build, with
+  `disable_external_dependency_loading`: the replay recorder, exception and
+  dead-click capture are in the bundle this site serves, and the remote
+  config arrives as JSON. The ordinary build injects those as `<script>` tags
+  from PostHog's asset host, which no hash can pin — third-party code running
+  beside every sibling app's Firebase session on this origin.
 - **The encuesta never loads it.** `useTracking` is mounted in `App` and in
   `ListPage`, and `PollPage` sits beside both in `main.tsx` for exactly
   this kind of reason: a voter was promised the one who made the list sees
