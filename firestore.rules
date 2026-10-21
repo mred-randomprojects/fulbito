@@ -71,10 +71,17 @@ service cloud.firestore {
     // `allow list` on /polls: being able to audit an encuesta you were sent is
     // a different power from being able to enumerate everybody's. (The site
     // owner, below, does get that one — it is the power "Ver como" is.)
+    //
+    // A verified address, on a Google session, for the same reason as
+    // `isSiteOwner()`: an unverified one is a claim anybody can type into a
+    // sign-up form, and the day a provider like that is switched on this must
+    // not quietly hand out every voter's mail.
     function isSuperAdmin() {
       return request.auth != null
         && 'email' in request.auth.token
         && request.auth.token.email is string
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
         && request.auth.token.email.lower() in [
           'maxiredigonda@gmail.com',
           'bruno.david9914@gmail.com'
@@ -93,12 +100,14 @@ service cloud.firestore {
     //
     // Read, never write: every rule below that mentions it is an `allow read`
     // or an `allow list`/`get`. A verified address, because an unverified one
-    // is a claim anybody can type into a sign-up form.
+    // is a claim anybody can type into a sign-up form — and a Google session,
+    // which is the only way the owner signs in.
     function isSiteOwner() {
       return request.auth != null
         && 'email' in request.auth.token
         && request.auth.token.email is string
         && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
         && request.auth.token.email.lower() == 'maxiredigonda@gmail.com';
     }
 

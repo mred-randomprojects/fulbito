@@ -26,6 +26,9 @@ const ANON_Y = anon("anon-y");
 const SITE_OWNER = google("admin-1", "maxiredigonda@gmail.com");
 /** `isSuperAdmin()` only. */
 const OTHER_ADMIN = google("admin-2", "bruno.david9914@gmail.com");
+const OWNER_EMAIL_UNVERIFIED = google("fake-1", "maxiredigonda@gmail.com", false);
+const OWNER_EMAIL_PASSWORD = google("fake-2", "maxiredigonda@gmail.com", true, "password");
+const ADMIN_EMAIL_UNVERIFIED = google("fake-3", "bruno.david9914@gmail.com", false);
 
 /** A string the API does not turn into a timestamp, for fields the rules want as strings. */
 const SEEN = "2026-10-16 12:00";
@@ -387,4 +390,18 @@ const SQUATS: Row[] = [
   deny("A-Q16", "anon sends a poll", { who: ANON, method: "create", path: "polls/P2", data: { ownerUid: "anon-x", title: "x", createdAt: SEEN } }, "ALLOW"),
 ];
 
-export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES, ...MARKERS, ...SQUATS];
+/* ------------------------------------------------------------------ */
+/* Who is the site owner, who is a super admin: verified Google only.  */
+/* ------------------------------------------------------------------ */
+
+const ADMINS: Row[] = [
+  deny("A-S1", "unverified token with the site owner's address reads a roster", { who: OWNER_EMAIL_UNVERIFIED, method: "get", path: "users/owner-1/players/p1", existing: { rating: 70 } }),
+  deny("A-S2", "the site owner's address off a password sign-in reads a roster", { who: OWNER_EMAIL_PASSWORD, method: "get", path: "users/owner-1/players/p1", existing: { rating: 70 } }, "ALLOW"),
+  deny("A-S3", "unverified token with the site owner's address lists the profiles", { who: OWNER_EMAIL_UNVERIFIED, method: "list", path: "users/owner-1", existing: { email: "owner@example.com" } }),
+  deny("A-S4", "unverified token with a super admin's address lists who sent which ballot", { who: ADMIN_EMAIL_UNVERIFIED, method: "list", path: "polls/P1/identities/pb1", existing: { email: "voter@example.com" } }, "ALLOW"),
+  deny("A-S5", "unverified token with a super admin's address lists a recap's addresses", { who: ADMIN_EMAIL_UNVERIFIED, method: "list", path: "recaps/M1/identities/voter-1", existing: { email: "voter@example.com" } }, "ALLOW"),
+  deny("A-S6", "the site owner's address off a password sign-in lists who sent which ballot", { who: OWNER_EMAIL_PASSWORD, method: "list", path: "polls/P1/identities/pb1", existing: { email: "voter@example.com" } }, "ALLOW"),
+  deny("A-S7", "unverified token with a super admin's address reads a ballot", { who: ADMIN_EMAIL_UNVERIFIED, method: "get", path: "polls/P1/ballots/pb1", existing: { votes: {} }, world: { ...W, "polls/P1/voters/fake-3": null } }, "ALLOW"),
+];
+
+export const ROWS: Row[] = [...ISLANDS, ...POLLS, ...LISTS, ...RECAPS, ...PICKS, ...ELSEWHERE, ...FACES, ...MARKERS, ...SQUATS, ...ADMINS];

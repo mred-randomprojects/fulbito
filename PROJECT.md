@@ -939,7 +939,8 @@ whose app it is and is the way back.
 - **It is one address, and not the super admins.** Hard-coded in both halves,
   like `lib/superAdmin.ts`, and a separate list on purpose: auditing an
   encuesta you were sent and reading every roster in the project are
-  different powers. The rules also want the address *verified*.
+  different powers. The rules also want the address *verified*, on a Google
+  session — and so does `isSuperAdmin()`.
 - **The rules let it read and never write.** Everything under
   `users/{uid}/…`, the `users/{uid}` profile, every `meta` in one
   collection-group query, anybody's polls by `ownerUid` and their ballots —
@@ -1030,7 +1031,10 @@ look, and it is deliberately the two people who maintain the app and nobody
 else: `SUPER_ADMIN_EMAILS` in `lib/superAdmin.ts`, and the identical list in
 `isSuperAdmin()` in `firestore.rules` — hard-coded in both, never a field on a
 document, so granting it is two deliberate edits rather than one accidental
-write. Four things keep it from undoing the anonymity above.
+write. The rules take the address only verified and off a Google session, so
+the day another sign-in provider is switched on, typing an admin's address
+into it reads nobody's mail. Four things keep it from undoing the anonymity
+above.
 
 - **The poll's owner still cannot see it.** Not `get`, not `list`. The
   anonymity a voter was promised is anonymity *from the person who made the

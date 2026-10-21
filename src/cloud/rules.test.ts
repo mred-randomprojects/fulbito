@@ -86,7 +86,14 @@ const PROJECT = "demo-fulbito";
 const [HOST, PORT] = (process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8080").split(":");
 
 /** Somebody, as the emulator will see them. `null` is a visitor with no session. */
-type Who = { uid: string; email?: string; anonymous?: boolean; unverified?: boolean } | null;
+type Who = {
+  uid: string;
+  email?: string;
+  anonymous?: boolean;
+  unverified?: boolean;
+  /** `sign_in_provider` when it is neither Google nor anonymous, e.g. `password`. */
+  provider?: string;
+} | null;
 
 const apps: FirebaseApp[] = [];
 
@@ -107,7 +114,9 @@ function as(who: Who): Firestore {
             ...(who.email === undefined
               ? {}
               : { email: who.email, email_verified: who.unverified !== true }),
-            firebase: { sign_in_provider: who.anonymous === true ? "anonymous" : "google.com" },
+            firebase: {
+              sign_in_provider: who.anonymous === true ? "anonymous" : (who.provider ?? "google.com"),
+            },
           },
         },
   );
@@ -279,6 +288,28 @@ describe("the site owner", () => {
     const unverified: Who = { uid: "fake", email: "maxiredigonda@gmail.com", unverified: true };
     await denied(getDoc(doc(as(unverified), "users", "owner-1", "players", "p1")));
     await denied(listAccounts(as(unverified)));
+    // And a Google session: the owner signs in no other way.
+    const password: Who = { uid: "fake-2", email: "maxiredigonda@gmail.com", provider: "password" };
+    await denied(getDoc(doc(as(password), "users", "owner-1", "players", "p1")));
+  });
+
+  /**
+   * The super admins read every encuesta's addresses. Today only Google and
+   * anonymous sign-in are on, so nobody can present an unverified address;
+   * the day another provider is switched on, the address alone must not be
+   * enough to read who answered what.
+   */
+  it("gives the super admins' reads to verified Google sessions only", async () => {
+    const pollId = await createPoll(as(OWNER), "owner-1", {
+      title: "Ranking",
+      players: [{ id: "p1" as PlayerId, name: "Maxi", avatar: "" }],
+    });
+    await fetchIdentities(as(OTHER_ADMIN), pollId);
+    const unverified: Who = { uid: "fake-3", email: "bruno.david9914@gmail.com", unverified: true };
+    await denied(fetchIdentities(as(unverified), pollId));
+    await denied(fetchBallotEntries(as(unverified), pollId));
+    const password: Who = { uid: "fake-4", email: "bruno.david9914@gmail.com", provider: "password" };
+    await denied(fetchIdentities(as(password), pollId));
   });
 
   it("sees somebody's encuestas, the pile included, and still not the names", async () => {
