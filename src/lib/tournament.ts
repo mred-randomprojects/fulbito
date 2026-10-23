@@ -53,7 +53,22 @@ export interface WinnerStaysFixture {
   queue: number[];
 }
 
-export type Fixture = RoundRobinFixture | WinnerStaysFixture;
+/**
+ * A copa, as far as it can be written down before it starts: the first
+ * round's cruces, who goes straight through, and what comes after, in words —
+ * the rest depends on results nobody has yet. See `lib/copa.ts`.
+ */
+export interface KnockoutFixture {
+  format: "knockout";
+  /** The first round, in bracket order. */
+  opening: FixtureMatch[];
+  /** Teams with a bye: straight into the next round. */
+  byes: number[];
+  /** "Después: semis, final y 3er puesto." */
+  then: string;
+}
+
+export type Fixture = RoundRobinFixture | WinnerStaysFixture | KnockoutFixture;
 
 /** Enough of a team to write a fixture line about it. */
 export interface FixtureTeamLabel {
@@ -172,6 +187,16 @@ export function fixtureLines(
   fixture: Fixture,
   teams: readonly FixtureTeamLabel[],
 ): string[] {
+  if (fixture.format === "knockout") {
+    const lines = ["🏁 Primera ronda"];
+    for (const match of fixture.opening) lines.push(matchLine(teams, match));
+    for (const index of fixture.byes) {
+      const team = labelOf(teams, index);
+      lines.push(`  ${team.emoji} ${team.name} pasa directo`);
+    }
+    lines.push("", fixture.then);
+    return lines;
+  }
   if (fixture.format === "winner-stays") {
     const lines = ["🏁 Arrancan", matchLine(teams, fixture.opener)];
     if (fixture.queue.length > 0) {

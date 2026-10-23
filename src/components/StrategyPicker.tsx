@@ -20,11 +20,18 @@ interface Props {
   onChange: (strategy: ArmarStrategy) => void;
   /** Tonight's anotados. */
   squad: Player[];
-  teamA: TeamConfig;
-  teamB: TeamConfig;
-  captains: Partial<Record<TeamKey, PlayerId>>;
-  onCaptainChange: (team: TeamKey, id: PlayerId | null) => void;
-  onDrawCaptains: () => void;
+  /**
+   * The two captains' draft, where there are two sides to draft for. Absent
+   * on a torneo: three captains picking by turns is a different game, and the
+   * chip is left off rather than offered and refused.
+   */
+  capitanes?: {
+    teamA: TeamConfig;
+    teamB: TeamConfig;
+    captains: Partial<Record<TeamKey, PlayerId>>;
+    onCaptainChange: (team: TeamKey, id: PlayerId | null) => void;
+    onDrawCaptains: () => void;
+  };
   /** Opens a player's ficha, to fill in what is missing. */
   onViewPlayer: (id: PlayerId) => void;
 }
@@ -41,17 +48,7 @@ const MISSING_SHOWN = 8;
  * exception is the keepers check — "hay uno solo" is a fact about who has a
  * GK rating of 60 or more — so it drops out while scores are hidden.
  */
-export function StrategyPicker({
-  strategy,
-  onChange,
-  squad,
-  teamA,
-  teamB,
-  captains,
-  onCaptainChange,
-  onDrawCaptains,
-  onViewPlayer,
-}: Props) {
+export function StrategyPicker({ strategy, onChange, squad, capitanes, onViewPlayer }: Props) {
   const hidden = useScoresHidden();
   const checksFor = (key: ArmarStrategy) =>
     strategyData(key, squad).filter((check) => !hidden || check.key !== "keepers");
@@ -62,7 +59,7 @@ export function StrategyPicker({
   return (
     <div className="space-y-2">
       <div role="radiogroup" aria-label="Cómo armar los equipos" className="flex flex-wrap gap-1.5">
-        {ARMAR_STRATEGIES.map((key) => {
+        {ARMAR_STRATEGIES.filter((key) => capitanes !== undefined || key !== "capitanes").map((key) => {
           const keyReady = strategyReady(checksFor(key));
           return (
             <button
@@ -102,14 +99,14 @@ export function StrategyPicker({
           ))}
         </ul>
 
-        {strategy === "capitanes" && (
+        {strategy === "capitanes" && capitanes !== undefined && (
           <CaptainPicker
             squad={squad}
-            teamA={teamA}
-            teamB={teamB}
-            captains={captains}
-            onChange={onCaptainChange}
-            onDraw={onDrawCaptains}
+            teamA={capitanes.teamA}
+            teamB={capitanes.teamB}
+            captains={capitanes.captains}
+            onChange={capitanes.onCaptainChange}
+            onDraw={capitanes.onDrawCaptains}
           />
         )}
 

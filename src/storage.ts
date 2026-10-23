@@ -1,9 +1,9 @@
 import { normalizeAppData, type AppData, EMPTY_APP_DATA } from "./types.js";
 
 /**
- * The slice of `Storage` this module reads and writes. Typed structurally, as
- * `lib/splitDraft.ts` does, so the tests can hand it a plain Map instead of a
- * browser. Every function defaults to the real `localStorage`.
+ * The slice of `Storage` this module reads and writes. Typed structurally, so
+ * the tests can hand it a plain Map instead of a browser. Every function
+ * defaults to the real `localStorage`.
  */
 export interface AppDataStorage {
   readonly length: number;

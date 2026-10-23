@@ -7,7 +7,6 @@ import { NavBar } from "./components/NavBar";
 import { PlayersPage } from "./components/PlayersPage";
 import { MatchesPage } from "./components/MatchesPage";
 import { MatchBuilder } from "./components/MatchBuilder";
-import { SplitPage } from "./components/SplitPage";
 import { TeamsPage } from "./components/TeamsPage";
 import { TournamentPage, TournamentsPage } from "./components/TournamentsPage";
 import { SettingsPage } from "./components/SettingsPage";
@@ -26,9 +25,10 @@ import {
   type Match,
   type MatchId,
 } from "./types";
-import { defaultMatchName, todayIso } from "./lib/dates";
+import { defaultMatchName, defaultTorneoName, todayIso } from "./lib/dates";
 import { track } from "./lib/track";
 import { findLiga } from "./lib/liga";
+import { isTorneoHost, newTorneo, syncTorneoGames, torneoGamesOf } from "./lib/torneo";
 import { interceptSave } from "cmd-s";
 
 export default function App() {
@@ -60,12 +60,16 @@ function AppBody() {
   // toast of its own — `save` returns nothing.
   useEffect(() => interceptSave({ onSave: app.save }), [app.save]);
 
-  const createMatch = useCallback(() => {
+  /**
+   * A new match, or — from "Torneo nuevo" — a new night that is a torneo from
+   * the start: four teams, which is the usual reason a night needs one.
+   */
+  const createMatch = useCallback((asTorneo = false) => {
     const today = todayIso();
     const match: Match = {
       id: newMatchId(),
       ratingScale: RATING_SCALE,
-      name: defaultMatchName(today),
+      name: asTorneo ? defaultTorneoName(today) : defaultMatchName(today),
       date: today,
       teamA: { ...DEFAULT_TEAM_A },
       teamB: { ...DEFAULT_TEAM_B },
@@ -86,6 +90,7 @@ function AppBody() {
       reviews: {},
       forecastNotes: "",
       videos: [],
+      ...(asTorneo ? { torneo: newTorneo(0, 4) } : {}),
       updatedAt: new Date().toISOString(),
     };
     app.saveMatch(match);
@@ -149,7 +154,8 @@ function AppBody() {
                 players={app.players}
                 onOpen={(match) => navigate(`/matches/${match.id}`)}
                 onOpenTournament={(id) => navigate(`/torneos/${id}`)}
-                onCreate={createMatch}
+                onCreate={() => createMatch()}
+                onCreateTorneo={() => createMatch(true)}
               />
             }
           />
@@ -167,19 +173,9 @@ function AppBody() {
             }
           />
           <Route path="/torneos/:id" element={<TournamentRoute app={app} />} />
-          <Route
-            path="/split"
-            element={
-              <SplitPage
-                players={app.players}
-                matches={app.matches}
-                savedTeams={app.teams}
-                onSavePlayer={app.savePlayer}
-                onDeletePlayer={app.deletePlayer}
-                onSaveTeam={app.saveTeam}
-              />
-            }
-          />
+          {/* Repartir lived here. It is now part of a match: more than two
+              teams turns the match into a torneo. */}
+          <Route path="/split" element={<Navigate to="/matches" replace />} />
           <Route
             path="/teams"
             element={
@@ -250,23 +246,51 @@ function MatchRoute({ app }: { app: ReturnType<typeof useAppData> }) {
 
   if (match === undefined) return <Navigate to="/matches" replace />;
   // A torneo game belongs to its board: that is where you came from and where
-  // the next score gets written.
-  const home = match.tournament === undefined ? "/matches" : `/torneos/${match.tournament.id}`;
+  // the next score gets written. The board of a torneo armado in a match is
+  // that match; one made from saved teams has a page of its own.
+  const tag = match.tournament;
+  const host = tag === undefined ? undefined : app.getMatch(tag.id as MatchId);
+  const home =
+    tag === undefined
+      ? "/matches"
+      : host !== undefined && isTorneoHost(host)
+        ? `/matches/${host.id}`
+        : `/torneos/${tag.id}`;
 
   return (
     <MatchBuilder
+      key={match.id}
       match={match}
       players={app.players}
       matches={app.matches}
       teams={app.teams}
-      onChange={app.saveMatch}
+      onChange={(next) => {
+        // The night of a torneo writes its games along with it when they show
+        // something it changed — a team's name, its bibs, the title, the date.
+        if (isTorneoHost(next)) {
+          const games = torneoGamesOf(next.id, app.matches);
+          const changed = games.length === 0 ? [] : syncTorneoGames(match, next, games);
+          if (changed.length > 0) {
+            app.saveMatches([next, ...changed]);
+            return;
+          }
+        }
+        app.saveMatch(next);
+      }}
       onDelete={() => {
-        app.deleteMatch(match.id);
+        // A torneo goes with its games; Deshacer brings them all back.
+        const games = isTorneoHost(match) ? torneoGamesOf(match.id, app.matches) : [];
+        if (games.length > 0) app.deleteMatches([match.id, ...games.map((game) => game.id)]);
+        else app.deleteMatch(match.id);
         navigate(home);
       }}
       onSavePlayer={app.savePlayer}
       onDeletePlayer={app.deletePlayer}
       onBack={() => navigate(home)}
+      onSaveMatches={app.saveMatches}
+      onDeleteMatches={app.deleteMatches}
+      onOpenMatch={(gameId) => navigate(`/matches/${gameId}`)}
+      onSaveTeam={app.saveTeam}
     />
   );
 }
@@ -275,7 +299,10 @@ function TournamentRoute({ app }: { app: ReturnType<typeof useAppData> }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const liga = id == null ? undefined : findLiga(app.matches, id);
+  const host = id == null ? undefined : app.getMatch(id as MatchId);
 
+  // A torneo armado in a match is read on that match, not here.
+  if (host !== undefined && isTorneoHost(host)) return <Navigate to={`/matches/${host.id}`} replace />;
   if (liga === undefined) return <Navigate to="/torneos" replace />;
 
   return (

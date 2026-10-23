@@ -461,6 +461,8 @@ export interface Torneo {
   spreadKeepers: boolean;
   /** Copa only: whether the two who lost the semis play for third. */
   thirdPlace: boolean;
+  /** How each game is played — "a 2 goles", "10 minutos" — as typed, for the grupo. */
+  rule: string;
 }
 
 export interface MatchTorneoGame {
@@ -892,6 +894,7 @@ const TORNEO_FIELDS: Record<keyof Torneo, true> = {
   fieldPrice: true,
   spreadKeepers: true,
   thirdPlace: true,
+  rule: true,
 };
 
 const TORNEO_TEAM_FIELDS: Record<keyof TorneoTeam, true> = {
@@ -1225,6 +1228,7 @@ function normalizeTorneo(value: unknown): Torneo | undefined {
     fieldPrice: clampCourtCost(num(value.fieldPrice, 0)),
     spreadKeepers: value.spreadKeepers !== false,
     thirdPlace: value.thirdPlace !== false,
+    rule: str(value.rule),
   };
 }
 

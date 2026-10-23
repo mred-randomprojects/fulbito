@@ -30,6 +30,7 @@ import {
   buildTeamTournamentSchedule,
 } from "@/lib/teamTournament";
 import { formatLongDate } from "@/lib/dates";
+import { isTorneoHost } from "@/lib/torneo";
 import { COPY_REFUSED } from "@/share";
 import { useCopy } from "@/useCopy";
 import {
@@ -65,7 +66,12 @@ interface ListProps {
  * the night it matters.
  */
 export function TournamentsPage({ matches, teams, players, onCreateMatches, onOpen }: ListProps) {
-  const ligas = useMemo(() => groupLigas(matches), [matches]);
+  // A torneo armado in a match is listed on Partidos, with its match; this
+  // page is the ligas made from saved teams.
+  const ligas = useMemo(() => {
+    const hosts = new Set(matches.filter(isTorneoHost).map((match) => match.id as string));
+    return groupLigas(matches.filter((match) => !hosts.has(match.tournament?.id ?? "")));
+  }, [matches]);
   const [creating, setCreating] = useState(false);
   const showBuilder = creating || ligas.length === 0;
 
@@ -73,9 +79,10 @@ export function TournamentsPage({ matches, teams, players, onCreateMatches, onOp
     <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Torneos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Ligas de equipos guardados</h1>
           <p className="text-sm text-muted-foreground">
-            Ligas con tus equipos guardados: fixture, goles y tabla en un lugar.
+            Fixture, goles y tabla para los equipos que guardaste. Para armar los
+            equipos en el momento, creá un torneo desde Partidos.
           </p>
         </div>
         {!showBuilder && (

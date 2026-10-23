@@ -74,3 +74,10 @@ export function defaultMatchName(iso: string): string {
   if (date == null) return "Picado";
   return `Picado del ${WEEKDAYS[date.getDay()]}`;
 }
+
+/** "Torneo del martes" — the same, for a night that starts out as a torneo. */
+export function defaultTorneoName(iso: string): string {
+  const date = parse(iso);
+  if (date == null) return "Torneo";
+  return `Torneo del ${WEEKDAYS[date.getDay()]}`;
+}

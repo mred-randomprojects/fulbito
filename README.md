@@ -3,8 +3,9 @@
 Pick fair teams for five-, six- or seven-a-side, in the thirty seconds before
 kick-off. Rate your mates once, let it work out the split, write down how it
 ended, and keep track of who still owes you for the cancha. Twenty turned up?
-Cut them into four fives, name them, send the group the torneito, and keep the
-one side that plays every week. Same two sides every week? Save them once, see
+Make the night a torneo: four even fives with names and bibs, a liga or a copa
+across the canchas you have, the goals tapped in game by game, the cancha split
+between everybody — and keep the one side that plays every week. Same two sides every week? Save them once, see
 either of them lined up on half a pitch, and bring both into a match in a tap.
 Want to know how it goes before it goes? Six models will tell you, and
 afterwards the app tells you which of them was right. And if the grupo would
@@ -87,16 +88,17 @@ any other app, full screen and with no signal needed.
   so it is a real test and not a model marking its own homework.
 - **Uneven sides and deliberate handicaps.** 5 v 6 is normal. So is stacking one
   team on purpose.
-- **More than two teams.** Twenty people, two hours, one pitch: cut them into
-  four fives, or two sevens and a six, and rotate on every goal. Every pair of
-  teams gets played over a night like that, so the split is scored on how even
-  the *worst* matchup is, not just on the totals. Locks and the two who cannot
-  be on the same side work here too — tocale el candadito a alguien en la lista
-  y queda fijo en ese equipo, con el resto repartido alrededor suyo. Todo el
-  borrador queda en este dispositivo: podés ir a otra pantalla o recargar y
-  volver a encontrar los convocados, pines, opciones, cambios y nombres tal
-  como estaban.
-- **Un arquero para cada equipo.** Ticked by default on Repartir: whoever you
+- **More than two teams, and the match becomes a torneo.** Twenty people, two
+  hours, two canchas: ask the match for three teams or more ("Equipos" above
+  Armar, or "Torneo nuevo" on Partidos) and it becomes the night of a torneo.
+  It cuts them into four fives, or two sevens and a six, with the same
+  strategies as Armar — Completo, Por nivel, Por físico, Por puestos — and,
+  since every pair of teams can meet, scores the split on how even the *worst*
+  matchup is, not just on the totals. Locks and the two who cannot be on the
+  same side work here too — tocale el candadito a alguien en la lista y queda
+  fijo en ese equipo, con el resto repartido alrededor suyo. Everything is on
+  the match, so it syncs and survives a reload like any partido.
+- **Un arquero para cada equipo.** Ticked by default on a torneo: whoever you
   rated 60 or more al arco gets dealt out one per team, so nobody ends up
   putting their 9 bajo los tres palos. It only counts a keeper somebody
   actually rated in goal — being the best footballer is not the same as being
@@ -108,20 +110,23 @@ any other app, full screen and with no signal needed.
   score teams the app never picked: start anywhere, move people until the
   screen matches the sides already chosen at the cancha, and read off how
   parejos they actually are.
-- **A torneito, drawn.** Once the teams exist, name them and pick how the night
-  runs: todos contra todos, where every pairing is known before a ball is
-  kicked and comes out as fechas; or el que gana se queda, where all that can
-  honestly be written down is who starts and what the queue is, because every
-  pairing after the first depends on a result nobody has yet. Either way it
-  comes out as one PNG — the teams, the faces and the fixture — for the group
-  chat. El armado queda como borrador local para que navegar no lo borre; no se
-  convierte en un torneo del historial ni se sincroniza como uno.
-  The exception is asked for out loud — if one of those fives is the same five
-  every week, Guardar keeps it in Equipos, and next week it comes back into a
-  match in a tap instead of being ticked off one by one. The same five are
-  never saved twice, and a name another team already has becomes "Los Pibes
-  (2)" rather than a second Los Pibes.
-- **A liga from saved teams, in one tap.** Torneos opens with every saved
+- **A liga or a copa, played out on the board.** Name the teams, hand out the
+  bibs, say how many canchas are running and Arrancar: every game becomes a
+  real Partido with both lineups. A liga is todos contra todos, packed onto
+  the canchas turn by turn, with the table filling itself as goals are tapped
+  in. A copa is a bracket — semis, final and a third place you can mark as
+  not played — with byes when the teams are odd, los penales when a game ends
+  level, and the final filled in as the semis finish. Each result goes on the
+  players' records, and each torneo on their ficha: campeón, subcampeón, the
+  round they went out in. The cancha is priced per cancha, multiplied by the
+  canchas and split between everybody who came, and the whole night is one
+  row on Partidos. The teams, the fixture and the results go to the group chat
+  as text or as a PNG. If one of those fives is the same five every week,
+  Guardar keeps it in Equipos, and next week it comes back into a match in a
+  tap instead of being ticked off one by one. The same five are never saved
+  twice, and a name another team already has becomes "Los Pibes (2)" rather
+  than a second Los Pibes.
+- **A liga from saved teams, in one tap.** From Equipos, the liga builder opens with every saved
   team ticked and the fixture already drawn — four teams on two pitches means
   two games at once, three times — so Arrancar is all it takes. Each field
   still has a picker to move a matchup around, and a turn that puts one team
@@ -196,7 +201,7 @@ any other app, full screen and with no signal needed.
   cosas. El único dato que el link no lleva es el mail de nadie: queda guardado
   donde sólo lo ves vos y los que mantienen la app.
 - **Share without leaking ratings — and there is nothing to opt into.** A PNG
-  of the pitch, a PNG of the torneito, or a plain-text list for the group chat:
+  of the pitch, a PNG of a torneo, or a plain-text list for the group chat:
   the teams, who is in goal, what the cancha cost, the video. **No número de
   nadie, ni total de equipo, en ninguno de los cuatro.** There used to be a
   "Mostrar los niveles" checkbox, off by default; it went, because a door that
@@ -248,7 +253,7 @@ any other app, full screen and with no signal needed.
   the run they are on. Nothing is stored on the player: it is read back off the
   matches every time, so fixing a scoreline fixes the record.
 - **Who is this again, from wherever you are.** Hold a finger on any player —
-  on the pitch, on the bench, in the list of anotados, in Repartir, in
+  on the pitch, on the bench, in the list of anotados, in a torneo's teams, in
   Encuestas — and their ficha opens right there, without losing whatever you
   were in the middle of arranging. The tap still does what it always did:
   open their card on the cancha, anotarlos, take them off. On a laptop it is
@@ -402,8 +407,8 @@ be pasted straight in with Ctrl/⌘+V — most of them start as a screenshot or
 something someone just sent — so nothing has to go via the filesystem first.
 
 Sharing produces a PNG of the pitch, drawn on a canvas from the same geometry
-the on-screen pitch uses (`src/lib/lineupImage.ts`), or a PNG of the whole
-torneito — teams, faces and fixture — sized to whatever the night turned out to
+the on-screen pitch uses (`src/lib/lineupImage.ts`), or a PNG of a whole
+torneo — teams, faces and fixture — sized to whatever the night turned out to
 be (`src/lib/tournamentImage.ts`), plus a plain-text list for the group chat.
 None of it needs a server.
 
@@ -435,8 +440,12 @@ has not pulled.
 
 - **A team's own record across torneos.** A torneo has its table, but a
   saved team has no all-time won/lost tally and no rating yet.
-- **Other tournament formats.** Only todos contra todos: no knockout stages
-  or head-to-head tiebreaks.
+- **Other tournament formats.** Liga and copa only: no el que gana se queda
+  kept game by game, no liga with a final, no head-to-head tiebreaks.
+- **The year in fútbol.** A recap per player at the end of the year — games,
+  wins, torneos, cups — as one image to share. Everything it would read is
+  already there: every torneo game is a match on the record, and each
+  torneo's finish is read off them on the ficha.
 - **Free placement on the pitch.** Positions currently come from a formation;
   dragging a player anywhere on the grass is the obvious next step.
 - **Sharing a roster with somebody else.** Sync copies your data between *your*

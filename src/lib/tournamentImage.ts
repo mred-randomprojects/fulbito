@@ -117,6 +117,16 @@ function columnsFor(teams: number): number {
 }
 
 function measureFixture(fixture: Fixture): number {
+  if (fixture.format === "knockout") {
+    return (
+      SECTION_TITLE +
+      ROUND_LABEL +
+      fixture.opening.length * MATCH_ROW +
+      fixture.byes.length * BYE_ROW +
+      12 +
+      BYE_ROW
+    );
+  }
   if (fixture.format === "winner-stays") {
     return (
       SECTION_TITLE +
@@ -249,6 +259,20 @@ function drawFixture(
   ctx.textAlign = "center";
 
   let y = top + SECTION_TITLE;
+
+  if (fixture.format === "knockout") {
+    y = drawSectionLabel(ctx, "Primera ronda", y);
+    for (const match of fixture.opening) {
+      drawMatchRow(ctx, teams, match, y);
+      y += MATCH_ROW;
+    }
+    for (const index of fixture.byes) {
+      drawNote(ctx, `${nameOf(teams, index)} pasa directo`, y);
+      y += BYE_ROW;
+    }
+    drawNote(ctx, fixture.then, y + 12);
+    return;
+  }
 
   if (fixture.format === "winner-stays") {
     y = drawSectionLabel(ctx, "Arrancan", y);

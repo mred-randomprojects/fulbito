@@ -118,3 +118,37 @@ describe("the forecast badge", () => {
     assert.equal(tab({ hasLineup: true, forecastFavourite: 0.9 }, "pronostico").alert, false);
   });
 });
+
+describe("matchTabs on the night of a torneo", () => {
+  const base = {
+    squadSize: 20,
+    hasLineup: false,
+    benchCount: 0,
+    conflictCount: 0,
+    sizeMismatch: 0,
+    courtCost: 90000,
+    payers: 20,
+    paidCount: 5,
+    forecastFavourite: null,
+    hasResult: false,
+  };
+
+  it("is the board, who came and the money", () => {
+    const tabs = matchTabs({ ...base, torneo: { started: false, played: 0, total: 0 } });
+    assert.deepEqual(
+      tabs.map((tab) => [tab.id, tab.label]),
+      [
+        ["cancha", "Torneo"],
+        ["jugadores", "Jugadores"],
+        ["pagos", "Pagos"],
+      ],
+    );
+    assert.equal(tabs[0].badge, null);
+    assert.equal(tabs[2].badge, "5/20");
+  });
+
+  it("counts the games played once it started", () => {
+    const tabs = matchTabs({ ...base, torneo: { started: true, played: 2, total: 6 } });
+    assert.equal(tabs[0].badge, "2/6");
+  });
+});

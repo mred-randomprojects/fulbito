@@ -17,10 +17,15 @@ up, and it works out the fairest split of the sides in the thirty seconds
 before kick-off. Then you record how it actually ended, whatever needs saying
 about the night, how each of them went one by one, who still owes you for
 the cancha, and where the recording of it lives. When more people turn
-up than two teams can hold, a second screen splits them into several, lets you
-name them, draws the torneito they are about to play, and offers to keep any
-of those sides for next week. And when the sides already exist, you can pick
-the saved teams on Torneos, say how many pitches are running, and start a
+up than two teams can hold, the same match is asked for three teams or more
+and becomes the night of a torneo: it splits them with the same strategies,
+lets you name them and hand out the bibs, and runs the night as a liga (todos
+contra todos, with the table) or a copa (the bracket, los penales, the third
+place) across however many canchas are running — every game a match of its
+own with both lineups, so each result lands on the players' records and each
+torneo on their ficha, and the canchas are priced one at a time and split
+between everybody who came. And when the sides already exist, you can pick
+the saved teams (from Equipos), say how many pitches are running, and start a
 liga in one tap: every match is created with both lineups ready and stays
 tied to its teams, the table fills itself as goals are tapped in, and
 renaming a team renames it on every game it plays. The same saved teams
@@ -160,7 +165,8 @@ record back under the same stamp, and let the next edit erase it everywhere.
   `lib/familiarity.ts` through an `EvaluationContext`: up to
   `FAMILIARITY_POINTS` (3) a player for a side whose every pair has shared a
   side in 4+ of the latest 30 played games — lineups, not opinions. Only the
-  match screen passes one; Repartir, Equipos and the Pronóstico see zero.
+  match screen passes one; a torneo's split, Equipos and the Pronóstico see
+  zero.
 - **Armar asks one of four questions** (`lib/strategies.ts`), picked with the
   chips above the pitch and held in component state, not on the `Match`.
   *Completo* is the default (`DEFAULT_STRATEGY`) and takes everything: the
@@ -178,7 +184,10 @@ record back under the same stamp, and let the next edit erase it everywhere.
   mean and never makes anyone poco fondo or motor. Physical rules cost
   `RULE_PENALTY` (10): above balance, below keepers and named pairs. Whatever
   built the lineup, "Según cada criterio" reads it against all of them
-  (`readMatchup`). Repartir does not have strategies yet.
+  (`readMatchup`). A torneo's split asks the same four (not Capitanes:
+  three captains picking by turns is another game): `findGroupSplits` takes
+  the strategy as its pairing `cost` and averages it over every pair of
+  teams.
 - **A fifth option, Capitanes, is not a search** (`lib/captains.ts`). Two
   captains — picked in the selects or drawn — and pan y queso for the first
   pick, then one each, always the highest overall `rating` left, with two bits
@@ -206,7 +215,7 @@ record back under the same stamp, and let the next edit erase it everywhere.
   satisfiable preference. `TOGETHER_PENALTY` is half of it per broken-up
   pair: still far above any balance cost, and below a feud on purpose, so
   when the two relations contradict each other the friendship gives.
-  `KEEPER_PENALTY` is a quarter of a feud (250) per team Repartir leaves
+  `KEEPER_PENALTY` is a quarter of a feud (250) per team a torneo's split leaves
   without a keeper — above the worst imaginable balance cost (about 170 under
   the default weights), so no arrangement of ratings can buy its way out of
   stranding a team, and below both of the other two, because those are things
@@ -289,7 +298,7 @@ record back under the same stamp, and let the next edit erase it everywhere.
   are read off the players and the matches. Equipos can stand one on half a
   pitch to look at, and the shape it stands in dies with the tab for exactly
   that reason. See `lib/teamMatch.ts` for what happens when two of them meet,
-  and `lib/savedTeams.ts` for keeping one of Repartir's.
+  and `lib/savedTeams.ts` for keeping one of a torneo's.
 - **`Match.notes`** — free text about the game: quién trajo la pelota, quién
   se lesionó, por qué el 8-1 no cuenta. Stored exactly as typed, because
   trimming as you go makes a space impossible to type; whether that adds up to
@@ -406,7 +415,6 @@ gate, including tooltips and charts.
 | `lib/groups.ts` | The fairest way to cut a squad into three or more teams, by level or by any of Armar's strategies (`cost`) — and what a cut somebody made themselves is worth |
 | `lib/torneo.ts` | A torneo armado in a match: setting its teams up, the liga's fixture, turning teams into games, the table, keeping games in step with the night, each player's finishes, and the text for the grupo |
 | `lib/copa.ts` | La copa's bracket read off its games: seeding and byes, who went through (los penales included), the third place, the podium, and games the bracket no longer agrees with |
-| `lib/splitDraft.ts` | Repartir's device-local working copy: validation, compact result storage and re-scoring on restore |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/teamTournament.ts` | A saved-team round robin across simultaneous fields, manual fixture swaps, conflict checks and ready-to-score match creation, each game tagged with its torneo and teams |
 | `lib/liga.ts` | A torneo read back off its tagged matches: grouping, the points table, the current turn, the group-chat text |
@@ -416,7 +424,7 @@ gate, including tooltips and charts.
 | `lib/pairs.ts` | A symmetric relation between players stored on one side: the closure, the pairs inside and across teams, the chain from one person, and who named whom |
 | `lib/avoid.ts` | Who cannot be put on a side with whom, and which pairs a split broke |
 | `lib/together.ts` | Who had better share a side with whom, which pairs a split broke up, and everyone a player is chained to |
-| `lib/keepers.ts` | Who can actually go in goal, how many of Repartir's teams ended up without one, and who is being played outfield anyway |
+| `lib/keepers.ts` | Who can actually go in goal, how many of a torneo's teams ended up without one, and who is being played outfield anyway |
 | `lib/squad.ts` | Anotar and desanotar, and everything a player is let go of on the way out — the pin, the payment, the slot |
 | `lib/squadSearch.ts` | Who the squad list's search finds and in what order, and what Enter in it does; `useSquadSearch.ts` holds the box above a picker that gets remounted |
 | `lib/pasteList.ts` | The numbered list from the grupo pasted into that search box: the names in it, and who in the plantel each one most likely is, or that they are new |
@@ -452,7 +460,7 @@ gate, including tooltips and charts.
 | `lib/kits.ts` | What a tap on a colour does to *both* sides, and when the name follows it |
 | `lib/image.ts` | Turning a camera photo into a square avatar of at most 60 KB |
 | `lib/lineupImage.ts` | Drawing the shareable PNG of the pitch on a canvas |
-| `lib/tournamentImage.ts` | Drawing the shareable PNG of the whole torneito |
+| `lib/tournamentImage.ts` | Drawing the shareable PNG of a torneo: its teams, and the liga's fechas or the copa's first round |
 | `lib/canvas.ts` | The canvas drawing both of those share: photos, chips, corners |
 | `lib/dates.ts`, `lib/scales.ts` | Dates written out in Spanish, and today in local time (`todayIso`, also the date an undated match falls back to; never `toISOString()`, which is tomorrow from 21:00 here); what each number on the 0–100 scale means |
 | `lib/datePicker.ts` | Whether a date field can open the browser's own picker |
@@ -494,18 +502,24 @@ gate, including tooltips and charts.
 
 Screens: `MatchesPage` (the list, with the face of each side's best player
 and what is still owed on each row),
-`MatchBuilder` (one screen in five tabs — Cancha, Pronóstico, Jugadores,
+`MatchesPage` is "Partidos y torneos": every night, a torneo as one row
+(`TorneoRow`, or `LigaRow` for one made from saved teams) and its games never
+as rows of their own, with "Partido nuevo" and "Torneo nuevo" (a match that
+opens as a torneo of four). `MatchBuilder` (one screen in five tabs — Cancha,
+Pronóstico, Jugadores,
 Ajustes, Pagos — under a result panel, a note and the recordings
 (`VideoPanel`) that are always there; on the
 cancha, a tap on a player opens `PitchPlayerCard`, the uno x uno box with the
-move and the ficha under it; `ForecastPanel` is the Pronóstico tab), `SplitPage` (Repartir: one squad into up to eight teams, plus the torneito
-they play and the offer to keep any of them as an equipo), `TeamsPage`
+move and the ficha under it; `ForecastPanel` is the Pronóstico tab; above
+Armar, "Equipos" is the way to three or more; on the night of a torneo it is
+three tabs instead — Torneo, Jugadores, Pagos — and `TorneoPanel` is the
+first: the setup and the split before Arrancar, the board after it), `TeamsPage`
 (Equipos: the sides that live between games, each of which can be stood up on
 half a pitch — `Pitch` draws one team's own half, in a shape picked on the
-screen and never stored — plus a link to Torneos),
-`TournamentsPage` / `TournamentPage` (Torneos: the one-tap liga builder,
-`TeamTournamentBuilder`, and each torneo's table, turns and goal steppers;
-Partidos shows a torneo as one row),
+screen and never stored — plus a link to the ligas of saved teams),
+`TournamentsPage` / `TournamentPage` (the ligas of saved teams, reached from
+Equipos and no longer on the nav: the one-tap liga builder,
+`TeamTournamentBuilder`, and each liga's table, turns and goal steppers),
 `PlayersPage` + `PlayerForm` (the roster, each player's record, every line of
 uno x uno ever written about them, which crews they belong to, who they will
 not play with, and — for the super admin, once an encuesta has asked about
@@ -539,7 +553,7 @@ organiser's side of it. `SaveIndicator` floats over all the others, and
 `UndoBar` just above it for ten seconds after a delete. `ErrorBoundary` sits under
 everything in `main.tsx`: a screen that throws gets "Se rompió algo", the
 backup straight off `localStorage`, and a reload, instead of a white page. `SquadPicker` is shared by
-the match screen and Repartir, and is deliberately ignorant of *which* teams
+a match of two and the night of a torneo, and is deliberately ignorant of *which* teams
 exist: it is handed a colour and a label per lock (`LockTarget`) rather than
 `TeamKey`.
 
@@ -572,7 +586,7 @@ text *and* whether the box had focus, and the new picker takes it back in a
 layout effect. `lib/squadSearch.ts` has the ordering and the Enter decision.
 
 Pasting the grupo's list into that same box — two lines or more, on the
-match screen and Repartir — opens `PasteListDialog` instead: one row per
+match screen — opens `PasteListDialog` instead: one row per
 name, each already set to a player, to "cargar a alguien nuevo" or, when two
 people fit about equally ("Juli": Julián or Julieta), to nobody until the
 organiser picks. Confirming creates the new ones with `blankPlayer` (the same
@@ -600,8 +614,8 @@ every screen a player appears on, and the rule for how is one sentence:
 The tap is spent nearly everywhere, and on something different each time: on
 the cancha and the bench it opens the player's card (which has "Ver ficha" on
 it, so on that one screen the ficha is also two taps away), in the list of
-anotados it ticks them in or out, in a team card on Repartir it moves them
-between sides, on Encuestas it picks who goes on the list. Only the roster and
+anotados it ticks them in or out, in a team card of a torneo it moves them
+between teams, on Encuestas it picks who goes on the list. Only the roster and
 the members of a saved team had a tap going spare. So the gesture is
 `useLongPress`, and it is the same one everywhere — *including* on the two
 screens where the tap already works, which hold to the same thing rather than
@@ -645,7 +659,10 @@ kits, chase the money — and they used to be one long column. On a phone that
 put the cancha's money at the very bottom, so `MatchTabsBar` puts each job one
 tap away instead. The fifth tab, Pronóstico, is not a job but a reading: what
 the models make of the sides, and afterwards which of them was right. It has
-its own section below. Two consequences worth knowing:
+its own section below. The night of a torneo has three of them instead —
+Torneo, Jugadores, Pagos — because there is no pitch of two to look at,
+nothing for the models to forecast and no two kits to set; a tab the match
+no longer has falls back to the first. Two consequences worth knowing:
 
 - **The tabs only exist once the squad reaches two.** Below that the screen is
   still the intro layout: an explainer beside the picker, because there is no
@@ -782,86 +799,86 @@ tally forecasts forty. `useForecastTally` scores them a few at a time on the
 timer `browserClock` wires up and lets the rows land as they are ready;
 every game after the first visit is a cache hit and lands on the first tick.
 
-### Repartir, and why it is not a match
+### Torneos armados in a match
 
-`SplitPage` is a tool, not a stored football-history record. It does keep a
-device-local working draft, because opening another screen must not throw away
-the teams somebody just spent time arranging.
+There used to be a screen for this, Repartir, that cut a squad into several
+teams, printed a fixture for the group chat and kept nothing. Now it is what
+a match turns into when it is asked for three teams or more ("Equipos" above
+Armar, or "Torneo nuevo" on Partidos), and the reason is everything a night
+already has that Repartir did not: the squad and la lista, the money for the
+canchas, the notes and the videos are about everybody who came. So the match
+made for the night stays the night — the *host* — and gains `Match.torneo`;
+`lib/torneo.ts` is every decision about it and `TorneoPanel` the wiring.
 
-A `Match` is a game: two sides, a pitch, one scoreline, and the records that
-come out of it. Twenty people sharing a pitch for two hours, rotating off on
-every goal, is none of that — there is no single result to write down, and no
-arrangement of four teams a pitch can draw. Forcing it into `Match` would mean
-a `result: {goalsA, goalsB}` that lies and a `lineupA`/`lineupB` pair with
-nowhere to put teams three and four.
+**Before Arrancar it is the old Repartir, written into the match as it goes.**
+How many teams (back to two is a match again), liga or copa, the third place,
+canchas at once, the rule for each game, the sizes, the basis, the two
+relations and "un arquero para cada equipo", then Armar with Completo, Por
+nivel, Por físico or Por puestos (`findGroupSplits` with the strategy as its
+pairing `cost`). The six options are component state, like Armar's on a match
+of two; whichever is on screen is stored in the teams, so a reload, another
+device or a trip elsewhere keeps the split — there is no device-local draft
+any more (`fulbito-split-draft-v1` is what the old screen left behind, and
+nothing reads it). The stored teams are the truth and are re-scored on every
+render (`scoreGrouping`), so a hand swap — tap one, tap one of another team —
+keeps honest numbers; the line about how the search found them is said only
+when it is known. Anotar or desanotar before Arrancar deals the sizes again
+and drops the split (`torneoForSquad`), the same call Repartir made. The
+padlock in Jugadores cycles a pin through the teams. Team totals and slot
+ratings sit behind `ScoresVisible`; the share text and the image carry names
+and goals only (`torneoShareText`, pinned by `secrecy.test.ts`).
 
-What comes out is still the message you paste into the group chat — and a PNG
-of the whole thing — rather than a fake `Match`. The screen's working state is
-saved separately under `fulbito-split-draft-v1`: squad, team count and sizes,
-pins, balance basis, the three constraint switches, all calculated options,
-the visible option, hand swaps, team names, fixture format/rule and the sharing
-choice. Results store player ids rather than duplicated player records, and
-`lib/splitDraft.ts` re-scores those exact teams from current ratings and roles
-when the screen returns. A corrupt or stale result is dropped without losing
-the surviving setup. If browser storage is unavailable, an in-memory mirror
-still protects route-to-route navigation for the current app session.
+**Arrancar makes the games, and they are ordinary matches.** Each carries the
+host's id in `tournament` (so it groups, orders and syncs the way a torneo
+game always has, with no change to the sync engine or `firestore.rules`) and
+its teams in `torneoGame`, and has both lineups, made by `planTeamMatch` and
+pinned — so a score typed on the board lands on every player's record exactly
+as a picado's does, the uno x uno and the videos work game by game, and
+nothing that reads matches has to learn about torneos. A liga makes every game
+at once, packed onto the canchas by turn (`ligaPlan`); a copa makes its first
+round (`copaOpeningPlan`) and the rest as the bracket fills. The host keeps the
+money: every game is at zero, and Pagos on the host asks what one cancha
+costs and multiplies it by the canchas (`torneoCourtCost`, capped like any
+amount), split between everybody anotado.
 
-That draft deliberately lives outside `AppData`, backups and cloud sync. It is
-not a torneito archive and has no list screen; it just makes navigation and a
-reload harmless on this device. With no draft yet, the last match's squad is
-still the opening guess at who is playing again tonight.
+**Who won is never stored.** The liga's table (`torneoTable`: 3/1/0, goal
+difference, goals, then the armado order) and the copa's bracket
+(`lib/copa.ts`) are read off the games every time, so a corrected score moves
+them with it. In the copa the bracket is the next power of two, standard
+seeding, byes to the first teams; a draw waits for `torneoGame.decider` (los
+penales) before anybody goes through, and stays a draw on the players'
+records; the third place can be marked as not played, and then the two who
+lost the semis share third. A copa game nobody started is drawn from the
+bracket and made into a match by its own two buttons ("Arrancó: 0 - 0", "Ver
+el partido"); one whose teams an earlier corrected score has since changed is
+flagged, and rebuilt on "Corregir la llave" only while it has no result — a
+played game stays as it was played.
 
-**The one durable domain record it can write is an `Equipo`, and only when
-asked out loud.**
-Under the cards is a row per side with a Guardar on it, because the *reparto*
-is disposable while a side sometimes is not: three of tonight's fives are for
-tonight, and the fourth is Los Pibes, who play every Thursday. That needs no
-new record type — a `Team` already exists, already syncs, already has a screen
-to find it on and comes back into a match in a tap — so the rule holds as
-written. The local draft does not turn the reparto into an `Equipo` by itself.
+**After Arrancar the teams are what the games were made from.** Names and
+bibs still change on the host and follow onto the games in the same write
+(`syncTorneoGames`, wired in `App`'s match route): the name always, the bibs
+only when the host's changed, the date only onto games still on the night's
+old date, a game's own name only while it is the "A vs B" it was born with.
+Swapping people is over; somebody anotado late pays and plays by being put in
+a game's own lineup. "Volver a armar" deletes the games while none has a
+result; deleting the host deletes its games with it, and Deshacer brings the
+lot back.
 
-Three switches sit above the button, all on by default: the two personal
-relations (`respectAvoids`, `respectTogether`) and "un arquero para cada
-equipo", which is `lib/keepers.ts`. That third one is Repartir's alone for now
-because that is where it was asked for, *not* because the question goes away
-with two sides: a group with two rated keepers can absolutely be dealt both of
-them on the same team by the match screen, and nothing there says so yet.
-All three are part of the local draft, so a detour to another screen does not
-quietly change the rules before the next reparto.
-
-**Pinning is the escape hatch none of the maths replaces.** The padlock beside
-each name in the squad list cycles somebody through the teams and leaves them
-there, and `findGroupSplits` treats that as a hard constraint — it fills the
-pinned seats first and searches only over what is left, so "él va conmigo" is
-answered by the best split *among the ones that obey it* rather than by a
-penalty that can be bought off. A pin also switches off the same-size symmetry
-break for the teams it touches, because two teams are only interchangeable
-while nobody is nailed to either. A pin pointing at a team that stopped
-existing — the team count was dialled back down — quietly stops applying
-instead of raising.
-
-Which of tonight's teams are already saved is looked up rather than remembered
-(`lib/savedTeams.ts`), and that is what keeps it honest through the swap
-gesture right above it: move one player between two teams and neither is the
-side that was saved any more, so both offers come back on their own. The same
-five are never saved twice, and a name another team already has becomes "Los
-Pibes (2)" rather than a second Los Pibes — a saved team is something somebody
-keeps, and the whole point of it is that it is still there next Thursday.
-
-**The torneito on the bottom of that screen follows the same draft boundary.**
-Team names, the format and the "cada partido" line return with the rest of the
-screen, but they do not become a synced torneito record. A plan sent to the
-group has done its job. Saved teams have the more durable path below, which
-creates ordinary matches tagged as one torneo, read back by `lib/liga.ts`.
+**Each player's torneos are on their ficha** (`torneoFinishes`): the team, the
+format, and how it ended — Campeón, Subcampeón, 3er puesto, Semifinal when the
+third place was not played, the round they went out in, "En juego" while it is
+on. Read off the matches like the record above it, and the data a year-end
+recap will read.
 
 ### Tournaments from saved teams
 
-Torneos (`/torneos`) starts from `Team` records rather than from a loose
-squad, and is built to get a liga going in one tap: `TeamTournamentBuilder`
+The ligas of saved teams (`/torneos`, reached from Equipos — the nav's
+Torneos tab is gone, since a torneo armado in a match is listed on Partidos)
+start from `Team` records rather than from a loose squad, and is built to get a liga going in one tap: `TeamTournamentBuilder`
 opens with every playable saved team ticked, the title "Liga", today, and as
 many simultaneous fields as the teams can fill (at most two), and the board is
 already drawn — Arrancar is the only thing left. `lib/teamTournament.ts` uses
-the same circle-method round robin as Repartir, then packs each
+the same circle-method round robin as a torneo's liga, then packs each
 non-conflicting round onto the fields that are actually available. Four teams
 on two fields therefore become six matches over three turns.
 
@@ -1014,9 +1031,7 @@ whose app it is and is the way back.
   polls; creating, deleting and setting a ballot aside are refused. La
   lista is watched and never written — a list made from there would sit at
   the target's match id under the owner's uid, and the rules would refuse
-  the target their own list for that partido forever. Repartir's draft goes
-  to a memory store instead of `fulbito-split-draft-v1`, which would
-  otherwise overwrite the owner's own.
+  the target their own list for that partido forever.
 - **The pick lives in React state and nowhere else**, and `viewingAs`
   re-checks it against the live session every render: a reload is always
   the way back, and signing out takes the other person's data off screen.
@@ -1926,8 +1941,8 @@ something.
   ratings cannot express.** `GK_PRIOR` exists so that being a good footballer
   is not mistaken for being a good keeper — which means the strength numbers
   are, correctly, almost blind to the thing that actually ruins a night of
-  rotating fives: the team that has to put its striker in goal. So Repartir
-  prices it, behind a switch that is on by default: `KEEPER_PENALTY` per team
+  rotating fives: the team that has to put its striker in goal. So a torneo's
+  split prices it, behind a switch that is on by default: `KEEPER_PENALTY` per team
   holding nobody with an explicit GK rating of `KEEPER_BAR` (60) or better.
   Explicit and nothing else — an `effectiveRating` in goal exists for
   everybody, and reading that would hand the gloves to whoever is the best
@@ -1973,9 +1988,7 @@ something.
   Two games on the same Tuesday could sit one way on the phone and the other
   way on the laptop and never agree. The comparator is total for that reason —
   every pair of distinct matches has an answer, and it is the same answer
-  everywhere. `SplitPage` deliberately keeps its own comparator: "whose squad
-  do we open with" is a question about the most recently *touched* game, so it
-  breaks a date tie on `updatedAt`, not alphabetically.
+  everywhere.
 
 - **A face on the list is a photo or it is nothing.** Each side of a match in
   Partidos shows its best player's face, and `lib/matchFaces.ts` skips anybody

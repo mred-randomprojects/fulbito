@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CalendarDays, ChevronRight, Clapperboard, Crown, NotebookPen, Plus, Trophy } from "lucide-react";
+import { CalendarDays, ChevronRight, Clapperboard, Crown, Medal, NotebookPen, Plus, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMoney, splitCourt } from "@/lib/court";
 import { pickFace } from "@/lib/matchFaces";
@@ -19,6 +19,13 @@ import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { LigaRow } from "./TournamentsPage";
 import { groupLigas, type Liga } from "@/lib/liga";
+import {
+  FORMAT_LABEL,
+  isTorneoHost,
+  torneoGamesOf,
+  torneoProgress,
+  torneoTeamName,
+} from "@/lib/torneo";
 
 interface Props {
   matches: Match[];
@@ -26,16 +33,37 @@ interface Props {
   onOpen: (match: Match) => void;
   onOpenTournament: (id: string) => void;
   onCreate: () => void;
+  onCreateTorneo: () => void;
 }
 
-export function MatchesPage({ matches, players, onOpen, onOpenTournament, onCreate }: Props) {
+export function MatchesPage({
+  matches,
+  players,
+  onOpen,
+  onOpenTournament,
+  onCreate,
+  onCreateTorneo,
+}: Props) {
+  /**
+   * The nights that hold a torneo. Their games are inside them, so a game
+   * tagged with one of these ids never gets a row of its own.
+   */
+  const hostIds = useMemo(
+    () => new Set(matches.filter(isTorneoHost).map((match) => match.id as string)),
+    [matches],
+  );
   /**
    * A torneo is one row here, where its first game would have been, rather
    * than six rows of "A vs B" burying everything else. Its board is one tap in.
    */
   const ligaRows = useMemo(() => {
     const byFirstMatch = new Map<string, Liga>();
-    const ligas = new Map(groupLigas(matches).map((liga) => [liga.id, liga]));
+    const ligas = new Map(
+      groupLigas(matches.filter((match) => !hostIds.has(match.tournament?.id ?? ""))).map((liga) => [
+        liga.id,
+        liga,
+      ]),
+    );
     for (const match of matches) {
       const liga = match.tournament === undefined ? undefined : ligas.get(match.tournament.id);
       if (liga === undefined) continue;
@@ -43,7 +71,7 @@ export function MatchesPage({ matches, players, onOpen, onOpenTournament, onCrea
       ligas.delete(liga.id);
     }
     return byFirstMatch;
-  }, [matches]);
+  }, [matches, hostIds]);
   /**
    * Who still exists, so the money on a row is split between the same people
    * the match screen splits it between. A player deleted from the roster stays
@@ -58,15 +86,21 @@ export function MatchesPage({ matches, players, onOpen, onOpenTournament, onCrea
     <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Partidos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Partidos y torneos</h1>
           <p className="text-sm text-muted-foreground">
-            Todos los equipos que armaste.
+            Todo lo que se jugó: los picados, y las noches de tres equipos o más.
           </p>
         </div>
-        <Button onClick={onCreate} disabled={players.length < 2}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Partido nuevo
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={onCreateTorneo} disabled={players.length < 2}>
+            <Medal className="mr-1.5 h-4 w-4" />
+            Torneo nuevo
+          </Button>
+          <Button onClick={onCreate} disabled={players.length < 2}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Partido nuevo
+          </Button>
+        </div>
       </header>
 
       {players.length < 2 ? (
@@ -94,6 +128,20 @@ export function MatchesPage({ matches, players, onOpen, onOpenTournament, onCrea
       ) : (
         <ul className="space-y-2">
           {matches.map((match) => {
+            if (isTorneoHost(match)) {
+              return (
+                <li key={match.id}>
+                  <TorneoRow
+                    host={match}
+                    games={torneoGamesOf(match.id, matches)}
+                    rosterIds={rosterIds}
+                    onOpen={() => onOpen(match)}
+                  />
+                </li>
+              );
+            }
+            // A game of a torneo armado in a match lives inside that match's row.
+            if (match.tournament !== undefined && hostIds.has(match.tournament.id)) return null;
             if (match.tournament !== undefined) {
               // Only the first game the list reaches stands for the torneo.
               const liga = ligaRows.get(match.id);
@@ -321,6 +369,56 @@ function CourtNote({
       {" "}
       · faltan {formatMoney(split.outstanding)}
     </span>
+  );
+}
+
+/**
+ * The night of a torneo, as one row: how it is decided, how far along it is,
+ * who won or who is ahead, and the money still out — the same thing the
+ * row of a picado says about its cancha, for everybody who came.
+ */
+function TorneoRow({
+  host,
+  games,
+  rosterIds,
+  onOpen,
+}: {
+  host: Match;
+  games: Match[];
+  rosterIds: ReadonlySet<PlayerId>;
+  onOpen: () => void;
+}) {
+  const torneo = host.torneo;
+  if (torneo === undefined) return null;
+  const started = games.length > 0;
+  const progress = torneoProgress(torneo, games);
+  const champion = progress.champion === null ? undefined : torneo.teams[progress.champion];
+  const leader = progress.leader === null ? undefined : torneo.teams[progress.leader];
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 rounded-xl border border-amber-400/25 bg-card p-4 text-left transition-colors hover:border-amber-300/50 hover:bg-amber-300/[0.04]"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-300/30 bg-amber-300/10 text-amber-300">
+        {champion !== undefined ? <Crown className="h-4 w-4" fill="currentColor" /> : <Medal className="h-4 w-4" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{host.name.trim() || "Torneo"}</p>
+        <p className="text-xs text-muted-foreground">
+          {formatDate(host.date)} · {FORMAT_LABEL[torneo.format]} de {torneo.teams.length} ·{" "}
+          {started ? `${progress.played}/${progress.total} jugados` : `armando, ${host.squad.length} anotados`}
+          {champion !== undefined && (
+            <span className="text-amber-200"> · Campeón: {torneoTeamName(champion)}</span>
+          )}
+          {leader !== undefined && <span className="text-amber-200"> · Puntero: {torneoTeamName(leader)}</span>}
+          <CourtNote match={host} rosterIds={rosterIds} />
+          <VideoMark count={host.videos.length} />
+        </p>
+        <NoteLine notes={host.notes} />
+      </div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
 

@@ -609,8 +609,10 @@ describe("a torneo on a stored match", () => {
     assert.equal(withMatch({ torneo: { teams: "four" } }).torneo, undefined);
   });
 
-  it("reads an unknown format as a liga", () => {
+  it("reads an unknown format as a liga, and a missing rule as none", () => {
     assert.equal(withMatch({ torneo: { ...torneo, format: "suizo" } }).torneo?.format, "liga");
+    assert.equal(withMatch({ torneo }).torneo?.rule, "");
+    assert.equal(withMatch({ torneo: { ...torneo, rule: "a 2 goles " } }).torneo?.rule, "a 2 goles ");
   });
 
   it("carries along what a newer build added, inside it too", () => {

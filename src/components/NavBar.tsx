@@ -1,12 +1,15 @@
 import { ScorePrivacyStatus } from "./ScorePrivacy";
 import { Link, NavLink } from "react-router-dom";
-import { ClipboardList, Database, Medal, Shield, Shuffle, Trophy, Users } from "lucide-react";
+import { ClipboardList, Database, Shield, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Partidos holds the torneos too: a night of more than two teams is a match
+ * that became one, so it is listed, opened and paid for where every other
+ * night is. Torneos made from saved teams are still reached from Equipos.
+ */
 const LINKS = [
   { to: "/matches", label: "Partidos", icon: Trophy },
-  { to: "/torneos", label: "Torneos", icon: Medal },
-  { to: "/split", label: "Repartir", icon: Shuffle },
   { to: "/teams", label: "Equipos", icon: Shield },
   { to: "/players", label: "Jugadores", icon: Users },
   { to: "/encuestas", label: "Encuestas", icon: ClipboardList },

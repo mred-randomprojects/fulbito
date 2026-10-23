@@ -1,9 +1,19 @@
-import { copaBoard, copaRounds, copaSchedule, gameLabel, roundLabel, type CopaBoard } from "./copa.js";
+import {
+  copaBoard,
+  copaHasThird,
+  copaRounds,
+  copaSchedule,
+  firstRound,
+  gameLabel,
+  roundLabel,
+  type CopaBoard,
+} from "./copa.js";
+import { clampCourtCost } from "./court.js";
 import { MAX_TEAMS, splitSizes } from "./groups.js";
 import { POINTS_DRAW, POINTS_WIN } from "./liga.js";
 import { tournamentMatchName } from "./teamLinks.js";
 import { planTeamMatch } from "./teamMatch.js";
-import { roundRobin, summariseShape } from "./tournament.js";
+import { buildFixture, roundRobin, summariseShape, type Fixture } from "./tournament.js";
 import {
   DEFAULT_TEAM_A,
   DEFAULT_TEAM_B,
@@ -128,6 +138,7 @@ export function newTorneo(squadSize: number, teamCount: number): Torneo {
     fieldPrice: 0,
     spreadKeepers: true,
     thirdPlace: true,
+    rule: "",
   };
 }
 
@@ -285,7 +296,9 @@ export function teamOf(torneo: Torneo): Map<PlayerId, number> {
  * whatever total is on the match alone.
  */
 export function torneoCourtCost(torneo: Pick<Torneo, "fieldPrice" | "fields">): number | null {
-  return torneo.fieldPrice > 0 ? torneo.fieldPrice * Math.max(1, torneo.fields) : null;
+  // Capped like any amount: a bill the match could not store would be
+  // clamped on the next load and stop agreeing with the price on screen.
+  return torneo.fieldPrice > 0 ? clampCourtCost(torneo.fieldPrice * Math.max(1, torneo.fields)) : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -731,8 +744,9 @@ export function torneoShareText(
   const lines: string[] = [
     `🏆 ${torneoTitle(host)} — ${FORMAT_LABEL[torneo.format].toLowerCase()}`,
     `⚽ ${summariseShape(torneo.teams.map((team) => (team.players.length > 0 ? team.players.length : team.size)))}`,
-    "",
   ];
+  if (torneo.rule.trim() !== "") lines.push(`⏱️ Cada partido: ${torneo.rule.trim()}`);
+  lines.push("");
 
   torneo.teams.forEach((team, index) => {
     if (team.players.length === 0) return;
@@ -837,6 +851,36 @@ export function plannedTurns(torneo: Torneo): { turn: number; games: (PlannedGam
     turn: turn.turn,
     games: turn.games.map((game) => ({ ...game, label: gameLabel(game.round ?? 1, game.slot ?? 0, rounds) })),
   }));
+}
+
+/**
+ * The fixture as the shareable image draws it: the liga's fechas, or the
+ * copa's first round with the byes and what comes after, in words.
+ */
+export function torneoFixture(torneo: Torneo): Fixture {
+  const n = torneo.teams.length;
+  if (torneo.format === "liga") return buildFixture("round-robin", n);
+  const opening = firstRound(n);
+  const rounds = copaRounds(n);
+  const after: string[] = [];
+  for (let round = 2; round < rounds; round++) {
+    after.push(round === rounds - 1 ? "semis" : roundLabel(round, rounds).toLowerCase());
+  }
+  if (rounds >= 2) after.push("final");
+  if (torneo.thirdPlace && copaHasThird(n)) after.push("3er puesto");
+  return {
+    format: "knockout",
+    opening: opening.flatMap((pair) =>
+      pair.a !== null && pair.b !== null ? [{ home: pair.a, away: pair.b }] : [],
+    ),
+    byes: opening.flatMap((pair) => (pair.a === null || pair.b === null ? [pair.a ?? pair.b ?? -1] : [])).filter((team) => team >= 0),
+    then: after.length === 0 ? "Es la final." : `Después: ${listing(after)}.`,
+  };
+}
+
+function listing(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
 }
 
 function clampTeams(teamCount: number): number {

@@ -40,6 +40,7 @@ import { TeamInsights } from "./TeamInsights";
 import { ForecastPanel } from "./ForecastPanel";
 import { ShareDialog } from "./ShareDialog";
 import { MatchTabsBar } from "./MatchTabsBar";
+import { Stepper, TorneoPanel } from "./TorneoPanel";
 import { PlayerForm } from "./PlayerForm";
 import { usePlayerFormTarget } from "@/usePlayerFormTarget";
 import { useLongPress } from "@/useLongPress";
@@ -80,7 +81,18 @@ import { hasNote } from "@/lib/matchNotes";
 import { hasReview, setReview } from "@/lib/reviews";
 import { decideTap } from "@/lib/pitchTap";
 import { pickKit } from "@/lib/kits";
-import { setMembership } from "@/lib/squad";
+import { evenSizes, setMembership } from "@/lib/squad";
+import {
+  cycleTorneoPin,
+  MAX_TORNEO_TEAMS,
+  newTorneo,
+  torneoArmado,
+  torneoCourtCost,
+  torneoForSquad,
+  torneoGamesOf,
+  torneoProgress,
+  torneoTeamName,
+} from "@/lib/torneo";
 import { resolveFormation, type Formation } from "@/lib/formations";
 import { summarise } from "@/lib/insights";
 import type { TeamMatchPlan } from "@/lib/teamMatch";
@@ -96,6 +108,7 @@ import {
   playerShortName,
   type KitId,
   type Match,
+  type MatchId,
   type Player,
   type PlayerId,
   type Team,
@@ -117,6 +130,12 @@ interface Props {
   onSavePlayer: (player: Player) => void;
   onDeletePlayer: (id: PlayerId) => void;
   onBack: () => void;
+  /** A torneo's games: written, removed and opened from its board. */
+  onSaveMatches: (matches: Match[]) => void;
+  onDeleteMatches: (ids: MatchId[]) => void;
+  onOpenMatch: (id: MatchId) => void;
+  /** Keeping one of a torneo's teams as an equipo. */
+  onSaveTeam: (team: Team) => void;
 }
 
 /** Where a tapped player currently is. */
@@ -151,6 +170,10 @@ export function MatchBuilder({
   onSavePlayer,
   onDeletePlayer,
   onBack,
+  onSaveMatches,
+  onDeleteMatches,
+  onOpenMatch,
+  onSaveTeam,
 }: Props) {
   /**
    * What the grupo said about this game, when there is a tercer tiempo up.
@@ -320,7 +343,22 @@ export function MatchBuilder({
    * reaches two, so defaulting to the pitch would yank the list out from under
    * the finger that just ticked the second player.
    */
-  const [tab, setTab] = useState<MatchTabId>(() => (hasLineup ? "cancha" : "jugadores"));
+  /**
+   * The torneo this match holds, when it is the night of more than two
+   * teams; never on a game of one. See `lib/torneo.ts`.
+   */
+  const torneo = match.tournament === undefined ? match.torneo : undefined;
+  const games = useMemo(
+    () => (torneo === undefined ? [] : torneoGamesOf(match.id, matches)),
+    [torneo, match.id, matches],
+  );
+  const torneoStarted = games.length > 0;
+
+  const [tab, setTab] = useState<MatchTabId>(() =>
+    hasLineup || (torneo !== undefined && (torneoStarted || torneoArmado(torneo)))
+      ? "cancha"
+      : "jugadores",
+  );
 
   /* ---------------------------------------------------------------- */
   /* Mutations                                                         */
@@ -341,10 +379,18 @@ export function MatchBuilder({
    */
   const setSquadMembership = useCallback(
     (ids: readonly PlayerId[], playing: boolean) => {
-      patch(setMembership(match, ids, playing));
+      const next = setMembership(match, ids, playing);
+      // Before a torneo starts, its sizes follow the headcount and the split
+      // is dropped; once it has started, the teams are what the games were
+      // made from, and a late arrival only joins the money.
+      patch(
+        torneo !== undefined && !torneoStarted
+          ? { ...next, torneo: torneoForSquad(torneo, next.squad) }
+          : next,
+      );
       setSelection(null);
     },
-    [match, patch],
+    [match, patch, torneo, torneoStarted],
   );
 
   const toggleSquad = useCallback(
@@ -363,6 +409,12 @@ export function MatchBuilder({
 
   const cycleLock = useCallback(
     (id: PlayerId) => {
+      if (torneo !== undefined) {
+        // Pins only steer the next split, so after Arrancar there is nothing
+        // for the padlock to do.
+        if (!torneoStarted) patch({ torneo: cycleTorneoPin(torneo, id) });
+        return;
+      }
       const current = match.pins[id];
       const pins = { ...match.pins };
       if (current === undefined) pins[id] = "A";
@@ -370,7 +422,7 @@ export function MatchBuilder({
       else delete pins[id];
       patch({ pins });
     },
-    [match, patch],
+    [match, patch, torneo, torneoStarted],
   );
 
   /** debe → pagó → bancado → debe. See `lib/court.ts`. */
@@ -875,6 +927,17 @@ export function MatchBuilder({
   /** The kit of the side a player is pinned to, for the squad list to colour. */
   const lockedTo = useCallback(
     (id: PlayerId): LockTarget | null => {
+      if (torneo !== undefined) {
+        // Before Arrancar, the team somebody is pinned to; after it, the team
+        // they play for, so the list says who is on which side of the night.
+        const index = torneoStarted
+          ? torneo.teams.findIndex((team) => team.players.includes(id))
+          : torneo.pins[id];
+        const team = index === undefined || index < 0 ? undefined : torneo.teams[index];
+        if (team === undefined) return null;
+        const kit = KITS[team.kit];
+        return { name: torneoTeamName(team), fill: kit.fill, text: kit.text, caption: kit.ring };
+      }
       const pin = match.pins[id];
       if (pin == null) return null;
       const config = pin === "A" ? match.teamA : match.teamB;
@@ -884,8 +947,40 @@ export function MatchBuilder({
       // a dark card. The dark shirt's fill is very nearly the background.
       return { name: config.name, fill: kit.fill, text: kit.text, caption: kit.ring };
     },
-    [match.pins, match.teamA, match.teamB],
+    [match.pins, match.teamA, match.teamB, torneo, torneoStarted],
   );
+
+  /**
+   * Three teams or more: this match becomes the night that holds a torneo.
+   * The two sides on the pitch are let go of — there is no pitch of two any
+   * more — so a lineup somebody arranged is only dropped after asking.
+   */
+  const becomeTorneo = useCallback(
+    (count: number) => {
+      if (hasLineup && !window.confirm("¿Pasar a más de dos equipos? Se desarman los dos equipos de ahora.")) {
+        return;
+      }
+      patch({
+        torneo: newTorneo(match.squad.length, count),
+        pins: {},
+        lineupA: [],
+        lineupB: [],
+      });
+      setOptions(null);
+      setDraft(null);
+      setSelection(null);
+      setEdited(false);
+      setBalanceError(null);
+    },
+    [hasLineup, match.squad.length, patch],
+  );
+
+  /** Back to a match of two, before the torneo started. */
+  const leaveTorneo = useCallback(() => {
+    const next: Match = { ...match, ...evenSizes(match.squad.length) };
+    delete next.torneo;
+    onChange(next);
+  }, [match, onChange]);
 
   const nameOf = useCallback(
     (id: PlayerId): string => {
@@ -978,7 +1073,13 @@ export function MatchBuilder({
     paidCount: courtSplit.paidCount,
     forecastFavourite: forecasts === null ? null : Math.max(forecasts.consenso.pA, forecasts.consenso.pB),
     hasResult: match.result !== null,
+    ...(torneo === undefined
+      ? {}
+      : { torneo: { started: torneoStarted, ...torneoProgress(torneo, games) } }),
   });
+  // A tab the match no longer has — the pitch's Ajustes on a match that just
+  // became a torneo — falls back to the first one rather than to nothing.
+  const activeTab = tabs.some((entry) => entry.id === tab) ? tab : tabs[0].id;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5">
@@ -1004,8 +1105,9 @@ export function MatchBuilder({
         <Input
           value={match.name}
           onChange={(e) => patch({ name: e.target.value })}
-          className="h-10 w-auto min-w-0 flex-1 border-transparent bg-transparent px-2 text-lg font-semibold"
-          aria-label="Nombre del partido"
+          // Wide enough to read before the date wraps under it on a phone.
+          className="h-10 w-auto min-w-[10rem] flex-1 border-transparent bg-transparent px-2 text-lg font-semibold"
+          aria-label={torneo === undefined ? "Nombre del partido" : "Nombre del torneo"}
         />
         <DateField value={match.date} onChange={(date) => patch({ date })} />
         <Button
@@ -1022,7 +1124,8 @@ export function MatchBuilder({
       {/* Hidden on a match with nobody in it: "¿cómo salió?" is a silly
           question to put above "¿quiénes juegan?", and a game you actually
           played has a squad. A result already written down always shows. */}
-      {(squadReady || match.result != null) && (
+      {/* The night of a torneo has no one scoreline: each game has its own. */}
+      {torneo === undefined && (squadReady || match.result != null) && (
         <ResultPanel match={match} onChange={(result) => patch({ result })} />
       )}
 
@@ -1048,26 +1151,46 @@ export function MatchBuilder({
           result, the note and the videos. It shows itself only once there is
           a result and two sides — `canPublish` — so it is absent on a match
           still being arranged. */}
-      <RecapPanel match={match} players={players} recap={recap} />
+      {torneo === undefined && <RecapPanel match={match} players={players} recap={recap} />}
 
       {!squadReady ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-dashed border-border bg-card/40 p-6">
             <Users className="mb-3 h-9 w-9 text-muted-foreground/60" />
             <h2 className="text-lg font-medium">¿Quiénes juegan?</h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Marcá a todos los que cayeron. Los equipos se arman según cuántos
-              son: once jugadores queda 5 v 6, y después lo movés como quieras.
-            </p>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              El candadito al lado del nombre fija a alguien a un equipo antes
-              de repartir. Ideal para los que no se pueden separar.
-            </p>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              ¿Siempre juegan los mismos contra los mismos? Guardá los dos
-              equipos en Equipos y traelos de una: te deja el partido armado,
-              con las dos formaciones puestas.
-            </p>
+            {torneo === undefined ? (
+              <>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  Marcá a todos los que cayeron. Los equipos se arman según cuántos
+                  son: once jugadores queda 5 v 6, y después lo movés como quieras.
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  El candadito al lado del nombre fija a alguien a un equipo antes
+                  de repartir. Ideal para los que no se pueden separar.
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  ¿Siempre juegan los mismos contra los mismos? Guardá los dos
+                  equipos en Equipos y traelos de una: te deja el partido armado,
+                  con las dos formaciones puestas.
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  ¿Son un montón? Arriba de la cancha elegís cuántos equipos: con
+                  tres o más se arma un torneo, en liga o en copa.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  Marcá a todos los que vienen. Después, en la pestaña Torneo, se
+                  reparten en {torneo.teams.length} equipos parejos, elegís si es
+                  liga o copa, y arranca.
+                </p>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  La cancha se cobra acá, una vez por cabeza para toda la noche, y
+                  cada partido del torneo suma a la ficha de los que lo jugaron.
+                </p>
+              </>
+            )}
           </div>
           <div className="space-y-4">
             <ListPanel
@@ -1076,12 +1199,14 @@ export function MatchBuilder({
               onAnotar={(ids) => setSquadMembership(ids, true)}
               onCreatePlayer={form.create}
             />
-            <SavedTeamsPanel
-              teams={teams}
-              playersById={playersById}
-              match={match}
-              onLoad={loadSavedTeams}
-            />
+            {torneo === undefined && (
+              <SavedTeamsPanel
+                teams={teams}
+                playersById={playersById}
+                match={match}
+                onLoad={loadSavedTeams}
+              />
+            )}
             <SquadPicker
               players={players}
               squad={match.squad}
@@ -1100,18 +1225,44 @@ export function MatchBuilder({
         </div>
       ) : (
         <>
-          <MatchTabsBar tabs={tabs} active={tab} onSelect={setTab} />
+          <MatchTabsBar tabs={tabs} active={activeTab} onSelect={setTab} />
 
           <div
             role="tabpanel"
-            id={`match-panel-${tab}`}
-            aria-labelledby={`match-tab-${tab}`}
+            id={`match-panel-${activeTab}`}
+            aria-labelledby={`match-tab-${activeTab}`}
           >
-            {tab === "cancha" && (
+            {activeTab === "cancha" && torneo !== undefined && (
+              <TorneoPanel
+                match={match}
+                torneo={torneo}
+                games={games}
+                players={players}
+                playersById={playersById}
+                squadPlayers={squadPlayers}
+                savedTeams={teams}
+                onPatch={patch}
+                onLeave={leaveTorneo}
+                onSaveGames={onSaveMatches}
+                onRemoveGames={onDeleteMatches}
+                onOpenGame={onOpenMatch}
+                onViewPlayer={form.view}
+                onSaveTeam={onSaveTeam}
+              />
+            )}
+
+            {activeTab === "cancha" && torneo === undefined && (
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
                 {/* The pitch stays put while the analysis beside it scrolls — the
                     teams are the thing you keep glancing back at. */}
                 <div className="space-y-4 lg:sticky lg:top-14">
+                  {match.tournament === undefined && (
+                    <TeamCountRow
+                      squadSize={match.squad.length}
+                      disabled={match.result !== null}
+                      onMore={() => becomeTorneo(3)}
+                    />
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       onClick={() => balance()}
@@ -1186,11 +1337,13 @@ export function MatchBuilder({
                     strategy={strategy}
                     onChange={chooseStrategy}
                     squad={squadPlayers}
-                    teamA={match.teamA}
-                    teamB={match.teamB}
-                    captains={captains}
-                    onCaptainChange={changeCaptain}
-                    onDrawCaptains={redrawCaptains}
+                    capitanes={{
+                      teamA: match.teamA,
+                      teamB: match.teamB,
+                      captains,
+                      onCaptainChange: changeCaptain,
+                      onDrawCaptains: redrawCaptains,
+                    }}
                     onViewPlayer={form.view}
                   />
 
@@ -1352,7 +1505,7 @@ export function MatchBuilder({
               </div>
             )}
 
-            {tab === "pronostico" && (
+            {activeTab === "pronostico" && (
               <ForecastPanel
                 match={match}
                 players={players}
@@ -1362,7 +1515,7 @@ export function MatchBuilder({
               />
             )}
 
-            {tab === "jugadores" && (
+            {activeTab === "jugadores" && (
               <div className="mx-auto w-full max-w-3xl space-y-4">
                 {/* The names from the grupo come first: they are where tonight's
                     squad actually starts, and ticking the roster by hand is
@@ -1373,12 +1526,14 @@ export function MatchBuilder({
                   onAnotar={(ids) => setSquadMembership(ids, true)}
                   onCreatePlayer={form.create}
                 />
-                <SavedTeamsPanel
-                  teams={teams}
-                  playersById={playersById}
-                  match={match}
-                  onLoad={loadSavedTeams}
-                />
+                {torneo === undefined && (
+                  <SavedTeamsPanel
+                    teams={teams}
+                    playersById={playersById}
+                    match={match}
+                    onLoad={loadSavedTeams}
+                  />
+                )}
 
                 {/* Bringing two saved sides in wholesale sits above picking
                     people one by one, because it is the shortcut past the
@@ -1400,7 +1555,7 @@ export function MatchBuilder({
               </div>
             )}
 
-            {tab === "ajustes" && (
+            {activeTab === "ajustes" && (
               <div className="mx-auto w-full max-w-3xl">
                 <MatchSetup
                   teamA={match.teamA}
@@ -1431,7 +1586,7 @@ export function MatchBuilder({
               </div>
             )}
 
-            {tab === "pagos" && (
+            {activeTab === "pagos" && (
               <div className="mx-auto w-full max-w-3xl">
                 <CourtPanel
                   cost={match.courtCost}
@@ -1439,6 +1594,20 @@ export function MatchBuilder({
                   payments={match.payments}
                   onCostChange={(courtCost) => patch({ courtCost })}
                   onCyclePayment={cyclePayment}
+                  perField={
+                    torneo === undefined
+                      ? undefined
+                      : {
+                          fields: torneo.fields,
+                          price: torneo.fieldPrice,
+                          onPriceChange: (fieldPrice) => {
+                            const next = { ...torneo, fieldPrice };
+                            // A price wiped back to nothing leaves the bill
+                            // at nothing, not at whatever it was before.
+                            patch({ torneo: next, courtCost: torneoCourtCost(next) ?? 0 });
+                          },
+                        }
+                  }
                 />
               </div>
             )}
@@ -1764,5 +1933,45 @@ function BenchChip({
         {noted && <NotebookPen className="h-3 w-3 text-primary" aria-label="Con uno x uno" />}
       </button>
     </li>
+  );
+}
+
+/**
+ * How many teams, on an ordinary match: two, and the way to more.
+ *
+ * Above Armar rather than in Ajustes, because "son veinte, ¿cuántos equipos
+ * armamos?" is the first question of a big night and the last place anybody
+ * looks for it is a settings tab. Going past two turns the match into the
+ * night of a torneo; see `lib/torneo.ts`.
+ */
+function TeamCountRow({
+  squadSize,
+  disabled,
+  onMore,
+}: {
+  squadSize: number;
+  disabled: boolean;
+  onMore: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-card/60 px-3 py-2">
+      <span className="text-sm font-medium">Equipos</span>
+      <Stepper
+        value={2}
+        min={2}
+        max={disabled ? 2 : Math.min(MAX_TORNEO_TEAMS, Math.max(3, squadSize))}
+        onChange={(count) => {
+          if (count > 2) onMore();
+        }}
+        label="equipos"
+      />
+      <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+        {disabled
+          ? "Este partido ya tiene resultado."
+          : squadSize >= 15
+            ? `Son ${squadSize}: con tres o más equipos se arma un torneo, en liga o en copa.`
+            : "Con tres o más se arma un torneo, en liga o en copa."}
+      </span>
+    </div>
   );
 }

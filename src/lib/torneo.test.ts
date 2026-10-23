@@ -20,6 +20,7 @@ import {
   torneoArmado,
   torneoCourtCost,
   torneoFinishes,
+  torneoFixture,
   torneoForSquad,
   torneoGamesOf,
   torneoProgress,
@@ -203,6 +204,11 @@ describe("setting a torneo up", () => {
   it("prices the night per cancha only while a price per cancha is set", () => {
     assert.equal(torneoCourtCost({ fieldPrice: 0, fields: 2 }), null);
     assert.equal(torneoCourtCost({ fieldPrice: 45000, fields: 2 }), 90000);
+    assert.equal(
+      torneoCourtCost({ fieldPrice: 99_999_999, fields: 2 }),
+      99_999_999,
+      "never a bill the match cannot store",
+    );
     assert.equal(maxFields(5), 2);
     assert.equal(maxFields(3), 1);
   });
@@ -460,6 +466,26 @@ describe("torneoShareText", () => {
     const text = torneoShareText(match, [scored(semi1, { goalsA: 2, goalsB: 2 }, "A"), scored(semi2, { goalsA: 1, goalsB: 0 })], byId);
     assert.match(text, /Semi 1: 🔴 Rojos 2 - 2 🟡 Amarillos \(pasó 🔴 Rojos\)/);
     assert.match(text, /Final: 🔴 Rojos vs 🔵 Azules/);
+  });
+});
+
+describe("torneoFixture", () => {
+  it("is the liga's fechas, every pairing once", () => {
+    const fixture = torneoFixture(newTorneo(20, 4));
+    assert.equal(fixture.format, "round-robin");
+    if (fixture.format === "round-robin") assert.equal(fixture.total, 6);
+  });
+
+  it("is the copa's first round, the byes, and what comes after in words", () => {
+    const fixture = torneoFixture({ ...newTorneo(25, 5), format: "copa" });
+    assert.deepEqual(fixture, {
+      format: "knockout",
+      opening: [{ home: 3, away: 4 }],
+      byes: [0, 1, 2],
+      then: "Después: semis, final y 3er puesto.",
+    });
+    const three = torneoFixture({ ...newTorneo(12, 3), format: "copa" });
+    assert.equal(three.format === "knockout" ? three.then : "", "Después: final.");
   });
 });
 

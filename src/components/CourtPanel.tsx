@@ -27,6 +27,13 @@ interface Props {
   payments: PaymentBook;
   onCostChange: (cost: number) => void;
   onCyclePayment: (id: PlayerId) => void;
+  /**
+   * A torneo's canchas: priced one at a time and multiplied by how many are
+   * running, so the night with two canchas costs what two canchas cost and a
+   * third one raises everybody's share. Absent on an ordinary match, where the
+   * one number is the whole bill.
+   */
+  perField?: { fields: number; price: number; onPriceChange: (price: number) => void };
 }
 
 /**
@@ -46,6 +53,7 @@ export function CourtPanel({
   payments,
   onCostChange,
   onCyclePayment,
+  perField,
 }: Props) {
   const split = splitCourt({
     cost,
@@ -62,6 +70,34 @@ export function CourtPanel({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        {perField !== undefined && (
+          <label className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span className="shrink-0">¿Cuánto sale cada cancha?</span>
+            <span className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                $
+              </span>
+              <Input
+                value={perField.price === 0 ? "" : String(perField.price)}
+                inputMode="numeric"
+                placeholder="0"
+                onChange={(e) => perField.onPriceChange(parseAmount(e.target.value))}
+                aria-label="Cuánto sale cada cancha"
+                className="tabular h-10 w-32 pl-7 text-right font-semibold"
+              />
+            </span>
+            <span className="shrink-0">
+              × {perField.fields} cancha{perField.fields === 1 ? "" : "s"}
+              {priced && (
+                <>
+                  {" "}
+                  = <span className="tabular font-semibold text-foreground">{formatMoney(cost)}</span>
+                </>
+              )}
+            </span>
+          </label>
+        )}
+        {perField === undefined && (
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="shrink-0">¿Cuánto salió?</span>
           <span className="relative">
@@ -81,6 +117,7 @@ export function CourtPanel({
             />
           </span>
         </label>
+        )}
 
         {priced && split.share > 0 && (
           <p className="text-sm">
@@ -97,8 +134,10 @@ export function CourtPanel({
 
       {!priced ? (
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Poné cuánto salió y te digo cuánto pone cada uno. Después vas
-          tachando a los que ya pusieron.
+          {perField === undefined
+            ? "Poné cuánto salió y te digo cuánto pone cada uno."
+            : "Poné cuánto sale cada cancha: se multiplica por las canchas del torneo y se reparte entre todos los anotados."}{" "}
+          Después vas tachando a los que ya pusieron.
         </p>
       ) : (
         <>

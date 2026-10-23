@@ -91,6 +91,14 @@ export interface MatchTabsInput {
   forecastFavourite: number | null;
   /** Whether the result has been written down. */
   hasResult: boolean;
+  /**
+   * Set on the match that holds a torneo, which is three jobs rather than
+   * five: the board, who came, and the money. There is no pitch of two sides
+   * to look at, nothing for the models to forecast and no two kits to set —
+   * the first tab is the torneo instead, counting the games played once it
+   * has started.
+   */
+  torneo?: { started: boolean; played: number; total: number };
 }
 
 export function matchTabs({
@@ -104,10 +112,36 @@ export function matchTabs({
   paidCount,
   forecastFavourite,
   hasResult,
+  torneo,
 }: MatchTabsInput): MatchTab[] {
   // Decision 2 and 3: money is only worth counting when there is a bill and
   // somebody to split it between.
   const chasing = courtCost > 0 && payers > 0;
+  const pagos: MatchTab = {
+    id: "pagos",
+    label: "Pagos",
+    badge: chasing ? `${paidCount}/${payers}` : null,
+    alert: chasing && paidCount < payers,
+  };
+  const jugadores: MatchTab = {
+    id: "jugadores",
+    label: "Jugadores",
+    badge: squadSize > 0 ? String(squadSize) : null,
+    alert: false,
+  };
+
+  if (torneo !== undefined) {
+    return [
+      {
+        id: "cancha",
+        label: "Torneo",
+        badge: torneo.started ? `${torneo.played}/${torneo.total}` : null,
+        alert: false,
+      },
+      jugadores,
+      pagos,
+    ];
+  }
 
   return [
     {
@@ -127,12 +161,7 @@ export function matchTabs({
           : null,
       alert: false,
     },
-    {
-      id: "jugadores",
-      label: "Jugadores",
-      badge: squadSize > 0 ? String(squadSize) : null,
-      alert: false,
-    },
+    jugadores,
     {
       id: "ajustes",
       label: "Ajustes",
@@ -140,11 +169,6 @@ export function matchTabs({
       // Decision 4.
       alert: sizeMismatch !== 0,
     },
-    {
-      id: "pagos",
-      label: "Pagos",
-      badge: chasing ? `${paidCount}/${payers}` : null,
-      alert: chasing && paidCount < payers,
-    },
+    pagos,
   ];
 }

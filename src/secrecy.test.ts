@@ -316,18 +316,22 @@ describe("a puntaje is secret: what leaves in a message", () => {
   }
 
   /**
-   * The text that goes in the chat, in both screens that build one.
+   * The text that goes in the chat, in both places that build one: a match's
+   * two sides, and a torneo's teams and board.
    *
-   * The whole file is not checked for either: `SplitPage` is a screen of your
-   * own as well as a share, and the team cards on it show totals behind
+   * The whole file is not checked for either: the torneo's screen is a screen
+   * of your own as well as a share, and the team cards on it show totals behind
    * `ScoresVisible`, which is right — that is you looking at your own numbers
    * on your own phone. The share is the part that leaves, so the share is the
    * part that is pinned, and the extraction asserts that it found a function
    * rather than quietly checking an empty string.
    */
   it("the text pasted into the grupo carries no number about anybody", () => {
-    for (const path of ["src/components/ShareDialog.tsx", "src/components/SplitPage.tsx"]) {
-      const body = functionBody(code(path), "function buildText(");
+    for (const [path, marker] of [
+      ["src/components/ShareDialog.tsx", "function buildText("],
+      ["src/lib/torneo.ts", "function torneoShareText("],
+    ]) {
+      const body = functionBody(code(path), marker);
       for (const word of [/slotRatings/, /includeRatings/, /\.total\b/, /canShareScores/]) {
         assert.doesNotMatch(
           body,
@@ -343,7 +347,8 @@ describe("a puntaje is secret: what leaves in a message", () => {
   it("has no sharing checkbox left to tick", () => {
     for (const path of [
       "src/components/ShareDialog.tsx",
-      "src/components/SplitPage.tsx",
+      "src/components/TorneoPanel.tsx",
+      "src/lib/torneo.ts",
       "src/lib/scorePrivacy.ts",
     ]) {
       for (const word of [/canShareScores/, /includeRatings/, /requestedRatings/]) {
