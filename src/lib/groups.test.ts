@@ -167,6 +167,52 @@ describe("groupsCost", () => {
   });
 });
 
+describe("a pairing cost other than balanceCost", () => {
+  it("is averaged over every pair, the same way balanceCost is", () => {
+    const evaluations = [3, 5, 7].map((r) =>
+      evaluateSquad([player(r), player(r)], defaultFormation(2)),
+    );
+    // Three pairs; this cost is 1 for each, so the mean is 1 however the
+    // teams are rated.
+    assert.equal(groupsCost(evaluations, "total", undefined, () => 1), 1);
+  });
+
+  it("is what the search ranks on, even against the ratings", () => {
+    // Three stars and six who are not. Balancing by level spreads the stars
+    // one a team; this cost wants them on one team, and the search has to
+    // listen to the cost it was handed rather than to the ratings.
+    const stars = [player(90), player(90), player(90)];
+    const squad = [...stars, ...Array.from({ length: 6 }, () => player(10))];
+    const starIds = new Set(stars.map((p) => p.id));
+    const starsOn = (lineup: readonly (Player | null)[]) =>
+      lineup.filter((p) => p != null && starIds.has(p.id)).length;
+    const result = findGroupSplits({
+      players: squad,
+      sizes: [3, 3, 3],
+      basis: "total",
+      cost: (a, b) => 3 - Math.max(starsOn(a.lineup), starsOn(b.lineup)),
+    });
+    const best = result.options[0];
+    assert.ok(
+      best.teams.some((team) => team.players.every((p) => starIds.has(p.id))),
+      "the three stars should have been put together",
+    );
+  });
+
+  it("re-scores a hand swap with the same cost", () => {
+    const squad = ladder(9);
+    const cost = () => 2;
+    const found = findGroupSplits({ players: squad, sizes: [3, 3, 3], basis: "total", cost });
+    const option = found.options[0];
+    const again = scoreGrouping({
+      teams: option.teams.map((team) => team.players),
+      basis: "total",
+      cost,
+    });
+    assert.equal(again.cost, option.cost);
+  });
+});
+
 describe("findGroupSplits — what it refuses", () => {
   const squad = ladder(12);
 

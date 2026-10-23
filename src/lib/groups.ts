@@ -86,9 +86,19 @@ export interface GroupSplitRequest {
   /** How many distinct options to return. */
   optionCount?: number;
   weights?: CostWeights;
+  /**
+   * What one pairing of two teams costs, when it is not `balanceCost` — one
+   * of Armar's strategies (`strategyCost` in `lib/strategies.ts`), so a torneo
+   * is cut by the same question the match screen asks. `weights` is ignored
+   * when this is given, the same as `findSplits` does.
+   */
+  cost?: PairCost;
   /** Injected in tests for deterministic search. */
   random?: () => number;
 }
+
+/** What one pairing of two teams costs. See `GroupSplitRequest.cost`. */
+export type PairCost = (a: TeamEvaluation, b: TeamEvaluation) => number;
 
 export interface GroupTeam {
   players: Player[];
@@ -165,12 +175,16 @@ export function groupsCost(
   evaluations: readonly TeamEvaluation[],
   basis: BalanceBasis,
   weights?: CostWeights,
+  cost?: PairCost,
 ): number {
   let sum = 0;
   let pairs = 0;
   for (let i = 0; i < evaluations.length; i++) {
     for (let j = i + 1; j < evaluations.length; j++) {
-      sum += balanceCost(evaluations[i], evaluations[j], basis, 0, weights);
+      sum +=
+        cost === undefined
+          ? balanceCost(evaluations[i], evaluations[j], basis, 0, weights)
+          : cost(evaluations[i], evaluations[j]);
       pairs += 1;
     }
   }
@@ -201,6 +215,8 @@ export interface GroupingRequest {
   together?: TogetherIndex;
   keepers?: ReadonlySet<PlayerId>;
   weights?: CostWeights;
+  /** The same pairing cost the search was given, so a hand swap is read alike. */
+  cost?: PairCost;
 }
 
 /**
@@ -225,6 +241,7 @@ export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
     together = EMPTY_TOGETHER_INDEX,
     keepers = EMPTY_KEEPERS,
     weights,
+    cost,
   } = request;
   const formations =
     request.formations ?? teams.map((team) => defaultFormation(team.length));
@@ -246,7 +263,7 @@ export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
     // the one number these are compared on, so a penalty left outside it would
     // be honoured by one code path and ignored by the other.
     cost:
-      groupsCost(evaluations, basis, weights) +
+      groupsCost(evaluations, basis, weights, cost) +
       AVOID_PENALTY * conflicts +
       TOGETHER_PENALTY * separated +
       KEEPER_PENALTY * keeperless,
@@ -324,6 +341,7 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     keepers = EMPTY_KEEPERS,
     optionCount = 5,
     weights,
+    cost: pairCost,
   } = request;
 
   const teamCount = sizes.length;
@@ -487,7 +505,7 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
       // which swaps are improvements from `cost` alone, so a penalty kept
       // outside it would be honoured by one code path and ignored by the other.
       cost:
-        groupsCost(evaluations, basis, weights) +
+        groupsCost(evaluations, basis, weights, pairCost) +
         AVOID_PENALTY * conflicts +
         TOGETHER_PENALTY * separated +
         KEEPER_PENALTY * keeperless,
