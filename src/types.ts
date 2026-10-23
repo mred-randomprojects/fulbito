@@ -395,6 +395,20 @@ export interface Match {
    * the set of matches carrying the same `id`, read back by `lib/liga.ts`.
    */
   tournament?: MatchTournament;
+  /**
+   * What makes this match a torneo: the night when more than two teams share
+   * the canchas. Absent on an ordinary match.
+   *
+   * The match you made for the night stays the night — the squad, la lista,
+   * the money, the notes and the videos are all about everybody who came —
+   * and this holds what is new: the teams, how they are decided, and how many
+   * canchas are running. Each game is a match of its own, tagged with this
+   * match's id in `tournament` and with its teams in `torneoGame`. See
+   * `lib/torneo.ts`.
+   */
+  torneo?: Torneo;
+  /** On a game of a torneo armado in a match: which teams, and where on the board. */
+  torneoGame?: MatchTorneoGame;
   updatedAt: string;
 }
 
@@ -405,6 +419,62 @@ export interface MatchTournament {
   turn: number;
   /** 1-based. */
   field: number;
+}
+
+/**
+ * How a torneo is decided.
+ *
+ * - **Liga**: todos contra todos, three points a win, and the table says who
+ *   won. Every game is known before a ball is kicked.
+ * - **Copa**: eliminación. Lose and you are out; the final decides it and the
+ *   two who lost the semis can play for third. Who plays the later rounds is
+ *   only known as the earlier ones finish — see `lib/copa.ts`.
+ */
+export type TorneoFormat = "liga" | "copa";
+
+/** One of a torneo's teams: what the night calls it, its bibs and its people. */
+export interface TorneoTeam {
+  /** As typed. Blank shows the bibs' name, "Rojos" — see `torneoTeamName`. */
+  name: string;
+  /** The bibs. No two teams of one torneo wear the same. */
+  kit: KitId;
+  /** How many it gets. The split fills exactly this many. */
+  size: number;
+  /** Who is in it, once armado. Empty until then. */
+  players: PlayerId[];
+}
+
+export interface Torneo {
+  format: TorneoFormat;
+  /** Three or more. Two teams is a match, and the match screen already is one. */
+  teams: TorneoTeam[];
+  /** Players nailed to a team before the split, by index into `teams`. */
+  pins: Partial<Record<PlayerId, number>>;
+  /** Canchas running at once: how the games are packed into turns, and what the night costs. */
+  fields: number;
+  /**
+   * What one cancha costs, in whole pesos. While it is above zero the match's
+   * `courtCost` is this times `fields`, so the money follows the canchas.
+   */
+  fieldPrice: number;
+  /** Deal the keepers out one a team, the way `lib/keepers.ts` does. */
+  spreadKeepers: boolean;
+  /** Copa only: whether the two who lost the semis play for third. */
+  thirdPlace: boolean;
+}
+
+export interface MatchTorneoGame {
+  /** Which of the torneo's teams stand on side A and side B, by index. */
+  sides: [number, number];
+  /** Copa only: the round, 1-based. The last round holds the final. */
+  round?: number;
+  /**
+   * Copa only: the game within its round, 0-based. In the last round slot 0
+   * is the final and slot 1 the third-place game.
+   */
+  slot?: number;
+  /** Copa only: who went through when it finished level — los penales. */
+  decider?: TeamKey;
 }
 
 /**
@@ -809,7 +879,33 @@ const MATCH_FIELDS: Record<keyof Match, true> = {
   forecastNotes: true,
   videos: true,
   tournament: true,
+  torneo: true,
+  torneoGame: true,
   updatedAt: true,
+};
+
+const TORNEO_FIELDS: Record<keyof Torneo, true> = {
+  format: true,
+  teams: true,
+  pins: true,
+  fields: true,
+  fieldPrice: true,
+  spreadKeepers: true,
+  thirdPlace: true,
+};
+
+const TORNEO_TEAM_FIELDS: Record<keyof TorneoTeam, true> = {
+  name: true,
+  kit: true,
+  size: true,
+  players: true,
+};
+
+const TORNEO_GAME_FIELDS: Record<keyof MatchTorneoGame, true> = {
+  sides: true,
+  round: true,
+  slot: true,
+  decider: true,
 };
 
 const TEAM_FIELDS: Record<keyof Team, true> = {
@@ -1045,6 +1141,8 @@ function normalizeMatch(raw: unknown): Match | null {
     // same state as a match nobody filmed.
     videos: normalizeVideos(raw.videos),
     ...tournamentField(raw.tournament),
+    ...torneoField(raw.torneo),
+    ...torneoGameField(raw.torneoGame),
     updatedAt: str(raw.updatedAt, new Date(0).toISOString()),
   };
 }
@@ -1052,6 +1150,110 @@ function normalizeMatch(raw: unknown): Match | null {
 function tournamentField(value: unknown): { tournament?: MatchTournament } {
   const tournament = normalizeMatchTournament(value);
   return tournament === undefined ? {} : { tournament };
+}
+
+/**
+ * The kits a torneo's teams wear by default, in order: the bright ones first,
+ * because a torneo's teams are told apart across two canchas, and claros
+ * against oscuros is already what a match of two opens with.
+ */
+export const TORNEO_KITS: readonly KitId[] = [
+  "red",
+  "blue",
+  "green",
+  "yellow",
+  "orange",
+  "purple",
+  "light",
+  "dark",
+];
+
+function nonNegativeInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * A stored torneo, or nothing.
+ *
+ * Fewer than two teams is not a torneo of any kind, so it is dropped rather
+ * than kept as something no screen can draw; two is kept, because a newer
+ * build may well find a use for it. Two teams wearing the same bibs get the
+ * first free kit instead, since every game of the night reads its colours off
+ * these, and a pin pointing past the last team stops applying.
+ */
+function normalizeTorneo(value: unknown): Torneo | undefined {
+  if (!isRecord(value) || !Array.isArray(value.teams)) return undefined;
+  const raws = value.teams.filter(isRecord);
+  const declared = raws.map((raw, index) => normalizeKit(raw.kit, TORNEO_KITS[index % TORNEO_KITS.length]));
+  const worn = new Set<KitId>();
+  const teams: TorneoTeam[] = [];
+  raws.forEach((raw, index) => {
+    let kit = declared[index];
+    // The repeat takes bibs nobody else declared, so fixing one team never
+    // moves another that was fine.
+    if (worn.has(kit)) {
+      kit =
+        TORNEO_KITS.find((id) => !worn.has(id) && !declared.slice(index + 1).includes(id)) ??
+        TORNEO_KITS.find((id) => !worn.has(id)) ??
+        kit;
+    }
+    worn.add(kit);
+    teams.push({
+      ...unknownFields(raw, TORNEO_TEAM_FIELDS),
+      name: str(raw.name),
+      kit,
+      size: normalizeSize(raw.size, 0),
+      players: [...new Set(strArray(raw.players).filter((id) => id !== ""))] as PlayerId[],
+    });
+  });
+  if (teams.length < 2) return undefined;
+
+  const pins: Partial<Record<PlayerId, number>> = {};
+  if (isRecord(value.pins)) {
+    for (const [id, team] of Object.entries(value.pins)) {
+      const index = nonNegativeInt(team);
+      if (index !== undefined && index < teams.length) pins[id as PlayerId] = index;
+    }
+  }
+
+  return {
+    ...unknownFields(value, TORNEO_FIELDS),
+    format: value.format === "copa" ? "copa" : "liga",
+    teams,
+    pins,
+    fields: Math.min(8, positiveInt(value.fields)),
+    fieldPrice: clampCourtCost(num(value.fieldPrice, 0)),
+    spreadKeepers: value.spreadKeepers !== false,
+    thirdPlace: value.thirdPlace !== false,
+  };
+}
+
+function torneoField(value: unknown): { torneo?: Torneo } {
+  const torneo = normalizeTorneo(value);
+  return torneo === undefined ? {} : { torneo };
+}
+
+/** A stored game tag, or nothing: a game needs two different teams to be one. */
+function normalizeTorneoGame(value: unknown): MatchTorneoGame | undefined {
+  if (!isRecord(value) || !Array.isArray(value.sides) || value.sides.length !== 2) return undefined;
+  const a = nonNegativeInt(value.sides[0]);
+  const b = nonNegativeInt(value.sides[1]);
+  if (a === undefined || b === undefined || a === b) return undefined;
+  const round = typeof value.round === "number" ? positiveInt(value.round) : undefined;
+  const slot = nonNegativeInt(value.slot);
+  return {
+    ...unknownFields(value, TORNEO_GAME_FIELDS),
+    sides: [a, b],
+    // The two travel together: a round without a slot says nothing about
+    // where on the bracket the game sits.
+    ...(round !== undefined && slot !== undefined ? { round, slot } : {}),
+    ...(value.decider === "A" || value.decider === "B" ? { decider: value.decider } : {}),
+  };
+}
+
+function torneoGameField(value: unknown): { torneoGame?: MatchTorneoGame } {
+  const torneoGame = normalizeTorneoGame(value);
+  return torneoGame === undefined ? {} : { torneoGame };
 }
 
 /**

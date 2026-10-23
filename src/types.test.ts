@@ -572,6 +572,66 @@ describe("torneo links on a stored match", () => {
   });
 });
 
+describe("a torneo on a stored match", () => {
+  const torneo = {
+    format: "copa",
+    teams: [
+      { name: "Los Pibes", kit: "red", size: 5, players: ["a", "b", "a"] },
+      { name: "", kit: "red", size: 5, players: ["c"] },
+      { name: "", kit: "blue", size: 99, players: [] },
+    ],
+    pins: { a: 0, c: 7, d: "uno" },
+    fields: 2,
+    fieldPrice: 45000,
+    spreadKeepers: false,
+    thirdPlace: false,
+  };
+
+  it("keeps what it can read and repairs what it cannot", () => {
+    const match = withMatch({ torneo });
+    assert.equal(match.torneo?.format, "copa");
+    assert.deepEqual(match.torneo?.teams[0].players, ["a", "b"], "one person twice on a team is once");
+    assert.deepEqual(
+      match.torneo?.teams.map((team) => team.kit),
+      ["red", "green", "blue"],
+      "two teams in the same bibs: the second takes the first free kit",
+    );
+    assert.equal(match.torneo?.teams[2].size, 11);
+    assert.deepEqual(match.torneo?.pins, { a: 0 });
+    assert.equal(match.torneo?.fieldPrice, 45000);
+    assert.equal(match.torneo?.spreadKeepers, false);
+    assert.equal(match.torneo?.thirdPlace, false);
+  });
+
+  it("is absent on an ordinary match, and dropped when it has fewer than two teams", () => {
+    assert.equal("torneo" in withMatch({}), false);
+    assert.equal(withMatch({ torneo: { ...torneo, teams: [torneo.teams[0]] } }).torneo, undefined);
+    assert.equal(withMatch({ torneo: { teams: "four" } }).torneo, undefined);
+  });
+
+  it("reads an unknown format as a liga", () => {
+    assert.equal(withMatch({ torneo: { ...torneo, format: "suizo" } }).torneo?.format, "liga");
+  });
+
+  it("carries along what a newer build added, inside it too", () => {
+    const match = withMatch({
+      torneo: { ...torneo, sorteo: true, teams: torneo.teams.map((team) => ({ ...team, lema: "x" })) },
+    });
+    assert.equal((match.torneo as unknown as Record<string, unknown>).sorteo, true);
+    assert.equal((match.torneo?.teams[0] as unknown as Record<string, unknown>).lema, "x");
+  });
+
+  it("keeps a game's teams and place on the bracket, and drops a tag that cannot be a game", () => {
+    const game = withMatch({ torneoGame: { sides: [2, 0], round: 2, slot: 1, decider: "B" } });
+    assert.deepEqual(game.torneoGame, { sides: [2, 0], round: 2, slot: 1, decider: "B" });
+    const liga = withMatch({ torneoGame: { sides: [0, 1], round: 2, decider: "C" } });
+    assert.deepEqual(liga.torneoGame, { sides: [0, 1] }, "a round without a slot is no place");
+    assert.equal(withMatch({ torneoGame: { sides: [1, 1] } }).torneoGame, undefined);
+    assert.equal(withMatch({ torneoGame: { sides: [0] } }).torneoGame, undefined);
+    assert.equal(withMatch({ torneoGame: { sides: [-1, 2] } }).torneoGame, undefined);
+  });
+});
+
 describe("a match with no date", () => {
   it("falls back to today in local time, not the UTC date", (t) => {
     // 22:30 in Buenos Aires is already 01:30 the next day in UTC, which is

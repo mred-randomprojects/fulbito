@@ -256,6 +256,21 @@ record back under the same stamp, and let the next edit erase it everywhere.
 - **`Match.tournament`** — `{ id, name, turn, field }`, absent on an ordinary
   match. The torneo *is* the set of matches carrying one `id`; see "Tournaments
   from saved teams".
+- **`Match.torneo`** — on the match made for a night of more than two teams
+  (the *host*): `{ format: "liga" | "copa", teams, pins, fields, fieldPrice,
+  spreadKeepers, thirdPlace }`. Each team is `{ name, kit, size, players }`;
+  a blank name shows the bibs' name ("Rojos"), and no two teams of one
+  torneo wear the same kit (`normalizeTorneo` gives a repeat the first kit
+  nobody declared). Pins are team indices. `fieldPrice` above zero makes the
+  host's `courtCost` that price times `fields`. Fewer than two teams is
+  dropped on the way in. See "Torneos armados in a match".
+- **`Match.torneoGame`** — on each game of a host: `{ sides: [i, j] }`, the
+  host's team indices on side A and B, plus `{ round, slot }` in a copa (the
+  last round's slot 0 is the final, slot 1 the third place) and `decider`
+  ("A" | "B", who went through a draw: los penales). The same game also
+  carries `tournament` with the host's id, so everything that groups torneo
+  games by tag keeps working. Both new fields carry their unknown subfields
+  along, like a record's.
 - **`MatchResult`** — `{ goalsA, goalsB }`, or `null`. `null` and 0-0 are
   different states on purpose: one is a game nobody wrote down, the other is a
   game that finished goalless.
@@ -388,7 +403,9 @@ gate, including tooltips and charts.
 | `lib/matchBrief.ts` | The squad as Markdown, every puntaje included, for the match owner's own AI — see "Un puntaje es secreto" |
 | `lib/captains.ts` | Two captains picking by turns: the draft, and drawing the captains |
 | `lib/familiarity.ts` | Who has shared a side with whom lately, and what that is worth to a side |
-| `lib/groups.ts` | The fairest way to cut a squad into three or more teams — and what a cut somebody made themselves is worth |
+| `lib/groups.ts` | The fairest way to cut a squad into three or more teams, by level or by any of Armar's strategies (`cost`) — and what a cut somebody made themselves is worth |
+| `lib/torneo.ts` | A torneo armado in a match: setting its teams up, the liga's fixture, turning teams into games, the table, keeping games in step with the night, each player's finishes, and the text for the grupo |
+| `lib/copa.ts` | La copa's bracket read off its games: seeding and byes, who went through (los penales included), the third place, the podium, and games the bracket no longer agrees with |
 | `lib/splitDraft.ts` | Repartir's device-local working copy: validation, compact result storage and re-scoring on restore |
 | `lib/tournament.ts` | Who plays whom, and in what order, once there are teams |
 | `lib/teamTournament.ts` | A saved-team round robin across simultaneous fields, manual fixture swaps, conflict checks and ready-to-score match creation, each game tagged with its torneo and teams |
