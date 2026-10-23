@@ -7,6 +7,7 @@ import {
   HeartCrack,
   HeartHandshake,
   Loader2,
+  Medal,
   NotebookPen,
   Search,
   Trash2,
@@ -36,6 +37,7 @@ import { listedBy } from "@/lib/avoid";
 import { buildTogetherIndex, companionsOf, wantedBy } from "@/lib/together";
 import { reviewHistory, type ReviewEntry } from "@/lib/reviews";
 import { formatMatchDate } from "@/lib/dates";
+import { FORMAT_LABEL, torneoFinishes, type TorneoFinish } from "@/lib/torneo";
 import {
   addTag,
   hasTag,
@@ -63,6 +65,7 @@ import {
 import {
   ATTRIBUTES,
   ATTRIBUTE_LABELS,
+  KITS,
   ROLES,
   ROLE_LABELS,
   clampRating,
@@ -398,6 +401,7 @@ export function PlayerForm({
   ).filter((id) => !direct.has(id));
   const stats = statsById.get(draft.id) ?? emptyStats();
   const reviews = useMemo(() => reviewHistory(draft.id, matches), [draft.id, matches]);
+  const finishes = useMemo(() => torneoFinishes(matches, draft.id), [draft.id, matches]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -559,6 +563,11 @@ export function PlayerForm({
               read — an empty table of zeroes on a brand new player says
               nothing and takes up the room the form needs. */}
           {stats.played > 0 && <RecordPanel stats={stats} />}
+
+          {/* Every torneo they were on a team in, and how it ended for them.
+              The games themselves are already in the record above; this is
+              the part a record cannot say — who lifted the cup. */}
+          {finishes.length > 0 && <TorneoHistory finishes={finishes} />}
 
           {/* What you wrote about him, night by night. Read off the matches
               like the record above it, and absent until there is a line to
@@ -778,6 +787,72 @@ function ReviewHistory({ entries }: { entries: ReviewEntry[] }) {
  * different question with the same-looking number is how a stat stops being
  * trusted. The full G-E-P line is right there for anyone who wants the rest.
  */
+/** How many torneos are listed before "y N más". */
+const FINISHES_SHOWN = 6;
+
+/**
+ * The torneos on the ficha: the titles first, then each one with the team
+ * and how it ended. Read off the matches like the record (`lib/torneo.ts`),
+ * so a corrected final moves a cup from one ficha to another by itself.
+ */
+function TorneoHistory({ finishes }: { finishes: TorneoFinish[] }) {
+  const titles = finishes.filter((finish) => finish.place === 1).length;
+  const podiums = finishes.filter((finish) => finish.place !== null && finish.place <= 3).length;
+  const shown = finishes.slice(0, FINISHES_SHOWN);
+  return (
+    <div className="rounded-lg border border-amber-400/25 bg-amber-300/[0.04] p-3">
+      <div className="flex items-center gap-3">
+        <Medal className="h-4 w-4 shrink-0 text-amber-300" />
+        <p className="min-w-0 flex-1 text-sm font-medium">
+          {finishes.length} torneo{finishes.length === 1 ? "" : "s"}
+        </p>
+        <span className="text-xs text-muted-foreground">
+          {titles > 0 && (
+            <span className="text-amber-200">
+              {titles} campeón{titles === 1 ? "" : "es"}
+            </span>
+          )}
+          {titles > 0 && podiums > titles && " · "}
+          {podiums > titles && `${podiums} podio${podiums === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      <ul className="mt-2.5 space-y-1.5 border-t border-border pt-2.5">
+        {shown.map((finish) => (
+          <li key={finish.hostId} className="flex items-center gap-2 text-xs">
+            <span className="w-5 shrink-0 text-center" aria-hidden>
+              {finish.place === 1 ? "🏆" : finish.place === 2 ? "🥈" : finish.place === 3 ? "🥉" : "·"}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{finish.title}</span>
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-full ring-1 ring-border"
+                  style={{ background: KITS[finish.kit].fill }}
+                />
+                <span className="truncate">
+                  {finish.teamName} · {FORMAT_LABEL[finish.format]} · {formatMatchDate(finish.date)}
+                </span>
+              </span>
+            </span>
+            <span
+              className={cn(
+                "shrink-0 font-medium",
+                finish.place === 1 ? "text-amber-200" : finish.done ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {finish.label}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {finishes.length > shown.length && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">y {finishes.length - shown.length} más</p>
+      )}
+    </div>
+  );
+}
+
 function RecordPanel({ stats }: { stats: PlayerStats }) {
   const streak = describeStreak(stats);
 
