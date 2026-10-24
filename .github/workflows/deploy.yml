@@ -108,9 +108,9 @@ jobs:
 
       - name: Setup Node
         if: ${{ env.CAN_DEPLOY_RULES == 'true' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       - name: Publish the Firestore rules
         if: ${{ env.CAN_DEPLOY_RULES == 'true' }}
