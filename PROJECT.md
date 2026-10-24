@@ -2188,6 +2188,15 @@ typecheck, the lint and the unit tests in one command, and it is the gate CI
 runs (`deploy.yml` and `checks.yml`, on the Node in `.nvmrc`) before the rules
 tests and the build.
 
+The lint is oxlint (`.oxlintrc.json`), run with `--type-aware`, so it sees types
+through the TypeScript 7 compiler. On the app code, not the tests, that buys
+three rules: `no-floating-promises` (an async call nobody awaits or catches, so
+its error vanishes), `no-misused-promises` (an async function where a plain
+value is expected, like `if (isAllowed())`; JSX event handlers are exempt) and
+`await-thenable`. The tests are left out because `node:test`'s `it` and
+`describe` return promises that nobody needs to await. The plugin has to be
+listed in each override that uses its rules, or oxlint drops them silently.
+
 `npm run test:rules` is the one exception to "seconds": it starts the
 Firestore emulator and runs `src/cloud/rules.test.ts` — the app's own
 `cloud/lists.ts` and `cloud/polls.ts` on one side, a stranger's raw writes on

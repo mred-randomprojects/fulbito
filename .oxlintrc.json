@@ -115,6 +115,29 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "src/**/*.{ts,tsx}"
+      ],
+      "excludeFiles": [
+        "**/*.test.ts"
+      ],
+      "plugins": [
+        "typescript"
+      ],
+      "rules": {
+        "typescript/no-floating-promises": "error",
+        "typescript/no-misused-promises": [
+          "error",
+          {
+            "checksVoidReturn": {
+              "attributes": false
+            }
+          }
+        ],
+        "typescript/await-thenable": "error"
+      }
     }
   ]
 }

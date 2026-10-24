@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "check": "tsc -b && oxlint && npm test",
+    "lint": "oxlint --type-aware",
+    "check": "tsc -b && oxlint --type-aware && npm test",
     "test": "rm -rf .tmp/test-dist && tsc -p tsconfig.test.json && node --test $(find .tmp/test-dist/src -name '*.test.js')",
     "preview": "vite preview",
     "test:rules": "npx --yes firebase-tools@15.33.0 emulators:exec --only firestore --project demo-fulbito \"TSX_TSCONFIG_PATH=tsconfig.app.json node --import tsx --test src/cloud/rules.test.ts\"",
@@ -36,6 +36,7 @@
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.27",
     "oxlint": "^1.89.0",
+    "oxlint-tsgolint": "^7.0.2005",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
     "tailwindcss-animate": "^1.0.7",
