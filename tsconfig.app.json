@@ -22,7 +22,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
+    "types": ["node", "google.accounts"],
     "paths": {
       "@/*": ["./src/*"]
     }

@@ -8,7 +8,7 @@
  */
 export interface AvatarBytes {
   type: string;
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
 }
 
 export function decodeAvatarDataUrl(dataUrl: string): AvatarBytes | null {
