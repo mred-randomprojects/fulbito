@@ -620,7 +620,7 @@ describe("a torneo on a stored match", () => {
       torneo: { ...torneo, sorteo: true, teams: torneo.teams.map((team) => ({ ...team, lema: "x" })) },
     });
     assert.equal((match.torneo as unknown as Record<string, unknown>).sorteo, true);
-    assert.equal((match.torneo?.teams[0] as unknown as Record<string, unknown>).lema, "x");
+    assert.equal((match.torneo?.teams[0] as unknown as Record<string, unknown> | undefined)?.lema, "x");
   });
 
   it("keeps a game's teams and place on the bracket, and drops a tag that cannot be a game", () => {
