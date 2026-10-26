@@ -10,10 +10,12 @@ import {
   newTorneo,
   nextLigaRound,
   plannedTurns,
+  replaceTorneoPlayer,
   resizeTorneo,
   setTeamKit,
   setTeamSize,
   startTorneo,
+  swapInTorneoGames,
   swapTorneoPlayers,
   syncTorneoGames,
   teamOf,
@@ -362,6 +364,53 @@ describe("keeping the games in step with the night", () => {
     // games[1] is 1 v 2 and games[2] does not involve team 0 either: only
     // games with Rojos in them change.
     assert.ok(changed.every((game) => game.torneoGame!.sides.includes(0)));
+  });
+
+  it("carries a swap after Arrancar onto every game the two are in, played ones too", () => {
+    const { match, people, ids } = night("liga");
+    const games = startTorneo({ host: match, players: people, now: NOW, makeId });
+    const [x, y] = [ids[0], ids[5]]; // Rojos and Azules
+    const played = games.map((game) => scored(game, { goalsA: 2, goalsB: 1 }));
+    const changed = swapInTorneoGames(played, x, y);
+    const involving = (team: number) => games.filter((game) => game.torneoGame!.sides.includes(team));
+    assert.equal(changed.length, new Set([...involving(0), ...involving(1)].map((game) => game.id)).size);
+    for (const game of changed) {
+      const [i, j] = game.torneoGame!.sides;
+      const side = (team: number) => (i === team ? game.lineupA : j === team ? game.lineupB : null);
+      assert.equal(game.result?.goalsA, 2, "the score stays");
+      if (side(0) !== null) {
+        assert.ok(side(0)!.includes(y) && !side(0)!.includes(x));
+      }
+      if (side(1) !== null) {
+        assert.ok(side(1)!.includes(x) && !side(1)!.includes(y));
+      }
+      assert.equal(new Set(game.squad).size, game.squad.length, "nobody twice");
+      assert.ok(Object.values(game.pins).length === Object.keys(game.pins).length);
+    }
+    // Amarillos vs Verdes has neither of them and is not written.
+    assert.ok(changed.every((game) => game.torneoGame!.sides.some((team) => team === 0 || team === 1)));
+  });
+
+  it("puts somebody loose in a team in place of somebody, on the night and on its games", () => {
+    const { match, people, ids } = night("liga");
+    const late = person("Tardío");
+    const games = startTorneo({ host: match, players: people, now: NOW, makeId });
+    const torneo = replaceTorneoPlayer(match.torneo!, ids[0], late.id);
+    assert.ok(torneo.teams[0].players.includes(late.id));
+    assert.ok(!torneo.teams.some((team) => team.players.includes(ids[0])), "the one replaced is loose now");
+    const changed = swapInTorneoGames(games, ids[0], late.id);
+    assert.ok(changed.length > 0);
+    assert.ok(changed.every((game) => game.squad.includes(late.id) && !game.squad.includes(ids[0])));
+    // Somebody already on a team is swapped, not replaced.
+    assert.equal(replaceTorneoPlayer(match.torneo!, ids[0], ids[5]), match.torneo);
+  });
+
+  it("leaves the uno x uno where it was", () => {
+    const { match, people, ids } = night("liga");
+    const [game] = startTorneo({ host: match, players: people, now: NOW, makeId });
+    const reviewed: Match = { ...game, reviews: { [ids[0]]: "Le pegó de todos lados." } };
+    const [changed] = swapInTorneoGames([reviewed], ids[0], ids[15]);
+    assert.deepEqual(changed.reviews, reviewed.reviews);
   });
 
   it("moves the bibs only when the night's bibs changed", () => {

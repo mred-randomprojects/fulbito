@@ -80,6 +80,8 @@ import {
   setTeamKit,
   setTeamSize,
   startTorneo,
+  replaceTorneoPlayer,
+  swapInTorneoGames,
   swapTorneoPlayers,
   torneoArmado,
   torneoCopa,
@@ -350,10 +352,7 @@ function Setup({
     }
   };
 
-  const nameOf = (id: PlayerId) => {
-    const player = playersById.get(id);
-    return player === undefined ? "Alguien" : playerShortName(player);
-  };
+  const nameOf = (id: PlayerId) => nameOfPlayer(playersById, id);
 
   const conflicts = useMemo(
     () =>
@@ -776,6 +775,8 @@ function Board({
   onSaveTeam,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
+  /** Whoever is being held, waiting for somebody on another team to tap — as before Arrancar. */
+  const [picked, setPicked] = useState<PlayerId | null>(null);
   const copa = useMemo(
     () => (torneo.format === "copa" ? torneoCopa(torneo, games) : null),
     [torneo, games],
@@ -789,6 +790,47 @@ function Board({
   const repairs = copa === null ? null : copaRepairs(copa);
   const stale = copa === null ? [] : copa.games.flat().filter((game) => game.stale);
   const saveTorneo = (next: Torneo) => onPatch({ torneo: next });
+
+  /**
+   * The teams as they stand, scored, so the board keeps the totals the split
+   * showed. Only the evaluations are read: the relations and the keepers are
+   * the split's business, and the split is over.
+   */
+  const evaluations = useMemo(() => {
+    const teams = torneo.teams.map((team) =>
+      team.players.map((id) => playersById.get(id)).filter((player): player is Player => player !== undefined),
+    );
+    const formations = teams.map((team, index) => defaultFormation(team.length || torneo.teams[index].size));
+    return {
+      formations,
+      teams: scoreGrouping({ teams, formations, basis: match.basis }).teams.map((team) => team.evaluation),
+    };
+  }, [torneo.teams, playersById, match.basis]);
+
+  /**
+   * Tap somebody, tap somebody on another team, they change shirts — on the
+   * night and on every game already made, played ones included, because a
+   * swap this late is the teams being corrected to how they really played.
+   */
+  const tapPlayer = (id: PlayerId) => {
+    if (picked === null) return setPicked(id);
+    if (picked === id) return setPicked(null);
+    const same = torneo.teams.some((team) => team.players.includes(picked) && team.players.includes(id));
+    if (same) return setPicked(id);
+    const placed = torneo.teams.some((team) => team.players.includes(id));
+    if (!placed && !torneo.teams.some((team) => team.players.includes(picked))) return setPicked(id);
+    // One of the two loose: the loose one takes the other's place.
+    saveTorneo(
+      placed
+        ? torneo.teams.some((team) => team.players.includes(picked))
+          ? swapTorneoPlayers(torneo, picked, id)
+          : replaceTorneoPlayer(torneo, id, picked)
+        : replaceTorneoPlayer(torneo, picked, id),
+    );
+    const changed = swapInTorneoGames(games, picked, id);
+    if (changed.length > 0) onSaveGames(changed);
+    setPicked(null);
+  };
 
   const saveResult = (game: Match, result: MatchResult | null) => {
     const tag = game.torneoGame;
@@ -1054,27 +1096,58 @@ function Board({
       <div className="min-w-0 space-y-4">
         <TeamsGrid
           torneo={torneo}
-          teams={null}
-          formations={null}
+          teams={evaluations.teams}
+          formations={evaluations.formations}
           playersById={playersById}
-          picked={null}
-          onPick={onViewPlayer}
+          picked={picked}
+          onPick={tapPlayer}
           onView={onViewPlayer}
           onRename={(index, name) => saveTorneo(renameTeam(torneo, index, name))}
           onKit={(index, kit) => saveTorneo(setTeamKit(torneo, index, kit))}
           stacked
         />
+        <p className="flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
+          <ArrowLeftRight className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            {picked === null
+              ? "¿Alguien jugó en otro equipo? Tocá a uno y después a otro de otro equipo y se cambian de camiseta, también en los partidos ya jugados. Mantené apretado a cualquiera para ver su ficha."
+              : `${nameOfPlayer(playersById, picked)} está esperando. Tocá a alguien de otro equipo para hacer el cambio, o tocalo de nuevo para soltarlo.`}
+          </span>
+        </p>
         {loose.length > 0 && (
-          <p className="text-xs leading-snug text-muted-foreground">
-            Anotados sin equipo: {loose.map(playerShortName).join(", ")}. Pagan la cancha igual; para que
-            jueguen, sumalos desde el partido de cada cruce.
-          </p>
+          <div className="space-y-1.5 text-xs leading-snug text-muted-foreground">
+            <p>
+              Anotados sin equipo: pagan la cancha igual. Para que jueguen en lugar de alguien, tocá a uno y
+              después a quien reemplaza.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {loose.map((player) => (
+                <button
+                  key={player.id}
+                  type="button"
+                  aria-pressed={picked === player.id}
+                  onClick={() => tapPlayer(player.id)}
+                  className={cn(
+                    "rounded-full border border-border px-2 py-0.5 text-foreground hover:bg-accent",
+                    picked === player.id && "bg-accent ring-2 ring-foreground",
+                  )}
+                >
+                  {playerShortName(player)}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         <KeepTeams torneo={torneo} savedTeams={savedTeams} onSaveTeam={onSaveTeam} />
         <ShareCard match={match} torneo={torneo} games={games} playersById={playersById} />
       </div>
     </div>
   );
+}
+
+function nameOfPlayer(playersById: ReadonlyMap<PlayerId, Player>, id: PlayerId): string {
+  const player = playersById.get(id);
+  return player === undefined ? "Alguien" : playerShortName(player);
 }
 
 interface BoardEntry {

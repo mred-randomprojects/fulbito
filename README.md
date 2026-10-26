@@ -116,7 +116,9 @@ any other app, full screen and with no signal needed.
   the canchas turn by turn, with the table filling itself as goals are tapped
   in. A copa is a bracket — semis, final and a third place you can mark as
   not played — with byes when the teams are odd, los penales when a game ends
-  level, and the final filled in as the semis finish. Each result goes on the
+  level, and the final filled in as the semis finish. Teams can still be
+  corrected after Arrancar — a swap, or somebody sin equipo in for somebody —
+  and the change reaches every game, played ones too. Each result goes on the
   players' records, and each torneo on their ficha: campeón, subcampeón, the
   round they went out in. The cancha is priced per cancha, multiplied by the
   canchas and split between everybody who came, and the whole night is one

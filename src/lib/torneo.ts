@@ -252,6 +252,55 @@ export function swapTorneoPlayers(torneo: Torneo, a: PlayerId, b: PlayerId): Tor
 }
 
 /**
+ * Somebody without a team taking the place of somebody on one — the late
+ * arrival who played instead of the one who left. The one replaced stays
+ * anotado, loose, and pays like everybody. Nobody on a team, or a newcomer
+ * already on one, changes nothing (that is `swapTorneoPlayers`' job).
+ */
+export function replaceTorneoPlayer(torneo: Torneo, out: PlayerId, incoming: PlayerId): Torneo {
+  const at = torneo.teams.findIndex((team) => team.players.includes(out));
+  const placed = torneo.teams.some((team) => team.players.includes(incoming));
+  if (at < 0 || placed) return torneo;
+  return {
+    ...torneo,
+    teams: torneo.teams.map((team, index) =>
+      index === at ? { ...team, players: team.players.map((id) => (id === out ? incoming : id)) } : team,
+    ),
+  };
+}
+
+/**
+ * The same two people changing shirts on the games already made, so a swap
+ * after Arrancar is the teams as they really played: wherever one of them is
+ * in a game — its squad, its pins, either lineup — the other takes the place.
+ * Played games too, because the usual reason is that the teams were loaded
+ * wrong (somebody changed sides at the last minute), and a played game left
+ * as loaded keeps the wrong people on its result. The uno x uno is left
+ * alone: what was said about one person never becomes about another.
+ *
+ * Returns only the games that changed.
+ */
+export function swapInTorneoGames(games: readonly Match[], a: PlayerId, b: PlayerId): Match[] {
+  if (a === b) return [];
+  const swap = (id: PlayerId): PlayerId => (id === a ? b : id === b ? a : id);
+  const out: Match[] = [];
+  for (const game of games) {
+    const touched = [...game.squad, ...game.lineupA, ...game.lineupB, ...(Object.keys(game.pins) as PlayerId[])].some(
+      (id) => id === a || id === b,
+    );
+    if (!touched) continue;
+    out.push({
+      ...game,
+      squad: game.squad.map(swap),
+      pins: Object.fromEntries(Object.entries(game.pins).map(([id, side]) => [swap(id as PlayerId), side])),
+      lineupA: game.lineupA.map((id) => (id === null ? null : swap(id))),
+      lineupB: game.lineupB.map((id) => (id === null ? null : swap(id))),
+    });
+  }
+  return out;
+}
+
+/**
  * New bibs for one team. Whoever was wearing them takes the old ones, because
  * two teams of one night in the same colour is two teams nobody can tell
  * apart — the same rule `lib/kits.ts` keeps for the two sides of a match.

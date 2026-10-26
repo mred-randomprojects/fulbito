@@ -854,13 +854,22 @@ el partido"); one whose teams an earlier corrected score has since changed is
 flagged, and rebuilt on "Corregir la llave" only while it has no result — a
 played game stays as it was played.
 
-**After Arrancar the teams are what the games were made from.** Names and
+**After Arrancar the teams can still be corrected.** Names and
 bibs still change on the host and follow onto the games in the same write
 (`syncTorneoGames`, wired in `App`'s match route): the name always, the bibs
 only when the host's changed, the date only onto games still on the night's
 old date, a game's own name only while it is the "A vs B" it was born with.
-Swapping people is over; somebody anotado late pays and plays by being put in
-a game's own lineup. "Volver a armar" deletes the games while none has a
+The people still move, the same tap as before Arrancar, and the board keeps
+showing each team's total and slot ratings behind `ScoresVisible` (the same
+eyes the split showed them to): tap one, tap one of another team, and they
+change shirts (`swapTorneoPlayers`); tap somebody anotado sin equipo and
+somebody on a team, and the loose one takes the place (`replaceTorneoPlayer`).
+Either way the change goes onto every game already made, *played ones
+included* (`swapInTorneoGames`: squad, pins, both lineups), because a swap this
+late is the teams being corrected to how they really played. (It used to lock them and hide the totals; in October 2026 a
+torneo whose teams changed at the last minute was loaded as armado, and
+neither its teams nor their totals could be put right.) The uno x uno
+stays on whoever it was written about. "Volver a armar" deletes the games while none has a
 result; deleting the host deletes its games with it, and Deshacer brings the
 lot back.
 
