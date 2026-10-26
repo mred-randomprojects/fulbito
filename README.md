@@ -42,6 +42,15 @@ any other app, full screen and with no signal needed.
 - **Detail where you actually have an opinion.** Add a position rating for the
   60 outfield who is a 90 in goal; add attributes for the one who is quick but
   cannot finish. Missing data never costs a player anything.
+- **Comparar: two faces, one question.** On Jugadores → Comparar the app
+  shows two people side by side and asks "¿A quién preferís en tu equipo?" —
+  or who is better in goal, at the back, up front, who has more pique or more
+  aguante — with Parejos and No sé for the honest answers. After about three
+  answers per player it says which numbers would agree best with what you
+  picked (+6 to one, −4 to another), and whether your whole scale is squeezed
+  — a 50 and a 70 that are worlds apart on the pitch and twenty points on
+  paper — and applies the changes in one tap. The answers stay in your
+  browser: never synced, never exported.
 - **Balanced teams, worked out properly.** For the squad sizes this is built
   for, *every* legal split is checked and scored — not shuffled until it looks
   close. Six genuinely different options, none of them a mirror of another.

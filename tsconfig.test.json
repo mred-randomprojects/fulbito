@@ -27,6 +27,8 @@
     "src/lib/removed.test.ts",
     "src/lib/rating.ts",
     "src/lib/rating.test.ts",
+    "src/lib/compare.ts",
+    "src/lib/compare.test.ts",
     "src/lib/formations.ts",
     "src/lib/formations.test.ts",
     "src/lib/balance.ts",

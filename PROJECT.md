@@ -407,6 +407,7 @@ gate, including tooltips and charts.
 | Module | What it decides |
 | --- | --- |
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
+| `lib/compare.ts` | Comparar: the pairs to ask, and the answers read back (Bradley–Terry anchored on today's numbers, with a scale stretch) into suggested ratings; `useComparisons.ts` keeps the answers in this browser and `ComparePanel` is the screen |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
 | `lib/strategies.ts` | What "parejo" means under each of Armar's strategies, and how a lineup reads against all of them |
 | `lib/matchBrief.ts` | The squad as Markdown, every puntaje included, for the match owner's own AI — see "Un puntaje es secreto" |
@@ -798,6 +799,44 @@ about twenty milliseconds, nearly all of it the simulated matches, and the
 tally forecasts forty. `useForecastTally` scores them a few at a time on the
 timer `browserClock` wires up and lets the rows land as they are ready;
 every game after the first visit is a cache hit and lands on the first tick.
+
+### Comparar, and why its answers never leave the browser
+
+Jugadores has two views, Plantel and Comparar. Comparar shows two faces and
+one question — the overall ("¿A quién preferís en tu equipo?"), a role, or an
+attribute — with Parejos and No sé. A rating typed into a form is an absolute
+guess that drifts (a 50 out of pity, a 70 out of habit); a choice between two
+people is easier to get right. `lib/compare.ts` reads the choices back:
+
+- **The model** is Bradley–Terry, P(i over j) = σ((vᵢ − vⱼ)/SCALE), with
+  `SCALE` fixed by what a gap is taken to mean — ten points apart, the better
+  one is picked three times in four. Without such an anchor pairwise answers
+  say nothing about spread; with it they do.
+- **vᵢ = center + k·(anchorᵢ − center) + offsetᵢ**, fitted together. `k` is
+  the stretch: above one, the answers are more decisive than the numbers and
+  the scale is squeezed (the "a 5 and a 7 are worlds apart" feeling,
+  measured). The offsets are what each player's own answers add, against a
+  prior of 8 points. Fitted apart, one sleeper who beats everybody rated above
+  him read as "the numbers mean nothing" and squeezed the whole plantel — the
+  test that pins this is the first one in `compare.test.ts`.
+- **The anchor is the number when they were first asked about**, stored on
+  each answer (`baseA`, `baseB`), not today's. Applying a suggestion moves
+  today's number onto the fit, so the suggestion disappears instead of the
+  same answers pushing again.
+- **No sé is kept but not counted**: it stops the pair coming back. Parejos is
+  half a win each. A role's baseline is the stored role rating or what the
+  lineups use; an attribute's is the stored one or the overall rating.
+- **Who comes up** (`nextPair`): the least-asked first, a partner close in
+  number and not asked about much, never a pair already asked while a fresh
+  one is left, never the pair just shown, sides shuffled. The tag filter
+  narrows the pool.
+
+**Every answer is a puntaje** — what the one answering thinks of two people —
+so the answers live only in `localStorage` (`fulbito-comparisons-v1`), outside
+`AppData`: not synced, not in the export or the backup, not visible to a
+co-admin. What comes out of them is ratings, shown behind `ScoresVisible`, and
+Comparar is not offered while viewing as somebody else, whose plantel the
+answers are not about.
 
 ### Torneos armados in a match
 

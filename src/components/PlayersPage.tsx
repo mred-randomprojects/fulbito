@@ -1,7 +1,9 @@
 import { useScoresHidden } from "@/useScorePrivacy";
 import { ScoresVisible } from "./ScorePrivacy";
 import { useMemo, useState } from "react";
-import { Plus, Search, SlidersHorizontal, Star, Users } from "lucide-react";
+import { Plus, Scale, Search, SlidersHorizontal, Star, Users } from "lucide-react";
+import { ComparePanel } from "./ComparePanel";
+import { useViewAs } from "@/viewAs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
@@ -35,6 +37,11 @@ type SortKey = "name" | "rating" | "record" | "detail";
 export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
   const [query, setQuery] = useState("");
   const [chosenSort, setSort] = useState<SortKey>("name");
+  const [chosenView, setView] = useState<"plantel" | "comparar">("plantel");
+  // Comparar's answers are this browser's owner's, about their own plantel:
+  // somebody else's roster on screen is not what they were about.
+  const viewingAs = useViewAs().target !== null;
+  const view = viewingAs ? "plantel" : chosenView;
   const hidden = useScoresHidden();
   const sort = hidden && chosenSort === "rating" ? "name" : chosenSort;
   const tagFilter = useTagFilter(players);
@@ -96,7 +103,48 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
         </Button>
       </header>
 
-      {players.length > 0 && (
+      {players.length > 1 && !viewingAs && (
+        <div className="flex rounded-lg border border-border p-0.5">
+          {(
+            [
+              ["plantel", "Plantel", Users],
+              ["comparar", "Comparar", Scale],
+            ] as const
+          ).map(([key, label, Icon]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              aria-pressed={view === key}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                view === key ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "comparar" && (
+        <>
+          <TagFilter
+            tags={tagFilter.tags}
+            selected={tagFilter.selected}
+            onToggle={tagFilter.toggle}
+            onClear={tagFilter.clear}
+          />
+          <ComparePanel
+            pool={players.filter((player) => matchesTags(player, tagFilter.selected))}
+            players={players}
+            onSave={onSave}
+          />
+        </>
+      )}
+
+      {view === "plantel" && players.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[180px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -134,7 +182,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
         </div>
       )}
 
-      {players.length > 0 && (
+      {view === "plantel" && players.length > 0 && (
         <TagFilter
           tags={tagFilter.tags}
           selected={tagFilter.selected}
@@ -143,7 +191,7 @@ export function PlayersPage({ players, matches, onSave, onDelete }: Props) {
         />
       )}
 
-      {players.length === 0 ? (
+      {view === "comparar" ? null : players.length === 0 ? (
         <EmptyRoster onAdd={() => form.create()} />
       ) : visible.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
