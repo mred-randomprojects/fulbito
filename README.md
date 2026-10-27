@@ -42,6 +42,14 @@ any other app, full screen and with no signal needed.
 - **Detail where you actually have an opinion.** Add a position rating for the
   60 outfield who is a 90 in goal; add attributes for the one who is quick but
   cannot finish. Missing data never costs a player anything.
+- **Balanceo: every knob, your own profiles.** Armar's four ways of
+  balancing are now profiles you can open up: Nivel parejo, Líneas,
+  Dispersión, Estrellas, Aguante (and how hard the one without it drops),
+  Puestos, Química, Se conocen (mark who has played together for years) and
+  Win rate, plus a curve you drag like an equaliser — the 7 plays well, the
+  8 stands out, the 9 changes the game. Try it live on a real night's squad,
+  save it under your own name and pick it in Armar. Every team shows its sum
+  and, beside it, what it really rinde, with the reason on hover.
 - **Comparar: two faces, one question.** On Jugadores → Comparar the app
   shows two people side by side and asks "¿A quién preferís en tu equipo?" —
   or who is better in goal, at the back, up front, who has more pique or more

@@ -11,6 +11,7 @@ import {
   balanceCost,
   binomial,
   evaluateSquad,
+  type EvaluationContext,
   SplitError,
   strengthEdge,
   TOGETHER_PENALTY,
@@ -93,6 +94,8 @@ export interface GroupSplitRequest {
    * when this is given, the same as `findSplits` does.
    */
   cost?: PairCost;
+  /** What each team is worth beyond its eleven: a balance profile's curve and "se conocen". */
+  context?: EvaluationContext;
   /** Injected in tests for deterministic search. */
   random?: () => number;
 }
@@ -217,6 +220,8 @@ export interface GroupingRequest {
   weights?: CostWeights;
   /** The same pairing cost the search was given, so a hand swap is read alike. */
   cost?: PairCost;
+  /** The same evaluation context the search was given. */
+  context?: EvaluationContext;
 }
 
 /**
@@ -242,12 +247,13 @@ export function scoreGrouping(request: GroupingRequest): GroupSplitOption {
     keepers = EMPTY_KEEPERS,
     weights,
     cost,
+    context,
   } = request;
   const formations =
     request.formations ?? teams.map((team) => defaultFormation(team.length));
 
   const evaluations = teams.map((team, index) =>
-    evaluateSquad(team, formations[index] ?? defaultFormation(team.length)),
+    evaluateSquad(team, formations[index] ?? defaultFormation(team.length), context),
   );
   const ids = teams.map((team) => team.map((player) => player.id));
   const conflicts = ids.reduce((sum, team) => sum + conflictsWithin(avoid, team).length, 0);
@@ -342,6 +348,7 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     optionCount = 5,
     weights,
     cost: pairCost,
+    context,
   } = request;
 
   const teamCount = sizes.length;
@@ -484,6 +491,7 @@ export function findGroupSplits(request: GroupSplitRequest): GroupSplitResult {
     const result = evaluateSquad(
       indices.map((i) => players[i]),
       formation,
+      context,
     );
     evalCache.set(key, result);
     return result;

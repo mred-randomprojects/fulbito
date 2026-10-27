@@ -1,23 +1,29 @@
-import { AlertTriangle, CheckCircle2, Crown, Dices, FastForward, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Crown, Dices, FastForward, Info, SlidersHorizontal } from "lucide-react";
+import { Link } from "react-router-dom";
 import { ScoresVisible } from "./ScorePrivacy";
 import { useScoresHidden } from "@/useScorePrivacy";
 import type { DraftResult } from "@/lib/captains";
 import {
-  ARMAR_STRATEGIES,
   STRATEGY_HINT,
   STRATEGY_LABEL,
   STRATEGY_STEPS,
   strategyData,
   strategyReady,
-  type ArmarStrategy,
   type DataCheck,
 } from "@/lib/strategies";
+import { profileDataChecks, profileSteps, type BalanceProfile } from "@/lib/profiles";
 import { KITS, playerDisplayName, type Player, type PlayerId, type TeamConfig, type TeamKey } from "@/types";
 import { cn } from "@/lib/utils";
 
+/** What Armar asks: a balance profile by id, or the captains' draft. */
+export const CAPITANES = "capitanes";
+
 interface Props {
-  strategy: ArmarStrategy;
-  onChange: (strategy: ArmarStrategy) => void;
+  /** A profile's id, or `CAPITANES`. */
+  selected: string;
+  onChange: (selected: string) => void;
+  /** Every profile, the factory ones first. */
+  profiles: BalanceProfile[];
   /** Tonight's anotados. */
   squad: Player[];
   /**
@@ -48,50 +54,79 @@ const MISSING_SHOWN = 8;
  * exception is the keepers check — "hay uno solo" is a fact about who has a
  * GK rating of 60 or more — so it drops out while scores are hidden.
  */
-export function StrategyPicker({ strategy, onChange, squad, capitanes, onViewPlayer }: Props) {
+export function StrategyPicker({ selected, onChange, profiles, squad, capitanes, onViewPlayer }: Props) {
   const hidden = useScoresHidden();
-  const checksFor = (key: ArmarStrategy) =>
-    strategyData(key, squad).filter((check) => !hidden || check.key !== "keepers");
+  const visibleChecks = (checks: DataCheck[]) => checks.filter((check) => !hidden || check.key !== "keepers");
+  const profileFor = (key: string) => profiles.find((p) => p.id === key) ?? profiles[0];
+  const checksFor = (key: string) =>
+    visibleChecks(key === CAPITANES ? strategyData("capitanes", squad) : profileDataChecks(profileFor(key), squad));
   const nameOf = new Map(squad.map((p) => [p.id, playerDisplayName(p)]));
-  const checks = checksFor(strategy);
+  const isDraft = selected === CAPITANES && capitanes !== undefined;
+  const current = isDraft ? null : profileFor(selected);
+  const checks = checksFor(isDraft ? CAPITANES : (current?.id ?? ""));
   const ready = strategyReady(checks);
+  const label = current === null ? STRATEGY_LABEL.capitanes : current.name;
+  const hint =
+    current === null
+      ? STRATEGY_HINT.capitanes
+      : current.strategy !== undefined
+        ? STRATEGY_HINT[current.strategy]
+        : "Tu perfil, con las perillas como las dejaste.";
+  const steps =
+    current === null
+      ? STRATEGY_STEPS.capitanes
+      : current.strategy !== undefined
+        ? STRATEGY_STEPS[current.strategy]
+        : profileSteps(current);
+  const chips = [
+    ...profiles.map((p) => ({ key: p.id, label: p.name, hint: p.strategy !== undefined ? STRATEGY_HINT[p.strategy] : "Tu perfil." })),
+    ...(capitanes !== undefined ? [{ key: CAPITANES, label: STRATEGY_LABEL.capitanes, hint: STRATEGY_HINT.capitanes }] : []),
+  ];
 
   return (
     <div className="space-y-2">
-      <div role="radiogroup" aria-label="Cómo armar los equipos" className="flex flex-wrap gap-1.5">
-        {ARMAR_STRATEGIES.filter((key) => capitanes !== undefined || key !== "capitanes").map((key) => {
-          const keyReady = strategyReady(checksFor(key));
+      <div role="radiogroup" aria-label="Cómo armar los equipos" className="flex flex-wrap items-center gap-1.5">
+        {chips.map((chip) => {
+          const keyReady = strategyReady(checksFor(chip.key));
+          const active = chip.key === (isDraft ? CAPITANES : current?.id);
           return (
             <button
-              key={key}
+              key={chip.key}
               type="button"
               role="radio"
-              aria-checked={strategy === key}
-              onClick={() => onChange(key)}
-              title={keyReady ? STRATEGY_HINT[key] : `${STRATEGY_HINT[key]} Le faltan datos.`}
+              aria-checked={active}
+              onClick={() => onChange(chip.key)}
+              title={keyReady ? chip.hint : `${chip.hint} Le faltan datos.`}
               className={cn(
                 "flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors",
-                strategy === key
+                active
                   ? "border-primary bg-primary/15 text-foreground"
                   : "border-border text-muted-foreground hover:bg-accent",
               )}
             >
-              {STRATEGY_LABEL[key]}
+              {chip.label}
               {!keyReady && squad.length > 0 && (
                 <AlertTriangle className="h-3 w-3 text-amber-400" aria-label="le faltan datos" />
               )}
             </button>
           );
         })}
+        <Link
+          to="/balanceo"
+          className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Perillas
+        </Link>
       </div>
 
       <div className="rounded-xl border border-border bg-card p-3">
         <p className="text-sm">
-          <span className="font-medium">{STRATEGY_LABEL[strategy]}.</span>{" "}
-          <span className="text-muted-foreground">{STRATEGY_HINT[strategy]}</span>
+          <span className="font-medium">{label}.</span>{" "}
+          <span className="text-muted-foreground">{hint}</span>
         </p>
         <ul className="mt-1.5 space-y-1">
-          {STRATEGY_STEPS[strategy].map((step) => (
+          {steps.map((step) => (
             <li key={step} className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
               {step}
@@ -99,7 +134,7 @@ export function StrategyPicker({ strategy, onChange, squad, capitanes, onViewPla
           ))}
         </ul>
 
-        {strategy === "capitanes" && capitanes !== undefined && (
+        {isDraft && capitanes !== undefined && (
           <CaptainPicker
             squad={squad}
             teamA={capitanes.teamA}

@@ -213,9 +213,24 @@ export interface TeamEvaluation {
    */
   familiarity: number;
   /**
-   * What the side is actually worth per player: `average`, less `weakLinks`,
-   * plus `chemistry` and `familiarity`. This — not the raw sum — is what
-   * balancing compares.
+   * What the side gains from people who know each other being on it (the
+   * "se conocen" marks, `Player.bonds`), in points per player. Zero without
+   * a context that prices it — a balance profile's Química manual.
+   */
+  bond: number;
+  /**
+   * What each slot is worth on the pitch once the profile's curve is applied
+   * (`EvaluationContext.curve`) — the same as `slotRatings` without one. A
+   * curve that makes a 90 worth far more than a 70 changes this, never the
+   * ratings.
+   */
+  worth: number[];
+  /** The sum of `worth`: the total once the curve is in. */
+  worthTotal: number;
+  /**
+   * What the side is actually worth per player: the mean of `worth`, less
+   * `weakLinks`, plus `chemistry`, `familiarity` and `bond`. This — not the
+   * raw sum — is what balancing compares.
    */
   strength: number;
 }
@@ -230,6 +245,10 @@ export interface TeamEvaluation {
  */
 export interface EvaluationContext {
   familiarity?: (ids: readonly PlayerId[]) => number;
+  /** What a side gains from the "se conocen" marks among them, points per player. */
+  bond?: (ids: readonly PlayerId[]) => number;
+  /** A rating's worth on the pitch: a balance profile's curve. Identity when absent. */
+  curve?: (rating: number) => number;
 }
 
 /**
@@ -349,6 +368,10 @@ export function evaluateLineup(
   });
   const familiarity =
     context.familiarity !== undefined && ids.length > 1 ? context.familiarity(ids) : 0;
+  const bond = context.bond !== undefined && ids.length > 1 ? context.bond(ids) : 0;
+  const curve = context.curve;
+  const worth = curve === undefined ? slotRatings : slotRatings.map((r, i) => (lineup[i] == null ? 0 : curve(r)));
+  const worthTotal = curve === undefined ? total : worth.reduce((sum, w) => sum + w, 0);
   const present = slotRatings.filter((_, i) => lineup[i] != null);
   const variance =
     present.length > 0
@@ -368,7 +391,10 @@ export function evaluateLineup(
     weakLinks,
     chemistry,
     familiarity,
-    strength: filled > 0 ? average - weakLinks + chemistry + familiarity : 0,
+    bond,
+    worth,
+    worthTotal,
+    strength: filled > 0 ? worthTotal / filled - weakLinks + chemistry + familiarity + bond : 0,
   };
 }
 

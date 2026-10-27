@@ -116,6 +116,15 @@ export interface Player {
    */
   together: PlayerId[];
   /**
+   * People this player knows well — they have played together for years,
+   * they get on — marked for a balance profile's Química manual: a bonus for
+   * the side that has them together, and if the profile says so a nudge to
+   * put them on one. Softer than `together`, which is a rule. Stored on
+   * whoever was marked first and read both ways (`lib/profiles.ts`).
+   * Optional: absent on everybody nobody has marked.
+   */
+  bonds?: PlayerId[];
+  /**
    * Which crews this player belongs to: the laburo, the barrio, the ones who
    * only turn up in summer. Free text, no fixed vocabulary, and read by
    * exactly one thing — the filter on the roster and on the squad list. See
@@ -851,6 +860,7 @@ const PLAYER_FIELDS: Record<keyof Player, true> = {
   foot: true,
   avoid: true,
   together: true,
+  bonds: true,
   tags: true,
   notes: true,
   updatedAt: true,
@@ -945,6 +955,8 @@ function normalizePlayer(raw: unknown): Player | null {
   };
   const foot = normalizeFoot(raw.foot);
   if (foot !== undefined) player.foot = foot;
+  const bonds = normalizePeople(raw.bonds, id);
+  if (bonds.length > 0) player.bonds = bonds;
   return { ...unknownFields(raw, PLAYER_FIELDS), ...player };
 }
 

@@ -5,6 +5,7 @@ import { useCloudSync } from "./useCloudSync";
 import { useTracking } from "./useTracking";
 import { NavBar } from "./components/NavBar";
 import { PlayersPage } from "./components/PlayersPage";
+import { BalancePage } from "./components/BalancePage";
 import { MatchesPage } from "./components/MatchesPage";
 import { MatchBuilder } from "./components/MatchBuilder";
 import { TeamsPage } from "./components/TeamsPage";
@@ -210,6 +211,10 @@ function AppBody() {
                 onSavePlayer={app.savePlayer}
               />
             }
+          />
+          <Route
+            path="/balanceo"
+            element={<BalancePage players={app.players} matches={app.matches} onSavePlayer={app.savePlayer} />}
           />
           <Route
             path="/settings"

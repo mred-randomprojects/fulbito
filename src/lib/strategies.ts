@@ -207,13 +207,13 @@ export const STAMINA_TOLERANCE = 5;
 export const RULE_PENALTY = 10;
 
 /** Under Completo, how much of the level term is the plain edge rather than the worn-down one. */
-const COMPLETE_LEVEL_SHARE = 0.5;
+export const COMPLETE_LEVEL_SHARE = 0.5;
 
 /** Per point of mean aguante gap, inside the tolerance: a nudge toward level. */
 const STAMINA_WEIGHT = 0.3;
 
 /** Per point of per-player aptitude gap on a line, under "Por puestos". */
-const LINE_WEIGHT = 0.5;
+export const LINE_WEIGHT = 0.5;
 
 export type OutfieldRole = Exclude<Role, "GK">;
 export const OUTFIELD_ROLES: readonly OutfieldRole[] = ["DEF", "MID", "FWD"];
@@ -225,9 +225,12 @@ export const OUTFIELD_ROLES: readonly OutfieldRole[] = ["DEF", "MID", "FWD"];
  * a 0 three quarters. It is the formula the grupo asked for, applied to what
  * each one is worth in the position they are standing in.
  */
-export function staminaFactor(stamina: number): number {
-  return 0.75 + 0.25 * (Math.min(100, Math.max(0, stamina)) / 100);
+export function staminaFactor(stamina: number, wear = DEFAULT_WEAR): number {
+  return 1 - wear + wear * (Math.min(100, Math.max(0, stamina)) / 100);
 }
+
+/** How much of the level a 0 in aguante loses by the end: a quarter, the grupo's formula. */
+export const DEFAULT_WEAR = 0.25;
 
 /** Everything the strategies need to know about a squad, worked out once. */
 export interface StrategyContext {
@@ -308,7 +311,7 @@ export interface SideReading {
   enduring: number;
 }
 
-export function readSide(context: StrategyContext, side: TeamEvaluation): SideReading {
+export function readSide(context: StrategyContext, side: TeamEvaluation, wear = DEFAULT_WEAR): SideReading {
   let size = 0;
   let stamina = 0;
   let low = 0;
@@ -322,7 +325,7 @@ export function readSide(context: StrategyContext, side: TeamEvaluation): SideRe
     size += 1;
     const own = context.stamina.get(player.id) ?? context.staminaMean;
     stamina += own;
-    worn += side.slotRatings[slot] * staminaFactor(own);
+    worn += side.worth[slot] * staminaFactor(own, wear);
     if (context.lowStamina.has(player.id)) low += 1;
     if (context.engines.has(player.id)) engines += 1;
     if (context.keepers.has(player.id)) keeper = true;
@@ -345,7 +348,7 @@ export function readSide(context: StrategyContext, side: TeamEvaluation): SideRe
     lines,
     // The weak links, the passing game and the history stay as they are; only
     // the individual levels are worn down.
-    enduring: side.strength - (side.average - worn / size),
+    enduring: side.strength - (side.worthTotal / size - worn / size),
   };
 }
 
@@ -366,7 +369,7 @@ export function engineExcess(a: SideReading, b: SideReading): number {
   return Math.max(0, Math.abs(a.engines - b.engines) - 1);
 }
 
-function physicalTerms(a: SideReading, b: SideReading): number {
+export function physicalTerms(a: SideReading, b: SideReading): number {
   const gap = Math.abs(a.stamina - b.stamina);
   return (
     STAMINA_WEIGHT * gap +
@@ -376,16 +379,19 @@ function physicalTerms(a: SideReading, b: SideReading): number {
   );
 }
 
-function positionTerms(context: StrategyContext, a: SideReading, b: SideReading): number {
-  let cost = 0;
-  if (context.keepers.size > 0) {
-    if (!a.keeper) cost += KEEPER_PENALTY;
-    if (!b.keeper) cost += KEEPER_PENALTY;
-  }
-  for (const role of OUTFIELD_ROLES) {
-    cost += LINE_WEIGHT * Math.abs(a.lines[role] - b.lines[role]);
-  }
-  return cost;
+/** `KEEPER_PENALTY` per side without a keeper, when the squad has any. */
+export function keeperTerms(context: StrategyContext, a: SideReading, b: SideReading): number {
+  if (context.keepers.size === 0) return 0;
+  return (a.keeper ? 0 : KEEPER_PENALTY) + (b.keeper ? 0 : KEEPER_PENALTY);
+}
+
+/** The per-player aptitude gaps on the three outfield lines, summed. */
+export function aptitudeGap(a: SideReading, b: SideReading): number {
+  return OUTFIELD_ROLES.reduce((sum, role) => sum + Math.abs(a.lines[role] - b.lines[role]), 0);
+}
+
+export function positionTerms(context: StrategyContext, a: SideReading, b: SideReading): number {
+  return keeperTerms(context, a, b) + LINE_WEIGHT * aptitudeGap(a, b);
 }
 
 /**

@@ -1,6 +1,7 @@
 import { ScorePrivacyPanel } from "./ScorePrivacy";
 import { useRef, useState } from "react";
-import { Download, HardDrive, Info, Upload } from "lucide-react";
+import { Download, HardDrive, Info, SlidersHorizontal, Upload } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { formatBytes, ORIGIN_QUOTA_BYTES, storageUsage } from "@/storage";
 import { normalizeAppData, type AppData } from "@/types";
@@ -83,6 +84,19 @@ export function SettingsPage({ data, onImport, onRestore, cloud, avatarStorage }
       </header>
 
       <ScorePrivacyPanel />
+
+      <Link
+        to="/balanceo"
+        className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-accent/40"
+      >
+        <SlidersHorizontal className="h-5 w-5 shrink-0 text-primary" />
+        <span className="min-w-0">
+          <span className="block text-sm font-medium">Balanceo</span>
+          <span className="block text-xs text-muted-foreground">
+            Las perillas de Armar, la curva del puntaje y tus perfiles, con un partido de prueba.
+          </span>
+        </span>
+      </Link>
 
       <CloudPanel state={cloud} />
 

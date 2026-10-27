@@ -58,14 +58,18 @@ import { matchBrief } from "@/lib/matchBrief";
 import { useCopy } from "@/useCopy";
 import { COPY_REFUSED } from "@/share";
 import { useViewAs } from "@/viewAs";
+import { strategyContext } from "@/lib/strategies";
 import {
-  DEFAULT_STRATEGY,
-  strategyContext,
-  strategyCost,
-  type ArmarStrategy,
-} from "@/lib/strategies";
+  buildBondIndex,
+  profileById,
+  profileCost,
+  profileEvaluationContext,
+  shrunkWinRates,
+} from "@/lib/profiles";
+import { useBalanceProfiles } from "@/useBalanceProfiles";
 import { DraftError, draftTeams, drawCaptains, type DraftResult } from "@/lib/captains";
-import { DraftCard, StrategyPicker } from "./StrategyPicker";
+import { CAPITANES, DraftCard, StrategyPicker } from "./StrategyPicker";
+import { RindeBadge } from "./RindeBadge";
 import { buildAvoidIndex, conflictsWithin, EMPTY_AVOID_INDEX } from "@/lib/avoid";
 import {
   buildTogetherIndex,
@@ -268,7 +272,7 @@ export function MatchBuilder({
     () => buildFamiliarity(matches, match.id),
     [matches, match.id],
   );
-  const evaluationContext = useMemo<EvaluationContext>(
+  const historyContext = useMemo<EvaluationContext>(
     () => ({ familiarity: (ids) => familiarityBonus(familiarityIndex, ids) }),
     [familiarityIndex],
   );
@@ -277,11 +281,22 @@ export function MatchBuilder({
   const squadContext = useMemo(() => strategyContext(squadPlayers), [squadPlayers]);
 
   /**
-   * Which question Armar asks. Not stored on the match: it is how this
-   * person wants to look at tonight, and every lineup is read against all of
-   * them anyway.
+   * Which question Armar asks: a balance profile, or the captains' draft.
+   * Not stored on the match: it is how this person wants to look at
+   * tonight, and every lineup is read against all of them anyway. It opens
+   * on the profile chosen as the default on Balanceo.
    */
-  const [strategy, setStrategy] = useState<ArmarStrategy>(DEFAULT_STRATEGY);
+  const { store: profileStore, profiles } = useBalanceProfiles();
+  const [strategy, setStrategy] = useState<string>(() => profileStore.defaultId);
+  const bondIndex = useMemo(() => buildBondIndex(players), [players]);
+  const winRates = useMemo(() => shrunkWinRates(statsById), [statsById]);
+  /** What a side is worth under a profile: its curve, its química, its "se conocen". */
+  const contextFor = useCallback(
+    (asked: string) =>
+      profileEvaluationContext(profileById(profileStore, asked === CAPITANES ? null : asked), historyContext, bondIndex),
+    [profileStore, historyContext, bondIndex],
+  );
+  const evaluationContext = useMemo(() => contextFor(strategy), [contextFor, strategy]);
 
   /** The captains asked for; whoever is no longer anotado drops out. */
   const [captainChoice, setCaptainChoice] = useState<Partial<Record<TeamKey, PlayerId>>>({});
@@ -616,12 +631,13 @@ export function MatchBuilder({
    * fires because the browser backgrounded the tab, leaving the button dead.
    */
   const balance = useCallback((
-    asked: ArmarStrategy = strategy,
+    asked: string = strategy,
     wanted: Partial<Record<TeamKey, PlayerId>> = captains,
   ) => {
     setBalanceError(null);
     try {
-      if (asked === "capitanes") {
+      const askedContext = contextFor(asked);
+      if (asked === CAPITANES) {
         const chosen = drawCaptains(squadPlayers, Math.random, wanted);
         if (chosen == null) {
           setBalanceError("Hacen falta al menos dos anotados para tener dos capitanes.");
@@ -637,8 +653,8 @@ export function MatchBuilder({
           first: Math.random() < 0.5 ? "A" : "B",
           avoid: match.respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
         });
-        const sideA = evaluateSquad(result.teamA, formationA, evaluationContext);
-        const sideB = evaluateSquad(result.teamB, formationB, evaluationContext);
+        const sideA = evaluateSquad(result.teamA, formationA, askedContext);
+        const sideB = evaluateSquad(result.teamB, formationB, askedContext);
         patch({
           lineupA: sideA.lineup.map((p) => p?.id ?? null),
           lineupB: sideB.lineup.map((p) => p?.id ?? null),
@@ -661,8 +677,14 @@ export function MatchBuilder({
         handicap: match.handicap,
         avoid: match.respectAvoids ? avoidIndex : EMPTY_AVOID_INDEX,
         together: match.respectTogether ? togetherIndex : EMPTY_TOGETHER_INDEX,
-        context: evaluationContext,
-        cost: strategyCost(asked, squadContext, match.basis, match.handicap),
+        context: askedContext,
+        cost: profileCost(profileById(profileStore, asked), {
+          context: squadContext,
+          basis: match.basis,
+          handicap: match.handicap,
+          winRates,
+          bonds: bondIndex,
+        }),
         optionCount: 6,
       });
       setOptions(result);
@@ -695,7 +717,10 @@ export function MatchBuilder({
     formationB,
     applyOption,
     strategy,
-    evaluationContext,
+    contextFor,
+    profileStore,
+    winRates,
+    bondIndex,
     squadContext,
     captains,
     patch,
@@ -1001,7 +1026,7 @@ export function MatchBuilder({
    * hand is theirs, and waits for Armar.
    */
   const chooseStrategy = useCallback(
-    (next: ArmarStrategy) => {
+    (next: string) => {
       setStrategy(next);
       if ((options != null || draft != null) && !edited && mismatch === 0) balance(next);
     },
@@ -1248,6 +1273,7 @@ export function MatchBuilder({
                 onOpenGame={onOpenMatch}
                 onViewPlayer={form.view}
                 onSaveTeam={onSaveTeam}
+                winRates={winRates}
               />
             )}
 
@@ -1334,8 +1360,9 @@ export function MatchBuilder({
                   </div>
 
                   <StrategyPicker
-                    strategy={strategy}
+                    selected={strategy}
                     onChange={chooseStrategy}
+                    profiles={profiles}
                     squad={squadPlayers}
                     capitanes={{
                       teamA: match.teamA,
@@ -1853,6 +1880,7 @@ function TeamChip({
       <span className="tabular rounded-full bg-black/15 px-1.5 py-0.5">
         <ScoresVisible fallback="—">{evaluation.total.toFixed(1)}</ScoresVisible>
       </span>
+      <RindeBadge evaluation={evaluation} />
       <ScoresVisible>{favoured === true && <span title="Levemente favorito">★</span>}</ScoresVisible>
     </div>
   );

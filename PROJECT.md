@@ -169,6 +169,9 @@ record back under the same stamp, and let the next edit erase it everywhere.
   zero.
 - **Armar asks one of four questions** (`lib/strategies.ts`), picked with the
   chips above the pitch and held in component state, not on the `Match`.
+  Those four are now the factory *perfiles de balanceo* (`lib/profiles.ts`,
+  see "Perfiles de balanceo" below): the chips are the profiles, factory ones
+  first, plus Capitanes, and Armar opens on the one marked as default.
   *Completo* is the default (`DEFAULT_STRATEGY`) and takes everything: the
   per-line, spread and star terms, the level edge half plain and half worn
   down by aguante, the physical rules and the keeper and line terms of Por
@@ -239,6 +242,12 @@ record back under the same stamp, and let the next edit erase it everywhere.
   nobody can answer.
 - **`Player.avoid`** — ids this player would rather not share a side with,
   stored only on whoever said it and read as symmetric. See `lib/avoid.ts`.
+- **`Player.bonds`** — optional: ids this player *knows* (they have played
+  together for years, they get on), for a balance profile's Se conocen and
+  Juntar a los que se conocen knobs. Softer than `together`, which is a rule:
+  a bonus for the side that has them and, if the profile says so, a price for
+  splitting them. Stored on whoever was marked first, read both ways
+  (`buildBondIndex`), edited from Balanceo; absent when empty.
 - **`Player.together`** — ids this player had better share a side with. The
   mirror of `avoid`, stored and read the same way, with one difference that
   is the whole design: it chains. One team per person means A with B and B
@@ -407,6 +416,8 @@ gate, including tooltips and charts.
 | Module | What it decides |
 | --- | --- |
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
+| `lib/profiles.ts` | Perfiles de balanceo: the knobs, the curve, the factory profiles (exactly the four strategies), the cost and the evaluation context a profile builds, "se conocen", shrunk win rates, and the store in this browser; `useBalanceProfiles.ts` shares it and `BalancePage` is the screen |
+| `lib/rinde.ts` | What a side is worth on the pitch next to its plain sum, and what makes up the difference; `RindeBadge` shows it |
 | `lib/compare.ts` | Comparar: the pairs to ask, and the answers read back (Bradley–Terry anchored on today's numbers, with a scale stretch) into suggested ratings; `useComparisons.ts` keeps the answers in this browser and `ComparePanel` is the screen |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
 | `lib/strategies.ts` | What "parejo" means under each of Armar's strategies, and how a lineup reads against all of them |
@@ -799,6 +810,45 @@ about twenty milliseconds, nearly all of it the simulated matches, and the
 tally forecasts forty. `useForecastTally` scores them a few at a time on the
 timer `browserClock` wires up and lets the rows land as they are ready;
 every game after the first visit is a cache hit and lands on the first tick.
+
+### Perfiles de balanceo
+
+Armar used to offer four fixed strategies. They are now four *profiles*, and
+a profile is every knob out in the open plus a curve (`lib/profiles.ts`);
+Balanceo (`/balanceo`, from Ajustes or "Perillas" beside Armar's chips) is
+where they are tried and saved.
+
+- **The knobs are weights on terms that already existed**: Nivel parejo
+  (the level edge), Aguante (how much of that edge is the one worn down by
+  each one's aguante) with its Desgaste (how much a 0 in aguante loses; the
+  grupo's formula is 25%), the physical rules, Líneas, Dispersión, Estrellas,
+  Puestos (per-player aptitude by line) and Arquero en cada lado. New ones:
+  Química (× the history bonus), Se conocen (points per marked pair on a
+  side), Juntar a los que se conocen (`BOND_SPLIT_COST` per split pair) and
+  Win rate (per point of gap in the sides' mean `shrunkWinRates`, a record
+  pulled toward a half by five imaginary games).
+- **The factory profiles are exact.** `profileCost` of Completo, Por nivel,
+  Por físico and Por puestos is `strategyCost` of that strategy, term for
+  term; `profiles.test.ts` checks it split by split and that the search lands
+  on the same best cost. So nothing moved for anybody who never opens
+  Balanceo.
+- **The curve** is what a rating is worth on the pitch, nine draggable points
+  (`CURVE_XS`) with straight lines between them, like an equaliser. It goes
+  into the evaluation (`EvaluationContext.curve` → `TeamEvaluation.worth`),
+  so it moves `strength`, the enduring edge and the rinde, never
+  `slotRatings`, `total` or a stored rating. Lines, spread and stars stay on
+  the ratings.
+- **Rinde** (`lib/rinde.ts`, `RindeBadge`): next to a side's sum, a bolt and
+  `strength × players`, with what makes the difference — curve, weak links,
+  passing game, history, se conocen — on hover or tap. Behind
+  `ScoresVisible`.
+- **Profiles live in this browser** (`fulbito-balance-v1`), the factory ones
+  never stored. They are configuration, not opinions about anybody; syncing
+  them would mean a new document under `users/{uid}/meta` and a rules change.
+- **The test squad** on Balanceo is a real night's (the latest by default),
+  split in two with Armar's own search; "Armar al mover una perilla" re-arms
+  180 ms after a knob stops, and whoever changed sides is highlighted. Each
+  knob that reads something says who in that squad has it blank.
 
 ### Comparar, and why its answers never leave the browser
 

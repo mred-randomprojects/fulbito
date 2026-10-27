@@ -28,6 +28,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { StrategyPicker } from "./StrategyPicker";
+import { RindeBadge } from "./RindeBadge";
+import { buildBondIndex, profileById, profileCost, profileEvaluationContext } from "@/lib/profiles";
+import { useBalanceProfiles } from "@/useBalanceProfiles";
 import { useLongPress } from "@/useLongPress";
 import { useCopy } from "@/useCopy";
 import { COPY_REFUSED, downloadBlob } from "@/share";
@@ -50,12 +53,7 @@ import {
 } from "@/lib/keepers";
 import { defaultFormation, type Formation } from "@/lib/formations";
 import { SPLIT_VERDICT_LABEL, verdictFor } from "@/lib/insights";
-import {
-  DEFAULT_STRATEGY,
-  strategyContext,
-  strategyCost,
-  type ArmarStrategy,
-} from "@/lib/strategies";
+import { strategyContext } from "@/lib/strategies";
 import { findByMembers, freeTeamName } from "@/lib/savedTeams";
 import { renderTournamentImage } from "@/lib/tournamentImage";
 import { summariseShape } from "@/lib/tournament";
@@ -138,6 +136,8 @@ interface Props {
   onOpenGame: (id: MatchId) => void;
   onViewPlayer: (id: PlayerId) => void;
   onSaveTeam: (team: Team) => void;
+  /** Each one's win rate, shrunk (`shrunkWinRates`), for a profile's Win rate knob. */
+  winRates: ReadonlyMap<PlayerId, number>;
 }
 
 /**
@@ -173,8 +173,10 @@ function Setup({
   onSaveGames,
   onViewPlayer,
   onSaveTeam,
+  winRates,
 }: Props) {
-  const [strategy, setStrategy] = useState<ArmarStrategy>(DEFAULT_STRATEGY);
+  const { store: profileStore, profiles } = useBalanceProfiles();
+  const [strategy, setStrategy] = useState<string>(() => profileStore.defaultId);
   const [result, setResult] = useState<GroupSplitResult | null>(null);
   const [optionIndex, setOptionIndex] = useState(0);
   /** Whoever is being held, waiting for somebody on another team to tap. */
@@ -194,10 +196,15 @@ function Setup({
   const keeperRule = torneo.spreadKeepers ? keepers : EMPTY_KEEPERS;
   const shortfall = keeperShortfall(keepers.size, teamCount);
   const context = useMemo(() => strategyContext(squadPlayers), [squadPlayers]);
+  const bonds = useMemo(() => buildBondIndex(players), [players]);
   const costFor = useCallback(
-    (asked: ArmarStrategy): PairCost | undefined =>
-      asked === "capitanes" ? undefined : strategyCost(asked, context, match.basis, 0),
-    [context, match.basis],
+    (asked: string): PairCost =>
+      profileCost(profileById(profileStore, asked), { context, basis: match.basis, handicap: 0, winRates, bonds }),
+    [context, match.basis, profileStore, winRates, bonds],
+  );
+  const contextFor = useCallback(
+    (asked: string) => profileEvaluationContext(profileById(profileStore, asked), {}, bonds),
+    [profileStore, bonds],
   );
 
   const armado = torneoArmado(torneo);
@@ -231,9 +238,10 @@ function Setup({
             together,
             keepers: keeperRule,
             cost: costFor(strategy),
+            context: contextFor(strategy),
           })
         : null,
-    [armado, teamsPlayers, formations, match.basis, avoid, together, keeperRule, costFor, strategy],
+    [armado, teamsPlayers, formations, match.basis, avoid, together, keeperRule, costFor, contextFor, strategy],
   );
 
   const headcount = torneo.teams.reduce((sum, team) => sum + team.size, 0);
@@ -264,7 +272,7 @@ function Setup({
     });
 
   /** Runs the search synchronously, for the same reason the match screen does. */
-  const armar = (asked: ArmarStrategy = strategy) => {
+  const armar = (asked: string = strategy) => {
     setError(null);
     try {
       const found = findGroupSplits({
@@ -278,6 +286,7 @@ function Setup({
         keepers: keeperRule,
         optionCount: 6,
         cost: costFor(asked),
+        context: contextFor(asked),
       });
       setResult(found);
       setOptionIndex(0);
@@ -301,7 +310,7 @@ function Setup({
     saveTorneo(withPlayers(torneo, idsOf(result.options[next])));
   };
 
-  const chooseStrategy = (next: ArmarStrategy) => {
+  const chooseStrategy = (next: string) => {
     setStrategy(next);
     // A split nobody touched is re-asked straight away; one moved by hand is
     // somebody's, and waits for Armar.
@@ -700,8 +709,9 @@ function Setup({
 
       <div className="min-w-0 space-y-4">
         <StrategyPicker
-          strategy={strategy}
+          selected={strategy}
           onChange={chooseStrategy}
+          profiles={profiles}
           squad={squadPlayers}
           onViewPlayer={onViewPlayer}
         />
@@ -775,6 +785,7 @@ function Board({
   onSaveTeam,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
+  const { store: profileStore } = useBalanceProfiles();
   /** Whoever is being held, waiting for somebody on another team to tap — as before Arrancar. */
   const [picked, setPicked] = useState<PlayerId | null>(null);
   const copa = useMemo(
@@ -801,11 +812,12 @@ function Board({
       team.players.map((id) => playersById.get(id)).filter((player): player is Player => player !== undefined),
     );
     const formations = teams.map((team, index) => defaultFormation(team.length || torneo.teams[index].size));
+    const context = profileEvaluationContext(profileById(profileStore, profileStore.defaultId), {}, buildBondIndex(players));
     return {
       formations,
-      teams: scoreGrouping({ teams, formations, basis: match.basis }).teams.map((team) => team.evaluation),
+      teams: scoreGrouping({ teams, formations, basis: match.basis, context }).teams.map((team) => team.evaluation),
     };
-  }, [torneo.teams, playersById, match.basis]);
+  }, [torneo.teams, playersById, match.basis, profileStore, players]);
 
   /**
    * Tap somebody, tap somebody on another team, they change shirts — on the
@@ -1637,6 +1649,7 @@ function TeamsGrid({
                   <ScoresVisible fallback="—">{evaluation.total.toFixed(1)}</ScoresVisible>
                 </span>
               )}
+              {evaluation !== null && <RindeBadge evaluation={evaluation} />}
             </div>
             <div className="flex flex-wrap gap-1 border-b border-border/60 bg-card px-2.5 py-1.5">
               {KIT_IDS.map((id) => (
