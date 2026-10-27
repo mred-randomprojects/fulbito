@@ -8,7 +8,10 @@ import { strategyContext, strategyCost, strategyData } from "./strategies.js";
 import {
   BOND_SPLIT_COST,
   CAPITANES_ID,
+  CURVE_MAX,
   CURVE_SHAPES,
+  CURVE_STEP,
+  CURVE_XS,
   FACTORY_PROFILES,
   IDENTITY_CURVE,
   bondGroups,
@@ -17,6 +20,8 @@ import {
   curveValue,
   isIdentityCurve,
   markBonds,
+  moveCurvePoint,
+  normalizeCurve,
   parseProfileStore,
   profileById,
   profileCost,
@@ -214,10 +219,36 @@ describe("the curve", () => {
     assert.equal(curveValue(curve, 120), 140);
   });
 
+  const climbs = (curve: readonly number[]) => curve.every((y, i) => i === 0 || y >= curve[i - 1] + CURVE_STEP);
+
   it("offers shapes that only ever go up", () => {
-    for (const shape of CURVE_SHAPES) {
-      for (let i = 1; i < shape.curve.length; i += 1) assert.ok(shape.curve[i] > shape.curve[i - 1], shape.label);
-    }
+    for (const shape of CURVE_SHAPES) assert.ok(climbs(shape.curve), shape.label);
+  });
+
+  it("holds a dragged point between its neighbours, so a 6 is never worth more than a 7", () => {
+    const curve = [...IDENTITY_CURVE];
+    // The 90 dragged under the 80 stops just above it…
+    assert.deepEqual(moveCurvePoint(curve, 7, 40), [0, 30, 40, 50, 60, 70, 80, 81, 100]);
+    // …and the 30 dragged over the 40 stops just under it.
+    assert.equal(moveCurvePoint(curve, 1, 120)[1], 39);
+    // The ends stop at the edges of the chart.
+    assert.equal(moveCurvePoint(curve, 0, -20)[0], 0);
+    assert.equal(moveCurvePoint(curve, 8, 999)[8], CURVE_MAX);
+    // Inside its room, it goes where it is put.
+    assert.equal(moveCurvePoint(curve, 4, 66)[4], 66);
+  });
+
+  it("reads a stored curve that dips as one that climbs", () => {
+    // The curve from the screenshot that started this: the 90 under the 80.
+    const dipping = [0, 12, 87, 96, 108, 120, 121, 90, 100];
+    const read = normalizeCurve(dipping);
+    assert.ok(climbs(read));
+    assert.deepEqual(read.slice(0, 7), dipping.slice(0, 7), "what already climbed is left alone");
+    // Everything pressed against the top still leaves a step for each point.
+    const flat = normalizeCurve(Array(CURVE_XS.length).fill(CURVE_MAX));
+    assert.ok(climbs(flat));
+    assert.equal(flat[flat.length - 1], CURVE_MAX);
+    assert.deepEqual(normalizeCurve([...IDENTITY_CURVE]), [...IDENTITY_CURVE]);
   });
 });
 

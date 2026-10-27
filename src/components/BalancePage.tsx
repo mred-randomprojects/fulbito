@@ -26,6 +26,7 @@ import {
   curveValue,
   isIdentityCurve,
   markBonds,
+  moveCurvePoint,
   profileById,
   profileCost,
   profileEvaluationContext,
@@ -592,7 +593,7 @@ function CurveEditor({ curve, onChange }: { curve: readonly number[]; onChange: 
     if (dragging === null) return;
     const worth = worthAt(event);
     if (worth === null) return;
-    onChange(curve.map((y, i) => (i === dragging ? worth : y)));
+    onChange(moveCurvePoint(curve, dragging, worth));
   };
   const path = CURVE_XS.map((x, i) => `${i === 0 ? "M" : "L"}${xOf(x)},${yOf(curve[i])}`).join(" ");
 
@@ -600,7 +601,8 @@ function CurveEditor({ curve, onChange }: { curve: readonly number[]; onChange: 
     <div className="space-y-2">
       <p className="text-[11px] leading-snug text-muted-foreground">
         Cuánto vale cada puntaje en la cancha. La diagonal punteada es el puntaje tal cual; subí un punto para que ese
-        nivel pese más, bajalo para que pese menos. Cambia el balanceo y el rinde, no los puntajes.
+        nivel pese más, bajalo para que pese menos. Siempre sube: un punto no pasa a su vecino, así un 6 nunca vale
+        más que un 7. Cambia el balanceo y el rinde, no los puntajes.
       </p>
       <svg
         ref={svg}

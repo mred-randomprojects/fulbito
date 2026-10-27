@@ -842,7 +842,10 @@ there too, without knobs; starred, a match drafts with captains and a torneo
   into the evaluation (`EvaluationContext.curve` → `TeamEvaluation.worth`),
   so it moves `strength`, the enduring edge and the rinde, never
   `slotRatings`, `total` or a stored rating. Lines, spread and stars stay on
-  the ratings.
+  the ratings. It always climbs, by at least `CURVE_STEP` a point: the editor
+  holds a dragged point between its neighbours (`moveCurvePoint`) and
+  `normalizeCurve` lifts a stored point that sits at or under the one before,
+  so a 6 is never worth more than a 7.
 - **Rinde** (`lib/rinde.ts`, `RindeBadge`): next to a side's sum, a bolt and
   `strength × players`, with what makes the difference — curve, weak links,
   passing game, history, se conocen — on hover or tap. Behind

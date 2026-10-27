@@ -173,6 +173,21 @@ export const CURVE_SHAPES: readonly { label: string; curve: readonly number[] }[
 /* The curve                                                           */
 /* ------------------------------------------------------------------ */
 
+/**
+ * How far each point sits at least above the one before. The curve always
+ * climbs: a higher puntaje is worth more than a lower one, never the same or
+ * less, or the balance would rather have a 6 than a 7.
+ */
+export const CURVE_STEP = 1;
+
+/** Point `index` dragged to `worth`, held between its neighbours so the curve still climbs. */
+export function moveCurvePoint(curve: readonly number[], index: number, worth: number): number[] {
+  const low = index === 0 ? 0 : curve[index - 1] + CURVE_STEP;
+  const high = index === curve.length - 1 ? CURVE_MAX : curve[index + 1] - CURVE_STEP;
+  const y = Math.min(high, Math.max(low, worth));
+  return curve.map((v, i) => (i === index ? y : v));
+}
+
 export function isIdentityCurve(curve: readonly number[]): boolean {
   return curve.length === CURVE_XS.length && curve.every((y, i) => Math.abs(y - CURVE_XS[i]) < 1e-9);
 }
@@ -473,9 +488,21 @@ export function normalizeKnobs(raw: unknown): BalanceKnobs {
   return out;
 }
 
+/**
+ * A stored curve, climbing. A point at or under the one before is lifted to
+ * just above it (and the top ones leave room for the rest), so a curve saved
+ * before the editor held them in order still reads as one that climbs.
+ */
 export function normalizeCurve(raw: unknown): number[] {
   if (!Array.isArray(raw) || raw.length !== CURVE_XS.length) return [...IDENTITY_CURVE];
-  return raw.map((y, i) => clamp(y, 0, CURVE_MAX, CURVE_XS[i]));
+  const last = CURVE_XS.length - 1;
+  const out: number[] = [];
+  raw.forEach((y, i) => {
+    const floor = i === 0 ? 0 : out[i - 1] + CURVE_STEP;
+    const ceiling = CURVE_MAX - (last - i) * CURVE_STEP;
+    out.push(Math.min(ceiling, Math.max(floor, clamp(y, 0, CURVE_MAX, CURVE_XS[i]))));
+  });
+  return out;
 }
 
 /** What `localStorage` held, read forgivingly. */
