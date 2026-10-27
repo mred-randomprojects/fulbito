@@ -854,7 +854,9 @@ there too, without knobs; starred, a match drafts with captains and a torneo
   knob or the curve, like an equaliser's "Custom": it is the profile you
   started from (its chip goes dashed) plus your changes, unsaved. It is not
   stored and Armar cannot use it until it is saved — over a profile of yours,
-  or as a new one.
+  or as a new one. So leaving Balanceo with it asks first: a `useBlocker`
+  for any way out inside the app (Volver, the nav, a link) and
+  `beforeunload` for closing or reloading the tab.
 - **Profiles live in this browser** (`fulbito-balance-v1`), the factory ones
   never stored. They are configuration, not opinions about anybody; syncing
   them would mean a new document under `users/{uid}/meta` and a rules change.

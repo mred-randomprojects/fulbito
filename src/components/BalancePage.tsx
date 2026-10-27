@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useBlocker, useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Pencil, Plus, RotateCcw, Shuffle, Star, Trash2, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,6 +109,23 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
   };
   const makeDefault = () => writeProfiles({ ...store, defaultId: captains ? CAPITANES_ID : selected.id });
   const isDefault = store.defaultId === (captains ? CAPITANES_ID : selected.id);
+
+  // Personalizado is not stored, so leaving with it loses it: ask first,
+  // whether the way out is a link in the app, Volver, or closing the tab.
+  const inUse = store.defaultId === CAPITANES_ID ? "Capitanes" : profileById(store, store.defaultId).name;
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
+  useEffect(() => {
+    if (blocker.state !== "blocked") return;
+    const leave = window.confirm(`Personalizado no está guardado: si salís, se pierde y Armar sigue usando «${inUse}». ¿Salir igual?`);
+    if (leave) blocker.proceed();
+    else blocker.reset();
+  }, [blocker, inUse]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   /* ---- The test squad --------------------------------------------- */
 
