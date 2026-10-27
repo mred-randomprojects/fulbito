@@ -850,6 +850,11 @@ there too, without knobs; starred, a match drafts with captains and a torneo
   `strength × players`, with what makes the difference — curve, weak links,
   passing game, history, se conocen — on hover or tap. Behind
   `ScoresVisible`.
+- **Personalizado**, after Capitanes, is where you are once you move any
+  knob or the curve, like an equaliser's "Custom": it is the profile you
+  started from (its chip goes dashed) plus your changes, unsaved. It is not
+  stored and Armar cannot use it until it is saved — over a profile of yours,
+  or as a new one.
 - **Profiles live in this browser** (`fulbito-balance-v1`), the factory ones
   never stored. They are configuration, not opinions about anybody; syncing
   them would mean a new document under `users/{uid}/meta` and a rules change.

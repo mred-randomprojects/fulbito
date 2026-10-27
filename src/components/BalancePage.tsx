@@ -214,10 +214,15 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
               key={p.id}
               type="button"
               onClick={() => select(p.id)}
-              aria-pressed={p.id === selected.id}
+              aria-pressed={!dirty && p.id === selected.id}
+              title={dirty && p.id === selected.id ? "Personalizado sale de este. Tocalo para volver a como era." : undefined}
               className={cn(
                 "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                p.id === selected.id ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:bg-accent",
+                p.id !== selected.id || captains
+                  ? "border-border text-muted-foreground hover:bg-accent"
+                  : dirty
+                    ? "border-dashed border-primary/60 text-foreground hover:bg-accent"
+                    : "border-primary bg-primary/15 text-foreground",
               )}
             >
               {p.id === store.defaultId && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="el que usa Armar" />}
@@ -235,6 +240,21 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
           >
             {store.defaultId === CAPITANES_ID && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="el que usa Armar" />}
             Capitanes
+          </button>
+          {/* Like an equaliser's "Custom": move anything and you are here,
+              off the profile you started from, until you save or discard. */}
+          <button
+            type="button"
+            disabled={!dirty}
+            aria-pressed={dirty}
+            title={dirty ? undefined : "Mové cualquier perilla o la curva y tus cambios quedan acá."}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              dirty ? "border-primary bg-primary/15 text-foreground" : "border-dashed border-border text-muted-foreground/60",
+            )}
+          >
+            {dirty && <span className="h-1.5 w-1.5 rounded-full bg-amber-300" aria-label="sin guardar" />}
+            Personalizado
           </button>
         </div>
         {captains ? (
@@ -256,9 +276,11 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
         ) : (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {dirty ? (
-            <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-amber-200">Cambios sin guardar</span>
+            <span className="rounded-lg bg-amber-300/15 px-2 py-1 leading-snug text-amber-200">
+              Personalizado: {selected.name} con tus cambios, sin guardar. Para usarlo en Armar, guardalo.
+            </span>
           ) : (
-            <span className="text-muted-foreground">{custom ? "Tu perfil." : "Perfil de fábrica: para cambiarlo, guardá una copia."}</span>
+            <span className="text-muted-foreground">{custom ? "Tu perfil." : "Perfil de fábrica: movés una perilla y pasás a Personalizado."}</span>
           )}
           <span className="flex-1" />
           {dirty && (
@@ -270,14 +292,14 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
           {dirty && custom && (
             <Button size="sm" onClick={save}>
               <Check className="mr-1 h-3.5 w-3.5" />
-              Guardar
+              Guardar en «{selected.name}»
             </Button>
           )}
           <Button size="sm" variant={dirty && !custom ? "default" : "secondary"} onClick={saveAsNew}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             Guardar como nuevo
           </Button>
-          {custom && (
+          {custom && !dirty && (
             <>
               <Button size="sm" variant="ghost" onClick={rename} aria-label="Renombrar">
                 <Pencil className="h-3.5 w-3.5" />
@@ -287,13 +309,13 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
               </Button>
             </>
           )}
-          {isDefault ? (
+          {dirty ? null : isDefault ? (
             <span className="flex items-center gap-1 text-amber-200">
               <Star className="h-3.5 w-3.5" fill="currentColor" />
               Lo usa Armar
             </span>
           ) : (
-            <Button size="sm" variant="ghost" onClick={makeDefault} disabled={dirty} title={dirty ? "Guardalo primero" : undefined}>
+            <Button size="sm" variant="ghost" onClick={makeDefault}>
               <Star className="mr-1 h-3.5 w-3.5" />
               Usar en Armar
             </Button>
