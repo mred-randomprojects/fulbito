@@ -281,13 +281,13 @@ export function MatchBuilder({
   const squadContext = useMemo(() => strategyContext(squadPlayers), [squadPlayers]);
 
   /**
-   * Which question Armar asks: a balance profile, or the captains' draft.
-   * Not stored on the match: it is how this person wants to look at
-   * tonight, and every lineup is read against all of them anyway. It opens
-   * on the profile chosen as the default on Balanceo.
+   * Which question Armar asks: the profile starred in Perillas (Balanceo),
+   * or the captains' draft when that is the one starred. Chosen there, not
+   * here, and not stored on the match: it is how this person balances, and
+   * every lineup is read against all the strategies anyway.
    */
   const { store: profileStore, profiles } = useBalanceProfiles();
-  const [strategy, setStrategy] = useState<string>(() => profileStore.defaultId);
+  const strategy = profileStore.defaultId;
   const bondIndex = useMemo(() => buildBondIndex(players), [players]);
   const winRates = useMemo(() => shrunkWinRates(statsById), [statsById]);
   /** What a side is worth under a profile: its curve, its química, its "se conocen". */
@@ -1020,19 +1020,6 @@ export function MatchBuilder({
   // cannot run until they match, so say why rather than fail on the click.
   const mismatch = match.sizeA + match.sizeB - match.squad.length;
 
-  /**
-   * Picking a strategy re-asks the question straight away when what is on the
-   * pitch is a search result nobody has touched; a lineup somebody moved by
-   * hand is theirs, and waits for Armar.
-   */
-  const chooseStrategy = useCallback(
-    (next: string) => {
-      setStrategy(next);
-      if ((options != null || draft != null) && !edited && mismatch === 0) balance(next);
-    },
-    [options, draft, edited, mismatch, balance],
-  );
-
   const changeCaptain = useCallback((team: TeamKey, id: PlayerId | null) => {
     setCaptainChoice((current) => {
       const next = { ...current };
@@ -1361,7 +1348,6 @@ export function MatchBuilder({
 
                   <StrategyPicker
                     selected={strategy}
-                    onChange={chooseStrategy}
                     profiles={profiles}
                     squad={squadPlayers}
                     capitanes={{

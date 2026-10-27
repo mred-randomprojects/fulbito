@@ -11,9 +11,10 @@ import { findSplits, lineGap, strengthEdge, type SplitResult, type TeamEvaluatio
 import { buildFamiliarity, familiarityBonus } from "@/lib/familiarity";
 import { defaultFormation } from "@/lib/formations";
 import { computeStats } from "@/lib/stats";
-import { enduringEdge, readSide, strategyContext } from "@/lib/strategies";
+import { STRATEGY_HINT, STRATEGY_STEPS, enduringEdge, readSide, strategyContext } from "@/lib/strategies";
 import { isKeeper } from "@/lib/keepers";
 import {
+  CAPITANES_ID,
   CURVE_MAX,
   CURVE_SHAPES,
   CURVE_XS,
@@ -58,13 +59,20 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
   const navigate = useNavigate();
   const { store, profiles, saveFailed } = useBalanceProfiles();
   const [selectedId, setSelectedId] = useState(store.defaultId);
+  // Capitanes is offered beside the profiles but has no knobs: picking it
+  // shows what it does and lets it be the one Armar uses, nothing else.
+  const captains = selectedId === CAPITANES_ID;
   const selected = profileById(store, selectedId);
   const [draft, setDraft] = useState<Settings>({ knobs: selected.knobs, curve: selected.curve });
-  const dirty = !sameSettings(draft, selected);
-  const custom = selected.strategy === undefined;
+  const dirty = !captains && !sameSettings(draft, selected);
+  const custom = !captains && selected.strategy === undefined;
 
   const select = (id: string) => {
     if (dirty && !window.confirm("Tenés cambios sin guardar. ¿Los descartás?")) return;
+    if (id === CAPITANES_ID) {
+      setSelectedId(CAPITANES_ID);
+      return;
+    }
     const next = profileById(store, id);
     setSelectedId(next.id);
     setDraft({ knobs: next.knobs, curve: next.curve });
@@ -98,7 +106,8 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
     setSelectedId(FACTORY_PROFILES[0].id);
     setDraft({ knobs: FACTORY_PROFILES[0].knobs, curve: FACTORY_PROFILES[0].curve });
   };
-  const makeDefault = () => writeProfiles({ ...store, defaultId: selected.id });
+  const makeDefault = () => writeProfiles({ ...store, defaultId: captains ? CAPITANES_ID : selected.id });
+  const isDefault = store.defaultId === (captains ? CAPITANES_ID : selected.id);
 
   /* ---- The test squad --------------------------------------------- */
 
@@ -190,8 +199,9 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">Balanceo</h1>
           <p className="text-sm text-muted-foreground">
-            Cómo arma Armar: cada perilla, la curva del puntaje y tus perfiles. Probalo con un partido de verdad a la
-            derecha.
+            Cómo arma Armar: cada perilla, la curva del puntaje y tus perfiles. El de la{" "}
+            <Star className="inline h-3.5 w-3.5 text-amber-300" fill="currentColor" aria-label="estrella" /> es el que
+            usa Armar. Probalo con un partido de verdad.
           </p>
         </div>
       </header>
@@ -209,11 +219,40 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
                 p.id === selected.id ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:bg-accent",
               )}
             >
-              {p.id === store.defaultId && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="por defecto" />}
+              {p.id === store.defaultId && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="el que usa Armar" />}
               {p.name}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => select(CAPITANES_ID)}
+            aria-pressed={captains}
+            className={cn(
+              "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              captains ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:bg-accent",
+            )}
+          >
+            {store.defaultId === CAPITANES_ID && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="el que usa Armar" />}
+            Capitanes
+          </button>
         </div>
+        {captains ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">{STRATEGY_HINT.capitanes} No tiene perillas.</span>
+            <span className="flex-1" />
+            {isDefault ? (
+              <span className="flex items-center gap-1 text-amber-200">
+                <Star className="h-3.5 w-3.5" fill="currentColor" />
+                Lo usa Armar
+              </span>
+            ) : (
+              <Button size="sm" onClick={makeDefault}>
+                <Star className="mr-1 h-3.5 w-3.5" />
+                Usar en Armar
+              </Button>
+            )}
+          </div>
+        ) : (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {dirty ? (
             <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-amber-200">Cambios sin guardar</span>
@@ -247,18 +286,40 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
               </Button>
             </>
           )}
-          {store.defaultId !== selected.id && (
+          {isDefault ? (
+            <span className="flex items-center gap-1 text-amber-200">
+              <Star className="h-3.5 w-3.5" fill="currentColor" />
+              Lo usa Armar
+            </span>
+          ) : (
             <Button size="sm" variant="ghost" onClick={makeDefault} disabled={dirty} title={dirty ? "Guardalo primero" : undefined}>
               <Star className="mr-1 h-3.5 w-3.5" />
               Usar en Armar
             </Button>
           )}
         </div>
+        )}
         <p className="text-[11px] text-muted-foreground">
           Los perfiles quedan en este navegador.{saveFailed && " Ojo: el navegador no deja guardarlos."}
         </p>
       </section>
 
+      {captains ? (
+        <section className="rounded-xl border border-border bg-card p-4">
+          <h2 className="mb-2 text-sm font-semibold">Capitanes</h2>
+          <ul className="space-y-1.5">
+            {STRATEGY_STEPS.capitanes.map((step) => (
+              <li key={step} className="flex gap-2 text-sm leading-relaxed text-muted-foreground">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                {step}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Los capitanes se eligen en el partido. En un torneo, que no tiene capitanes, Armar usa Completo.
+          </p>
+        </section>
+      ) : (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
         <div className="min-w-0 space-y-3">
           <KnobGroup title="Nivel">
@@ -401,6 +462,7 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
           </section>
         </aside>
       </div>
+      )}
     </div>
   );
 }

@@ -176,7 +176,9 @@ function Setup({
   winRates,
 }: Props) {
   const { store: profileStore, profiles } = useBalanceProfiles();
-  const [strategy, setStrategy] = useState<string>(() => profileStore.defaultId);
+  // The profile starred in Perillas; Capitanes starred falls back to Completo
+  // in `profileById`, since three captains picking by turns is another game.
+  const strategy = profileStore.defaultId;
   const [result, setResult] = useState<GroupSplitResult | null>(null);
   const [optionIndex, setOptionIndex] = useState(0);
   /** Whoever is being held, waiting for somebody on another team to tap. */
@@ -308,13 +310,6 @@ function Setup({
     setPicked(null);
     setEdited(false);
     saveTorneo(withPlayers(torneo, idsOf(result.options[next])));
-  };
-
-  const chooseStrategy = (next: string) => {
-    setStrategy(next);
-    // A split nobody touched is re-asked straight away; one moved by hand is
-    // somebody's, and waits for Armar.
-    if (result !== null && !edited && ready) armar(next);
   };
 
   /** Tap somebody, tap somebody on another team, they change shirts. */
@@ -710,7 +705,6 @@ function Setup({
       <div className="min-w-0 space-y-4">
         <StrategyPicker
           selected={strategy}
-          onChange={chooseStrategy}
           profiles={profiles}
           squad={squadPlayers}
           onViewPlayer={onViewPlayer}

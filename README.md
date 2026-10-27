@@ -48,7 +48,8 @@ any other app, full screen and with no signal needed.
   Puestos, Química, Se conocen (mark who has played together for years) and
   Win rate, plus a curve you drag like an equaliser — the 7 plays well, the
   8 stands out, the 9 changes the game. Try it live on a real night's squad,
-  save it under your own name and pick it in Armar. Every team shows its sum
+  save it under your own name and star it: Armar just says "Perillas ·
+  <perfil>" and uses the starred one (Capitanes included). Every team shows its sum
   and, beside it, what it really rinde, with the reason on hover.
 - **Comparar: two faces, one question.** On Jugadores → Comparar the app
   shows two people side by side and asks "¿A quién preferís en tu equipo?" —

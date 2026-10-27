@@ -136,6 +136,15 @@ export const FACTORY_PROFILES: readonly BalanceProfile[] = [
 
 export const DEFAULT_PROFILE_ID = "completo";
 
+/**
+ * The captains' draft, offered among the profiles on Balanceo although it has
+ * no knobs: it is one more way Armar can make the teams, and choosing how
+ * Armar makes them happens there. Never a `BalanceProfile`; where a search
+ * needs one (a torneo, which has no captains), the default falls back to
+ * Completo.
+ */
+export const CAPITANES_ID = "capitanes";
+
 /** Each knob's range, so the sliders and a hand-edited store agree on what is possible. */
 export const KNOB_RANGES: Record<Exclude<keyof BalanceKnobs, "reglasFisicas" | "arqueros">, { min: number; max: number; step: number }> = {
   nivel: { min: 0, max: 3, step: 0.05 },
@@ -486,7 +495,7 @@ export function parseProfileStore(raw: string | null): ProfileStore {
   for (const item of Array.isArray(r.custom) ? r.custom : []) {
     if (typeof item !== "object" || item === null) continue;
     const p = item as Record<string, unknown>;
-    if (typeof p.id !== "string" || p.id === "" || factory.has(p.id) || custom.some((c) => c.id === p.id)) continue;
+    if (typeof p.id !== "string" || p.id === "" || p.id === CAPITANES_ID || factory.has(p.id) || custom.some((c) => c.id === p.id)) continue;
     custom.push({
       id: p.id,
       name: typeof p.name === "string" && p.name.trim() !== "" ? p.name : "Sin nombre",
@@ -495,7 +504,8 @@ export function parseProfileStore(raw: string | null): ProfileStore {
     });
   }
   const defaultId =
-    typeof r.defaultId === "string" && (factory.has(r.defaultId) || custom.some((c) => c.id === r.defaultId))
+    typeof r.defaultId === "string" &&
+    (factory.has(r.defaultId) || r.defaultId === CAPITANES_ID || custom.some((c) => c.id === r.defaultId))
       ? r.defaultId
       : DEFAULT_PROFILE_ID;
   return { custom, defaultId };

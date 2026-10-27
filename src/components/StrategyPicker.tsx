@@ -11,17 +11,16 @@ import {
   strategyReady,
   type DataCheck,
 } from "@/lib/strategies";
-import { profileDataChecks, profileSteps, type BalanceProfile } from "@/lib/profiles";
+import { CAPITANES_ID, profileDataChecks, profileSteps, type BalanceProfile } from "@/lib/profiles";
 import { KITS, playerDisplayName, type Player, type PlayerId, type TeamConfig, type TeamKey } from "@/types";
 import { cn } from "@/lib/utils";
 
 /** What Armar asks: a balance profile by id, or the captains' draft. */
-export const CAPITANES = "capitanes";
+export const CAPITANES = CAPITANES_ID;
 
 interface Props {
-  /** A profile's id, or `CAPITANES`. */
+  /** The profile Armar uses — the one starred on Balanceo — or `CAPITANES`. */
   selected: string;
-  onChange: (selected: string) => void;
   /** Every profile, the factory ones first. */
   profiles: BalanceProfile[];
   /** Tonight's anotados. */
@@ -54,7 +53,7 @@ const MISSING_SHOWN = 8;
  * exception is the keepers check — "hay uno solo" is a fact about who has a
  * GK rating of 60 or more — so it drops out while scores are hidden.
  */
-export function StrategyPicker({ selected, onChange, profiles, squad, capitanes, onViewPlayer }: Props) {
+export function StrategyPicker({ selected, profiles, squad, capitanes, onViewPlayer }: Props) {
   const hidden = useScoresHidden();
   const visibleChecks = (checks: DataCheck[]) => checks.filter((check) => !hidden || check.key !== "keepers");
   const profileFor = (key: string) => profiles.find((p) => p.id === key) ?? profiles[0];
@@ -78,45 +77,21 @@ export function StrategyPicker({ selected, onChange, profiles, squad, capitanes,
       : current.strategy !== undefined
         ? STRATEGY_STEPS[current.strategy]
         : profileSteps(current);
-  const chips = [
-    ...profiles.map((p) => ({ key: p.id, label: p.name, hint: p.strategy !== undefined ? STRATEGY_HINT[p.strategy] : "Tu perfil." })),
-    ...(capitanes !== undefined ? [{ key: CAPITANES, label: STRATEGY_LABEL.capitanes, hint: STRATEGY_HINT.capitanes }] : []),
-  ];
+  const missingData = !ready && squad.length > 0;
 
+  // No chips: how Armar makes the teams is chosen in Perillas, where the
+  // presets are profiles like any other. Here it only says which one is on.
   return (
     <div className="space-y-2">
-      <div role="radiogroup" aria-label="Cómo armar los equipos" className="flex flex-wrap items-center gap-1.5">
-        {chips.map((chip) => {
-          const keyReady = strategyReady(checksFor(chip.key));
-          const active = chip.key === (isDraft ? CAPITANES : current?.id);
-          return (
-            <button
-              key={chip.key}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(chip.key)}
-              title={keyReady ? chip.hint : `${chip.hint} Le faltan datos.`}
-              className={cn(
-                "flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors",
-                active
-                  ? "border-primary bg-primary/15 text-foreground"
-                  : "border-border text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {chip.label}
-              {!keyReady && squad.length > 0 && (
-                <AlertTriangle className="h-3 w-3 text-amber-400" aria-label="le faltan datos" />
-              )}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Cómo arma:</span>
         <Link
           to="/balanceo"
-          className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="flex items-center gap-1.5 rounded-full border border-primary bg-primary/15 px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-primary/25"
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          Perillas
+          Perillas · {label}
+          {missingData && <AlertTriangle className="h-3 w-3 text-amber-400" aria-label="le faltan datos" />}
         </Link>
       </div>
 

@@ -170,8 +170,9 @@ record back under the same stamp, and let the next edit erase it everywhere.
 - **Armar asks one of four questions** (`lib/strategies.ts`), picked with the
   chips above the pitch and held in component state, not on the `Match`.
   Those four are now the factory *perfiles de balanceo* (`lib/profiles.ts`,
-  see "Perfiles de balanceo" below): the chips are the profiles, factory ones
-  first, plus Capitanes, and Armar opens on the one marked as default.
+  see "Perfiles de balanceo" below). Armar has no chips any more: it shows
+  "Perillas · <perfil>" and uses whichever profile is starred on Balanceo,
+  where Capitanes is offered beside the profiles (`CAPITANES_ID`).
   *Completo* is the default (`DEFAULT_STRATEGY`) and takes everything: the
   per-line, spread and star terms, the level edge half plain and half worn
   down by aguante, the physical rules and the keeper and line terms of Por
@@ -813,10 +814,14 @@ every game after the first visit is a cache hit and lands on the first tick.
 
 ### Perfiles de balanceo
 
-Armar used to offer four fixed strategies. They are now four *profiles*, and
-a profile is every knob out in the open plus a curve (`lib/profiles.ts`);
-Balanceo (`/balanceo`, from Ajustes or "Perillas" beside Armar's chips) is
-where they are tried and saved.
+Armar used to offer four fixed strategies as chips. They are now four
+*profiles*, and a profile is every knob out in the open plus a curve
+(`lib/profiles.ts`); Balanceo (`/balanceo`, from Ajustes or Armar's "Perillas
+· <perfil>") is where they are tried, saved and chosen. The starred one is
+what Armar and the torneo's split use — so choosing happens in one place and
+Armar's screen carries one control instead of six chips. Capitanes is offered
+there too, without knobs; starred, a match drafts with captains and a torneo
+(which has none) falls back to Completo.
 
 - **The knobs are weights on terms that already existed**: Nivel parejo
   (the level edge), Aguante (how much of that edge is the one worn down by

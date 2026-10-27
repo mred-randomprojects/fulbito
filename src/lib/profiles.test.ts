@@ -7,6 +7,7 @@ import { emptyStats, type PlayerStats } from "./stats.js";
 import { strategyContext, strategyCost, strategyData } from "./strategies.js";
 import {
   BOND_SPLIT_COST,
+  CAPITANES_ID,
   CURVE_SHAPES,
   FACTORY_PROFILES,
   IDENTITY_CURVE,
@@ -249,6 +250,10 @@ describe("the store", () => {
     assert.equal(profileById(store, "p1").name, "Aguante a full");
     assert.equal(profileById(store, "gone").id, "p1", "a missing one falls back to the default");
     assert.equal(profileById(parseProfileStore("nope"), null).id, "completo");
+    // Capitanes can be what Armar uses, but a search asked for a profile gets Completo.
+    const captains = parseProfileStore(JSON.stringify({ custom: [], defaultId: CAPITANES_ID }));
+    assert.equal(captains.defaultId, CAPITANES_ID);
+    assert.equal(profileById(captains, captains.defaultId).id, "completo");
   });
 
   it("tells a touched profile from an untouched one", () => {
