@@ -827,9 +827,16 @@ people is easier to get right. `lib/compare.ts` reads the choices back:
   half a win each. A role's baseline is the stored role rating or what the
   lineups use; an attribute's is the stored one or the overall rating.
 - **Who comes up** (`nextPair`): the least-asked first, a partner close in
-  number and not asked about much, never a pair already asked while a fresh
-  one is left, never the pair just shown, sides shuffled. The tag filter
-  narrows the pool.
+  number and not asked about much, never a pair already asked in this tanda
+  while a fresh one is left, never the pair just shown, sides shuffled. The
+  tag filter narrows the pool, and so does "No lo conozco".
+- **Tandas** (`CompareBatch`): the answers are kept in sittings — one a month,
+  say — each with its own "No lo conozco" list, whose people stop coming up in
+  that tanda and nothing is said about them. The suggestions read the open
+  tanda or all of them; a reading of one tanda anchors on the numbers as they
+  were when that tanda began, so last month's applied changes are not counted
+  again. The first version's bare list of answers comes back as "Primera
+  tanda" (`parseStore`).
 
 **Every answer is a puntaje** — what the one answering thinks of two people —
 so the answers live only in `localStorage` (`fulbito-comparisons-v1`), outside

@@ -49,8 +49,10 @@ any other app, full screen and with no signal needed.
   answers per player it says which numbers would agree best with what you
   picked (+6 to one, −4 to another), and whether your whole scale is squeezed
   — a 50 and a 70 that are worlds apart on the pitch and twenty points on
-  paper — and applies the changes in one tap. The answers stay in your
-  browser: never synced, never exported.
+  paper — and applies the changes in one tap. Answers go in tandas (one a
+  month, say), read alone or all together, and "No lo conozco" takes somebody
+  out of a tanda. The answers stay in your browser: never synced, never
+  exported.
 - **Balanced teams, worked out properly.** For the squad sizes this is built
   for, *every* legal split is checked and scored — not shuffled until it looks
   close. Six genuinely different options, none of them a mirror of another.

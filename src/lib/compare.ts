@@ -34,7 +34,8 @@ import {
  * Every answer is a puntaje — what the one answering thinks of two people —
  * so the answers live only in this browser (`COMPARISONS_KEY`), are never
  * synced or exported, and what comes out of them is shown behind
- * `ScoresVisible` like any rating.
+ * `ScoresVisible` like any rating. They are kept in tandas (`CompareBatch`),
+ * one per sitting, and a reading counts the open one or all of them.
  */
 
 export const COMPARISONS_KEY = "fulbito-comparisons-v1";
@@ -106,6 +107,8 @@ export function subjectChip(subject: CompareSubject): string {
 export type ComparePick = "A" | "B" | "tie" | "skip";
 
 export interface CompareAnswer {
+  /** Which tanda it was answered in (`CompareBatch.id`). */
+  batch: string;
   a: PlayerId;
   b: PlayerId;
   subject: SubjectId;
@@ -136,45 +139,135 @@ export function withValue(player: Player, subject: CompareSubject, value: number
   return { ...player, attributes: { ...player.attributes, [subject.key]: v } };
 }
 
-/** What `localStorage` held, read forgivingly: anything malformed is dropped, not fatal. */
-export function parseAnswers(raw: string | null): CompareAnswer[] {
-  if (raw === null) return [];
+/**
+ * A tanda: one sitting's worth of answers — once a month, say — with the
+ * people you said you do not know well enough, who stop coming up in it.
+ */
+export interface CompareBatch {
+  id: string;
+  name: string;
+  createdAt: string;
+  /** "No lo conozco" in this tanda: left out of its pairs, nothing said about them. */
+  unknown: PlayerId[];
+}
+
+/** Everything Comparar keeps: the tandas, which one is open, and every answer. */
+export interface CompareStore {
+  batches: CompareBatch[];
+  current: string;
+  answers: CompareAnswer[];
+}
+
+/** The tanda the first version's answers (before there were tandas) land in. */
+export const FIRST_BATCH: CompareBatch = { id: "tanda-1", name: "Primera tanda", createdAt: "", unknown: [] };
+
+function readAnswer(item: unknown, fallbackBatch: string): CompareAnswer | null {
+  if (typeof item !== "object" || item === null) return null;
+  const r = item as Record<string, unknown>;
+  const pick = r.pick;
+  if (
+    typeof r.a === "string" &&
+    typeof r.b === "string" &&
+    r.a !== r.b &&
+    typeof r.subject === "string" &&
+    (pick === "A" || pick === "B" || pick === "tie" || pick === "skip") &&
+    typeof r.baseA === "number" &&
+    Number.isFinite(r.baseA) &&
+    typeof r.baseB === "number" &&
+    Number.isFinite(r.baseB) &&
+    typeof r.at === "string"
+  ) {
+    return {
+      batch: typeof r.batch === "string" ? r.batch : fallbackBatch,
+      a: r.a as PlayerId,
+      b: r.b as PlayerId,
+      subject: r.subject,
+      pick,
+      baseA: r.baseA,
+      baseB: r.baseB,
+      at: r.at,
+    };
+  }
+  return null;
+}
+
+function readBatch(item: unknown): CompareBatch | null {
+  if (typeof item !== "object" || item === null) return null;
+  const r = item as Record<string, unknown>;
+  if (typeof r.id !== "string" || r.id === "" || typeof r.name !== "string") return null;
+  return {
+    id: r.id,
+    name: r.name,
+    createdAt: typeof r.createdAt === "string" ? r.createdAt : "",
+    unknown: Array.isArray(r.unknown) ? (r.unknown.filter((id) => typeof id === "string") as PlayerId[]) : [],
+  };
+}
+
+/**
+ * What `localStorage` held, read forgivingly: anything malformed is dropped,
+ * not fatal. The first version stored a bare list of answers; it comes back
+ * as one tanda, "Primera tanda", so nothing answered is lost.
+ */
+export function parseStore(raw: string | null): CompareStore {
+  const empty: CompareStore = { batches: [FIRST_BATCH], current: FIRST_BATCH.id, answers: [] };
+  if (raw === null) return empty;
   let data: unknown;
   try {
     data = JSON.parse(raw);
   } catch {
-    return [];
+    return empty;
   }
-  if (!Array.isArray(data)) return [];
-  const out: CompareAnswer[] = [];
-  for (const item of data as unknown[]) {
-    if (typeof item !== "object" || item === null) continue;
-    const r = item as Record<string, unknown>;
-    const pick = r.pick;
-    if (
-      typeof r.a === "string" &&
-      typeof r.b === "string" &&
-      r.a !== r.b &&
-      typeof r.subject === "string" &&
-      (pick === "A" || pick === "B" || pick === "tie" || pick === "skip") &&
-      typeof r.baseA === "number" &&
-      Number.isFinite(r.baseA) &&
-      typeof r.baseB === "number" &&
-      Number.isFinite(r.baseB) &&
-      typeof r.at === "string"
-    ) {
-      out.push({
-        a: r.a as PlayerId,
-        b: r.b as PlayerId,
-        subject: r.subject,
-        pick,
-        baseA: r.baseA,
-        baseB: r.baseB,
-        at: r.at,
-      });
-    }
+  if (Array.isArray(data)) {
+    const answers = data.flatMap((item) => readAnswer(item, FIRST_BATCH.id) ?? []);
+    return { ...empty, answers };
   }
-  return out;
+  if (typeof data !== "object" || data === null) return empty;
+  const r = data as Record<string, unknown>;
+  const batches = Array.isArray(r.batches) ? r.batches.flatMap((item) => readBatch(item) ?? []) : [];
+  if (batches.length === 0) batches.push(FIRST_BATCH);
+  const known = new Set(batches.map((batch) => batch.id));
+  const answers = (Array.isArray(r.answers) ? r.answers : [])
+    .flatMap((item) => readAnswer(item, batches[0].id) ?? [])
+    .map((answer) => (known.has(answer.batch) ? answer : { ...answer, batch: batches[0].id }));
+  const current = typeof r.current === "string" && known.has(r.current) ? r.current : batches[batches.length - 1].id;
+  return { batches, current, answers };
+}
+
+/** A new tanda, opened: the answers so far stay, in theirs. */
+export function openBatch(store: CompareStore, batch: CompareBatch): CompareStore {
+  return { ...store, batches: [...store.batches, batch], current: batch.id };
+}
+
+/** "No lo conozco" in a tanda, or taking it back. */
+export function toggleUnknown(store: CompareStore, batchId: string, id: PlayerId): CompareStore {
+  return {
+    ...store,
+    batches: store.batches.map((batch) =>
+      batch.id !== batchId
+        ? batch
+        : {
+            ...batch,
+            unknown: batch.unknown.includes(id) ? batch.unknown.filter((x) => x !== id) : [...batch.unknown, id],
+          },
+    ),
+  };
+}
+
+/** A tanda gone, with its answers. The last one left is emptied instead. */
+export function removeBatch(store: CompareStore, batchId: string): CompareStore {
+  const answers = store.answers.filter((answer) => answer.batch !== batchId);
+  const batches = store.batches.filter((batch) => batch.id !== batchId);
+  if (batches.length === 0) {
+    const kept = store.batches.find((batch) => batch.id === batchId) ?? FIRST_BATCH;
+    return { batches: [{ ...kept, unknown: [] }], current: kept.id, answers };
+  }
+  const current = store.current === batchId ? batches[batches.length - 1].id : store.current;
+  return { batches, current, answers };
+}
+
+/** The answers a reading counts: the open tanda's, or every tanda's. */
+export function answersIn(store: CompareStore, scope: "current" | "all"): CompareAnswer[] {
+  return scope === "all" ? store.answers : store.answers.filter((answer) => answer.batch === store.current);
 }
 
 function pairKey(a: PlayerId, b: PlayerId): string {

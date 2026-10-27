@@ -5,7 +5,12 @@ import {
   baselineOf,
   fitComparisons,
   nextPair,
-  parseAnswers,
+  FIRST_BATCH,
+  answersIn,
+  openBatch,
+  parseStore,
+  removeBatch,
+  toggleUnknown,
   subjectId,
   withValue,
   type CompareAnswer,
@@ -40,6 +45,7 @@ let clock = 0;
 function answer(a: Player, b: Player, pick: ComparePick, subject: CompareSubject = OVERALL): CompareAnswer {
   clock += 1;
   return {
+    batch: FIRST_BATCH.id,
     a: a.id,
     b: b.id,
     subject: subjectId(subject),
@@ -197,10 +203,53 @@ describe("storing the answers", () => {
     const a = person("a", 50);
     const b = person("b", 60);
     const good = answer(a, b, "tie");
-    const raw = JSON.stringify([good, { ...good, pick: "maybe" }, { ...good, b: good.a }, 7, null]);
-    assert.deepEqual(parseAnswers(raw), [good]);
-    assert.deepEqual(parseAnswers("{not json"), []);
-    assert.deepEqual(parseAnswers(null), []);
+    const store = { batches: [FIRST_BATCH], current: FIRST_BATCH.id, answers: [good] };
+    const raw = JSON.stringify({ ...store, answers: [good, { ...good, pick: "maybe" }, { ...good, b: good.a }, 7, null] });
+    assert.deepEqual(parseStore(raw), store);
+    assert.deepEqual(parseStore("{not json").answers, []);
+    assert.deepEqual(parseStore(null).batches, [FIRST_BATCH]);
+  });
+
+  it("brings the first version's bare list back as the first tanda", () => {
+    const a = person("a", 50);
+    const b = person("b", 60);
+    const full = answer(a, b, "A");
+    const old: Partial<CompareAnswer> = { ...full };
+    delete old.batch;
+    const store = parseStore(JSON.stringify([old]));
+    assert.equal(store.current, FIRST_BATCH.id);
+    assert.deepEqual(store.answers, [full]);
+  });
+
+  it("keeps each tanda's answers apart, and its no-lo-conozco to itself", () => {
+    const a = person("a", 50);
+    const b = person("b", 60);
+    let store = parseStore(null);
+    store = { ...store, answers: [answer(a, b, "A")] };
+    store = openBatch(store, { id: "t2", name: "Noviembre", createdAt: "2026-11-01", unknown: [] });
+    store = { ...store, answers: [...store.answers, { ...answer(b, a, "A"), batch: "t2" }] };
+    assert.equal(answersIn(store, "current").length, 1);
+    assert.equal(answersIn(store, "all").length, 2);
+    store = toggleUnknown(store, "t2", a.id);
+    assert.deepEqual(store.batches.find((x) => x.id === "t2")?.unknown, [a.id]);
+    assert.deepEqual(store.batches.find((x) => x.id === FIRST_BATCH.id)?.unknown, []);
+    assert.deepEqual(toggleUnknown(store, "t2", a.id).batches.find((x) => x.id === "t2")?.unknown, []);
+    // Answers pointing at a tanda that is gone go to the first one rather than vanish.
+    const orphan = parseStore(JSON.stringify({ ...store, answers: [{ ...store.answers[0], batch: "nope" }] }));
+    assert.equal(orphan.answers[0].batch, FIRST_BATCH.id);
+  });
+
+  it("removes a tanda with its answers, and empties the last one instead", () => {
+    const a = person("a", 50);
+    const b = person("b", 60);
+    let store = { ...parseStore(null), answers: [answer(a, b, "A")] };
+    store = openBatch(store, { id: "t2", name: "Noviembre", createdAt: "", unknown: [a.id] });
+    const without = removeBatch(store, "t2");
+    assert.equal(without.current, FIRST_BATCH.id);
+    assert.equal(without.answers.length, 1);
+    const empty = removeBatch(without, FIRST_BATCH.id);
+    assert.equal(empty.batches.length, 1);
+    assert.deepEqual(empty.answers, []);
   });
 
   it("wants about three answers per player before the suggestions mean much", () => {
