@@ -417,7 +417,7 @@ gate, including tooltips and charts.
 | Module | What it decides |
 | --- | --- |
 | `lib/rating.ts` | What a player is worth in a given role, from overall + role + attributes |
-| `lib/profiles.ts` | Perfiles de balanceo: the knobs, the curve, the factory profiles (exactly the four strategies), the cost and the evaluation context a profile builds, "se conocen", shrunk win rates, and the store in this browser; `useBalanceProfiles.ts` shares it and `BalancePage` is the screen |
+| `lib/profiles.ts` | Perfiles de balanceo: the knobs, the curve, the factory profiles (exactly the four strategies) and the Estricto preset, the cost and its breakdown by knob and the evaluation context a profile builds, "se conocen", shrunk win rates, and the store in this browser; `useBalanceProfiles.ts` shares it and `BalancePage` is the screen |
 | `lib/rinde.ts` | What a side is worth on the pitch next to its plain sum, and what makes up the difference; `RindeBadge` shows it |
 | `lib/compare.ts` | Comparar: the pairs to ask, and the answers read back (Bradley–Terry anchored on today's numbers, with a scale stretch) into suggested ratings; `useComparisons.ts` keeps the answers in this browser and `ComparePanel` is the screen |
 | `lib/balance.ts` | The best arrangement of a team, and the fairest splits of a squad in two |
@@ -846,6 +846,14 @@ there too, without knobs; starred, a match drafts with captains and a torneo
   holds a dragged point between its neighbours (`moveCurvePoint`) and
   `normalizeCurve` lifts a stored point that sits at or under the one before,
   so a 6 is never worth more than a 7.
+  It goes up to `CURVE_MAX` (300); the editor's chart scales to the curve
+  (`curveScaleTop`) but holds still while a point is dragged, and says the
+  curve in one number, `crackRatio`: how many 70s a 90 is worth.
+- **Estricto** (`PRESET_PROFILES`) ships built in beside the four factory
+  ones: Completo's knobs on `STRICT_CURVE`, where a 90 is worth more than two
+  70s. It is nobody's strategy, so it is kept out of `FACTORY_PROFILES` (held
+  to be exactly their strategy); `BUILT_IN_PROFILES` and `isBuiltIn` are what
+  say "ships with the app, cannot be overwritten, renamed or deleted".
 - **Rinde** (`lib/rinde.ts`, `RindeBadge`): next to a side's sum, a bolt and
   `strength × players`, with what makes the difference — curve, weak links,
   passing game, history, se conocen — on hover or tap. Behind
@@ -860,10 +868,18 @@ there too, without knobs; starred, a match drafts with captains and a torneo
 - **Profiles live in this browser** (`fulbito-balance-v1`), the factory ones
   never stored. They are configuration, not opinions about anybody; syncing
   them would mean a new document under `users/{uid}/meta` and a rules change.
+- **The screen**: the profile chips and their actions on one card, then the
+  curve, then the three knobs that matter most (Nivel parejo, Estrellas,
+  Aguante); every other knob, the toggles and "quiénes se conocen" fold
+  under Avanzado, whose summary names the ones that are on.
 - **The test squad** on Balanceo is a real night's (the latest by default),
-  split in two with Armar's own search; "Armar al mover una perilla" re-arms
-  180 ms after a knob stops, and whoever changed sides is highlighted. Each
-  knob that reads something says who in that squad has it blank.
+  split in two with Armar's own search; "Armar solo al mover una perilla"
+  re-arms 180 ms after a knob stops, and whoever changed sides is
+  highlighted. Above the teams, the gap in rinde in big and the cost taken
+  apart by knob (`costBreakdown`, whose parts add up to `profileCost`
+  exactly), heaviest first; on a phone a sticky pill keeps the gap in sight
+  while the knobs move. All of it behind `ScoresVisible`. Each knob that
+  reads something says who in that squad has it blank.
 
 ### Comparar, and why its answers never leave the browser
 

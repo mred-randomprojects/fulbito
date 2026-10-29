@@ -47,7 +47,10 @@ any other app, full screen and with no signal needed.
   Dispersión, Estrellas, Aguante (and how hard the one without it drops),
   Puestos, Química, Se conocen (mark who has played together for years) and
   Win rate, plus a curve you drag like an equaliser — the 7 plays well, the
-  8 stands out, the 9 changes the game. Try it live on a real night's squad,
+  8 stands out, the 9 changes the game; it goes up to 300, and Estricto ships
+  with one where a 90 is worth more than two 70s. The three knobs that matter
+  most are out, the rest fold under Avanzado. Try it live on a real night's
+  squad — the gap between the sides in big, and which knob weighed most —
   save it under your own name and star it: Armar just says "Perillas ·
   <perfil>" and uses the starred one (Capitanes included). Every team shows its sum
   and, beside it, what it really rinde, with the reason on hover.

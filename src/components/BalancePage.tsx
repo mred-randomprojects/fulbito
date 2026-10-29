@@ -1,29 +1,31 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useBlocker, useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Pencil, Plus, RotateCcw, Shuffle, Star, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Pencil, Plus, RotateCcw, Shuffle, Star, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { RindeBadge } from "./RindeBadge";
 import { ScoresVisible } from "./ScorePrivacy";
 import { useBalanceProfiles, writeProfiles } from "@/useBalanceProfiles";
-import { findSplits, lineGap, strengthEdge, type SplitResult, type TeamEvaluation } from "@/lib/balance";
+import { findSplits, type SplitResult, type TeamEvaluation } from "@/lib/balance";
 import { buildFamiliarity, familiarityBonus } from "@/lib/familiarity";
 import { defaultFormation } from "@/lib/formations";
 import { computeStats } from "@/lib/stats";
-import { STRATEGY_HINT, STRATEGY_STEPS, enduringEdge, readSide, strategyContext } from "@/lib/strategies";
+import { STRATEGY_HINT, STRATEGY_STEPS, strategyContext } from "@/lib/strategies";
+import { rindeOf } from "@/lib/rinde";
 import { isKeeper } from "@/lib/keepers";
 import {
   CAPITANES_ID,
-  CURVE_MAX,
   CURVE_SHAPES,
   CURVE_XS,
   FACTORY_PROFILES,
   KNOB_RANGES,
   bondGroups,
-  bondsSplit,
   buildBondIndex,
-  curveValue,
+  costBreakdown,
+  crackRatio,
+  curveScaleTop,
+  isBuiltIn,
   isIdentityCurve,
   markBonds,
   moveCurvePoint,
@@ -32,10 +34,11 @@ import {
   profileEvaluationContext,
   sameSettings,
   shrunkWinRates,
-  sideWinRate,
   unmarkBonds,
   type BalanceKnobs,
   type BalanceProfile,
+  type CostPart,
+  type ProfileInputs,
 } from "@/lib/profiles";
 import { playerDisplayName, playerShortName, type Match, type Player, type PlayerId } from "@/types";
 import { cn } from "@/lib/utils";
@@ -66,7 +69,7 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
   const selected = profileById(store, selectedId);
   const [draft, setDraft] = useState<Settings>({ knobs: selected.knobs, curve: selected.curve });
   const dirty = !captains && !sameSettings(draft, selected);
-  const custom = !captains && selected.strategy === undefined;
+  const custom = !captains && !isBuiltIn(selected.id);
 
   const select = (id: string) => {
     if (dirty && !window.confirm("Tenés cambios sin guardar. ¿Los descartás?")) return;
@@ -207,146 +210,111 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
   }, [draftKey, squadKey, auto]);
 
   const option = result?.options[optionIndex];
+  const basis = night?.basis ?? "total";
+  const verdict =
+    option === undefined ? null : readVerdict(option.evalA, option.evalB, draftProfile, { context: squadContext, basis, handicap: 0, winRates, bonds });
+  const description = captains
+    ? STRATEGY_HINT.capitanes
+    : selected.strategy !== undefined
+      ? STRATEGY_HINT[selected.strategy]
+      : selected.id === "estricto"
+        ? "Completo, con la curva estricta: un crack pesa mucho más que dos del montón."
+        : "Tu perfil.";
+  const advancedOn = ADVANCED.filter((key) => (typeof draft.knobs[key] === "boolean" ? draft.knobs[key] : draft.knobs[key] > 0));
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-5">
-      <header className="flex flex-wrap items-start gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} aria-label="Volver">
+    <div className="mx-auto w-full max-w-5xl space-y-3 px-4 py-4">
+      <header className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} aria-label="Volver" className="-ml-2">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Balanceo</h1>
-          <p className="text-sm text-muted-foreground">
-            Cómo arma Armar: cada perilla, la curva del puntaje y tus perfiles. El de la{" "}
-            <Star className="inline h-3.5 w-3.5 text-amber-300" fill="currentColor" aria-label="estrella" /> es el que
-            usa Armar. Probalo con un partido de verdad.
-          </p>
-        </div>
+        <h1 className="text-xl font-semibold tracking-tight">Balanceo</h1>
+        <span className="truncate text-xs text-muted-foreground">
+          · Armar usa el de la <Star className="inline h-3 w-3 -translate-y-px text-amber-300" fill="currentColor" aria-label="estrella" />
+        </span>
       </header>
 
-      <section className="space-y-2 rounded-xl border border-border bg-card p-3">
-        <div className="flex flex-wrap gap-1.5">
+      <section className="rounded-xl border border-border bg-card">
+        <div className="-mb-px flex gap-1.5 overflow-x-auto p-2 [scrollbar-width:none]">
           {profiles.map((p) => (
-            <button
+            <Chip
               key={p.id}
-              type="button"
               onClick={() => select(p.id)}
-              aria-pressed={!dirty && p.id === selected.id}
+              state={p.id !== selected.id || captains ? "off" : dirty ? "origin" : "on"}
+              starred={p.id === store.defaultId}
               title={dirty && p.id === selected.id ? "Personalizado sale de este. Tocalo para volver a como era." : undefined}
-              className={cn(
-                "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                p.id !== selected.id || captains
-                  ? "border-border text-muted-foreground hover:bg-accent"
-                  : dirty
-                    ? "border-dashed border-primary/60 text-foreground hover:bg-accent"
-                    : "border-primary bg-primary/15 text-foreground",
-              )}
             >
-              {p.id === store.defaultId && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="el que usa Armar" />}
               {p.name}
-            </button>
+            </Chip>
           ))}
-          <button
-            type="button"
-            onClick={() => select(CAPITANES_ID)}
-            aria-pressed={captains}
-            className={cn(
-              "flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-              captains ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:bg-accent",
-            )}
-          >
-            {store.defaultId === CAPITANES_ID && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="el que usa Armar" />}
+          <Chip onClick={() => select(CAPITANES_ID)} state={captains ? "on" : "off"} starred={store.defaultId === CAPITANES_ID}>
             Capitanes
-          </button>
+          </Chip>
           {/* Like an equaliser's "Custom": move anything and you are here,
               off the profile you started from, until you save or discard. */}
-          <button
-            type="button"
-            disabled={!dirty}
-            aria-pressed={dirty}
-            title={dirty ? undefined : "Mové cualquier perilla o la curva y tus cambios quedan acá."}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-              dirty ? "border-primary bg-primary/15 text-foreground" : "border-dashed border-border text-muted-foreground/60",
-            )}
-          >
-            {dirty && <span className="h-1.5 w-1.5 rounded-full bg-amber-300" aria-label="sin guardar" />}
-            Personalizado
-          </button>
-        </div>
-        {captains ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted-foreground">{STRATEGY_HINT.capitanes} No tiene perillas.</span>
-            <span className="flex-1" />
-            {isDefault ? (
-              <span className="flex items-center gap-1 text-amber-200">
-                <Star className="h-3.5 w-3.5" fill="currentColor" />
-                Lo usa Armar
-              </span>
-            ) : (
-              <Button size="sm" onClick={makeDefault}>
-                <Star className="mr-1 h-3.5 w-3.5" />
-                Usar en Armar
-              </Button>
-            )}
-          </div>
-        ) : (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          {dirty ? (
-            <span className="rounded-lg bg-amber-300/15 px-2 py-1 leading-snug text-amber-200">
-              Personalizado: {selected.name} con tus cambios, sin guardar. Para usarlo en Armar, guardalo.
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{custom ? "Tu perfil." : "Perfil de fábrica: movés una perilla y pasás a Personalizado."}</span>
-          )}
-          <span className="flex-1" />
           {dirty && (
-            <Button size="sm" variant="ghost" onClick={() => setDraft({ knobs: selected.knobs, curve: selected.curve })}>
-              <RotateCcw className="mr-1 h-3.5 w-3.5" />
-              Descartar
-            </Button>
+            <Chip state="on">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-300" aria-label="sin guardar" />
+              Personalizado
+            </Chip>
           )}
-          {dirty && custom && (
-            <Button size="sm" onClick={save}>
-              <Check className="mr-1 h-3.5 w-3.5" />
-              Guardar en «{selected.name}»
-            </Button>
+        </div>
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border px-3 py-2 text-xs",
+            dirty && "bg-amber-300/10",
           )}
-          <Button size="sm" variant={dirty && !custom ? "default" : "secondary"} onClick={saveAsNew}>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Guardar como nuevo
-          </Button>
-          {custom && !dirty && (
+        >
+          <span className={cn("min-w-0 flex-1 leading-snug", dirty ? "text-amber-200" : "text-muted-foreground")}>
+            {dirty ? `${selected.name} con tus cambios, sin guardar. Armar no lo usa hasta que lo guardes.` : description}
+          </span>
+          {dirty ? (
             <>
-              <Button size="sm" variant="ghost" onClick={rename} aria-label="Renombrar">
-                <Pencil className="h-3.5 w-3.5" />
+              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setDraft({ knobs: selected.knobs, curve: selected.curve })}>
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                Descartar
               </Button>
-              <Button size="sm" variant="ghost" onClick={remove} aria-label="Borrar" className="text-muted-foreground">
-                <Trash2 className="h-3.5 w-3.5" />
+              {custom && (
+                <Button size="sm" className="h-7 px-2" onClick={save}>
+                  <Check className="mr-1 h-3.5 w-3.5" />
+                  Guardar
+                </Button>
+              )}
+              <Button size="sm" variant={custom ? "secondary" : "default"} className="h-7 px-2" onClick={saveAsNew}>
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                {custom ? "Como nuevo" : "Guardar como perfil"}
               </Button>
             </>
-          )}
-          {dirty ? null : isDefault ? (
-            <span className="flex items-center gap-1 text-amber-200">
-              <Star className="h-3.5 w-3.5" fill="currentColor" />
-              Lo usa Armar
-            </span>
           ) : (
-            <Button size="sm" variant="ghost" onClick={makeDefault}>
-              <Star className="mr-1 h-3.5 w-3.5" />
-              Usar en Armar
-            </Button>
+            <>
+              {custom && (
+                <>
+                  <IconButton onClick={rename} label="Renombrar">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </IconButton>
+                  <IconButton onClick={remove} label="Borrar">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </IconButton>
+                </>
+              )}
+              {isDefault ? (
+                <span className="flex items-center gap-1 font-medium text-amber-200">
+                  <Star className="h-3.5 w-3.5" fill="currentColor" />
+                  Lo usa Armar
+                </span>
+              ) : (
+                <Button size="sm" variant="secondary" className="h-7 px-2" onClick={makeDefault}>
+                  <Star className="mr-1 h-3.5 w-3.5" />
+                  Usar en Armar
+                </Button>
+              )}
+            </>
           )}
         </div>
-        )}
-        <p className="text-[11px] text-muted-foreground">
-          Los perfiles quedan en este navegador.{saveFailed && " Ojo: el navegador no deja guardarlos."}
-        </p>
       </section>
 
       {captains ? (
         <section className="rounded-xl border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-semibold">Capitanes</h2>
           <ul className="space-y-1.5">
             {STRATEGY_STEPS.capitanes.map((step) => (
               <li key={step} className="flex gap-2 text-sm leading-relaxed text-muted-foreground">
@@ -356,163 +324,261 @@ export function BalancePage({ players, matches, onSavePlayer }: Props) {
             ))}
           </ul>
           <p className="mt-3 text-xs text-muted-foreground">
-            Los capitanes se eligen en el partido. En un torneo, que no tiene capitanes, Armar usa Completo.
+            No tiene perillas. Los capitanes se eligen en el partido; en un torneo, que no tiene capitanes, Armar usa Completo.
           </p>
         </section>
       ) : (
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
-        <div className="min-w-0 space-y-3">
-          <KnobGroup title="Nivel">
-            <Knob k="nivel" label="Nivel parejo entre equipos" hint="Que los dos equipos rindan lo mismo. La base de todo." draft={draft} onChange={setKnob} base={1} />
-            <Knob k="lineas" label="Líneas parejas" hint="Defensa contra defensa, medio contra medio, ataque contra ataque." draft={draft} onChange={setKnob} base={0.35} />
-            <Knob k="dispersion" label="Dispersión" hint="Que no quede un equipo de cracks y troncos contra uno de medios." draft={draft} onChange={setKnob} base={0.2} />
-            <Knob k="estrellas" label="Estrellas" hint="Que el mejor de cada lado sea parecido." draft={draft} onChange={setKnob} base={0.25} />
-          </KnobGroup>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+          <div className="min-w-0 space-y-3">
+            <section className="rounded-xl border border-border bg-card p-3">
+              <CurveEditor curve={draft.curve} onChange={(curve) => setDraft((d) => ({ ...d, curve }))} />
+            </section>
 
-          <KnobGroup title="Aguante">
-            <Knob
-              k="aguante"
-              label="Aguante"
-              hint="Cuánto del nivel se mide gastado por el aguante de cada uno: el 9 que a los 40 minutos no corre más."
-              draft={draft}
-              onChange={setKnob}
-              percent
-            />
-            {draft.knobs.aguante > 0 && (
+            <section className="space-y-3 rounded-xl border border-border bg-card p-3">
+              <Knob k="nivel" label="Nivel parejo" hint="Que los dos equipos rindan lo mismo. La base de todo." draft={draft} onChange={setKnob} base={1} />
+              <Knob k="estrellas" label="Estrellas" hint="Que el mejor de cada lado sea parecido." draft={draft} onChange={setKnob} base={0.25} />
               <Knob
-                k="desgaste"
-                label="Cuánto se cae el que no tiene aguante"
-                hint={`Con aguante 0 termina rindiendo un ${Math.round((1 - draft.knobs.desgaste) * 100)}% de su nivel; con 100, todo.`}
+                k="aguante"
+                label="Aguante"
+                hint="Cuánto del nivel se mide gastado: el 9 que a los 40 minutos no corre más."
                 draft={draft}
                 onChange={setKnob}
                 percent
               />
-            )}
-            <Toggle
-              label="Repartir los de poco fondo y los motores"
-              hint="Aguante 40 o menos mitad y mitad; pique y aguante de 85 para arriba también. Y el aguante promedio, parejo."
-              value={draft.knobs.reglasFisicas}
-              onChange={(v) => setKnob("reglasFisicas", v)}
-            />
-            <Missing
-              show={draft.knobs.aguante > 0 || draft.knobs.reglasFisicas}
-              ids={squad.filter((p) => p.attributes.stamina === undefined).map((p) => p.id)}
-              of={squad.length}
-              what="aguante"
-              effect="cuentan como el promedio del grupo"
-              byId={byId}
-            />
-          </KnobGroup>
-
-          <KnobGroup title="Puestos">
-            <Toggle
-              label="Arquero en cada lado"
-              hint="Un arquero de verdad (puntaje de arquero de 60 para arriba) para cada equipo."
-              value={draft.knobs.arqueros}
-              onChange={(v) => setKnob("arqueros", v)}
-            />
-            {draft.knobs.arqueros && (
-              <p className="text-xs text-muted-foreground">
-                En este partido hay <ScoresVisible fallback="—">{squad.filter(isKeeper).length}</ScoresVisible> arquero(s) de verdad.
-              </p>
-            )}
-            <Knob k="puestos" label="Puestos" hint="Que cada uno pueda jugar donde le toca: aptitud para defender, el medio y atacar, pareja." draft={draft} onChange={setKnob} base={0.5} />
-          </KnobGroup>
-
-          <KnobGroup title="Química">
-            <Knob k="quimica" label="Química (jugaron juntos)" hint="Los que jugaron juntos seguido en los últimos partidos rinden un poco más. Sale solo, de las alineaciones." draft={draft} onChange={setKnob} base={1} />
-            <Knob k="seConocen" label="Se conocen" hint="Puntos para el equipo por cada pareja que marcaste abajo como que se conocen." draft={draft} onChange={setKnob} unit=" pts" />
-            <Knob k="juntarConocidos" label="Juntar a los que se conocen" hint="Además de sumar, que traten de quedar del mismo lado (más suave que «Mejor ponerlo con»)." draft={draft} onChange={setKnob} />
-            <BondsEditor players={players} onSave={onSavePlayer} />
-          </KnobGroup>
-
-          <KnobGroup title="Historial">
-            <Knob k="winRate" label="Win rate" hint="Que no queden todos los que ganan siempre de un lado. Un historial corto pesa poco." draft={draft} onChange={setKnob} percent />
-            <Missing
-              show={draft.knobs.winRate > 0}
-              ids={squad.filter((p) => (stats.get(p.id)?.played ?? 0) < 3).map((p) => p.id)}
-              of={squad.length}
-              what="3 partidos jugados"
-              effect="cuentan casi como 50%"
-              byId={byId}
-            />
-          </KnobGroup>
-
-          <KnobGroup title="La curva">
-            <CurveEditor curve={draft.curve} onChange={(curve) => setDraft((d) => ({ ...d, curve }))} />
-          </KnobGroup>
-        </div>
-
-        <aside className="min-w-0 space-y-3 lg:sticky lg:top-4">
-          <section className="space-y-3 rounded-xl border border-border bg-card p-3">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <select
-                value={night?.id ?? ""}
-                onChange={(e) => setNightId(e.target.value)}
-                className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm"
-                aria-label="Partido de prueba"
-              >
-                {nights.length === 0 && <option value="">Los primeros 10 del plantel</option>}
-                {nights.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.date} · {m.name || "Partido"} ({m.squad.length})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={() => armar(false)}>
-                Armar
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => armar(true)}>
-                <Shuffle className="mr-1 h-3.5 w-3.5" />
-                Mezclar
-              </Button>
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-primary" />
-                Armar al mover una perilla
-              </label>
-            </div>
-            {error !== null && <p className="text-xs text-destructive">{error}</p>}
-            {option !== undefined && (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <TestTeam label="Equipo A" side={option.evalA} previous={previous} wasA />
-                  <TestTeam label="Equipo B" side={option.evalB} previous={previous} wasA={false} />
+              {draft.knobs.aguante > 0 && (
+                <div className="border-l-2 border-border pl-3">
+                  <Knob
+                    k="desgaste"
+                    label="Cuánto se cae el que no tiene"
+                    hint={`Con aguante 0 termina rindiendo un ${Math.round((1 - draft.knobs.desgaste) * 100)}% de su nivel.`}
+                    draft={draft}
+                    onChange={setKnob}
+                    percent
+                  />
                 </div>
-                {result !== null && result.options.length > 1 && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Opción {optionIndex + 1} de {result.options.length} entre las más parejas.
-                    {previous !== null && " Resaltados: los que cambiaron de lado."}
-                  </p>
-                )}
-                <Readout
-                  a={option.evalA}
-                  b={option.evalB}
-                  profile={draftProfile}
-                  basis={night?.basis ?? "total"}
-                  context={squadContext}
-                  winRates={winRates}
-                  bondIndex={bonds}
-                  cost={option.cost}
-                />
-              </>
+              )}
+              <Missing
+                show={draft.knobs.aguante > 0 || draft.knobs.reglasFisicas}
+                ids={squad.filter((p) => p.attributes.stamina === undefined).map((p) => p.id)}
+                of={squad.length}
+                what="aguante"
+                effect="cuentan como el promedio del grupo"
+                byId={byId}
+              />
+            </section>
+
+            <details className="group rounded-xl border border-border bg-card">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+                Avanzado
+                <span className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">
+                  {advancedOn.length === 0 ? "todo apagado" : advancedOn.map((key) => ADVANCED_LABEL[key]).join(" · ")}
+                </span>
+              </summary>
+              <div className="grid gap-x-6 gap-y-3 border-t border-border p-3 sm:grid-cols-2">
+                <Knob k="lineas" label="Líneas parejas" hint="Defensa contra defensa, medio contra medio, ataque contra ataque." draft={draft} onChange={setKnob} base={0.35} />
+                <Knob k="dispersion" label="Dispersión" hint="Que no quede uno de cracks y troncos contra uno de medios." draft={draft} onChange={setKnob} base={0.2} />
+                <Knob k="puestos" label="Puestos" hint="Aptitud para defender, el medio y atacar, pareja." draft={draft} onChange={setKnob} base={0.5} />
+                <Knob k="winRate" label="Win rate" hint="Que no queden todos los que ganan siempre de un lado." draft={draft} onChange={setKnob} percent />
+                <Knob k="quimica" label="Química" hint="Los que jugaron juntos seguido rinden un poco más. Sale de las alineaciones." draft={draft} onChange={setKnob} base={1} />
+                <Knob k="seConocen" label="Se conocen" hint="Puntos para el equipo por cada pareja marcada abajo." draft={draft} onChange={setKnob} unit=" pts" />
+                <Knob k="juntarConocidos" label="Juntar a los que se conocen" hint="Que traten de quedar del mismo lado (más suave que «Mejor ponerlo con»)." draft={draft} onChange={setKnob} />
+                <div className="space-y-2">
+                  <Toggle
+                    label="Repartir los de poco fondo y los motores"
+                    hint="Aguante 40 o menos mitad y mitad; pique y aguante de 85 para arriba también."
+                    value={draft.knobs.reglasFisicas}
+                    onChange={(v) => setKnob("reglasFisicas", v)}
+                  />
+                  <Toggle
+                    label="Arquero en cada lado"
+                    hint="Uno de verdad (60 o más de arquero) para cada equipo."
+                    value={draft.knobs.arqueros}
+                    onChange={(v) => setKnob("arqueros", v)}
+                  />
+                  {draft.knobs.arqueros && (
+                    <p className="pl-6 text-[11px] text-muted-foreground">
+                      En este partido hay <ScoresVisible fallback="—">{squad.filter(isKeeper).length}</ScoresVisible> arquero(s) de verdad.
+                    </p>
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <Missing
+                    show={draft.knobs.winRate > 0}
+                    ids={squad.filter((p) => (stats.get(p.id)?.played ?? 0) < 3).map((p) => p.id)}
+                    of={squad.length}
+                    what="3 partidos jugados"
+                    effect="cuentan casi como 50%"
+                    byId={byId}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <BondsEditor players={players} onSave={onSavePlayer} />
+                </div>
+              </div>
+            </details>
+            {/* On a phone the test split is below everything: keep its number
+                in sight while the knobs move. */}
+            {verdict !== null && (
+              <ScoresVisible>
+                <a
+                  href="#prueba"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById("prueba")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="sticky bottom-3 z-10 mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs shadow-lg backdrop-blur lg:hidden"
+                >
+                  <span className="text-muted-foreground">Diferencia</span>
+                  <span className="tabular font-semibold">{decimal(verdict.gap)}</span>
+                  {verdict.shown[0] !== undefined && (
+                    <span className="text-muted-foreground">· pesó {PART_LABEL[verdict.shown[0].key]}</span>
+                  )}
+                  <ChevronRight className="h-3.5 w-3.5 rotate-90 text-muted-foreground" />
+                </a>
+              </ScoresVisible>
             )}
-          </section>
-        </aside>
-      </div>
+            <p className="px-1 text-[11px] text-muted-foreground">
+              Los perfiles quedan en este navegador.{saveFailed && " Ojo: el navegador no deja guardarlos."}
+            </p>
+          </div>
+
+          <aside id="prueba" className="min-w-0 scroll-mt-4 lg:sticky lg:top-4">
+            <section className="space-y-3 rounded-xl border border-border bg-card p-3">
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={night?.id ?? ""}
+                  onChange={(e) => setNightId(e.target.value)}
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-xs"
+                  aria-label="Partido de prueba"
+                >
+                  {nights.length === 0 && <option value="">Los primeros 10 del plantel</option>}
+                  {nights.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.date} · {m.name || "Partido"} ({m.squad.length})
+                    </option>
+                  ))}
+                </select>
+                <IconButton onClick={() => armar(true)} label="Mezclar: otra de las más parejas">
+                  <Shuffle className="h-3.5 w-3.5" />
+                </IconButton>
+                {!auto && (
+                  <Button size="sm" className="h-8 px-2.5" onClick={() => armar(false)}>
+                    Armar
+                  </Button>
+                )}
+              </div>
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-primary" />
+                Armar solo al mover una perilla
+              </label>
+              {error !== null && <p className="text-xs text-destructive">{error}</p>}
+              {option !== undefined && (
+                <>
+                  {verdict !== null && <Verdict data={verdict} />}
+                  <div className="grid grid-cols-2 gap-2">
+                    <TestTeam label="A" side={option.evalA} previous={previous} wasA />
+                    <TestTeam label="B" side={option.evalB} previous={previous} wasA={false} />
+                  </div>
+                  {result !== null && result.options.length > 1 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Opción {optionIndex + 1} de {result.options.length} entre las más parejas.
+                      {previous !== null && " En amarillo, los que cambiaron de lado."}
+                    </p>
+                  )}
+                </>
+              )}
+            </section>
+          </aside>
+        </div>
       )}
     </div>
   );
 }
 
-function KnobGroup({ title, children }: { title: string; children: ReactNode }) {
+/** The knobs folded under Avanzado, in the order its summary lists the ones that are on. */
+const ADVANCED = [
+  "lineas",
+  "dispersion",
+  "puestos",
+  "winRate",
+  "quimica",
+  "seConocen",
+  "juntarConocidos",
+  "reglasFisicas",
+  "arqueros",
+] as const satisfies readonly (keyof BalanceKnobs)[];
+
+const ADVANCED_LABEL: Record<(typeof ADVANCED)[number], string> = {
+  lineas: "Líneas",
+  dispersion: "Dispersión",
+  puestos: "Puestos",
+  winRate: "Win rate",
+  quimica: "Química",
+  seConocen: "Se conocen",
+  juntarConocidos: "Juntar conocidos",
+  reglasFisicas: "Físico",
+  arqueros: "Arqueros",
+};
+
+const PART_LABEL: Record<CostPart["key"], string> = {
+  nivel: "Nivel parejo",
+  lineas: "Líneas",
+  dispersion: "Dispersión",
+  estrellas: "Estrellas",
+  reglasFisicas: "Físico",
+  arqueros: "Arqueros",
+  puestos: "Puestos",
+  winRate: "Win rate",
+  juntarConocidos: "Conocidos separados",
+};
+
+function Chip({
+  state,
+  starred = false,
+  onClick,
+  title,
+  children,
+}: {
+  /** on: the one you are on; origin: the one Personalizado came from; off: the rest. */
+  state: "on" | "origin" | "off";
+  starred?: boolean;
+  onClick?: () => void;
+  title?: string;
+  children: ReactNode;
+}) {
   return (
-    <section className="space-y-3 rounded-xl border border-border bg-card p-3">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h2>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={state === "on"}
+      title={title}
+      className={cn(
+        "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        state === "on"
+          ? "border-primary bg-primary/15 text-foreground"
+          : state === "origin"
+            ? "border-dashed border-primary/60 text-foreground hover:bg-accent"
+            : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+      )}
+    >
+      {starred && <Star className="h-3 w-3 text-amber-300" fill="currentColor" aria-label="el que usa Armar" />}
       {children}
-    </section>
+    </button>
+  );
+}
+
+function IconButton({ onClick, label, children }: { onClick: () => void; label: string; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -544,12 +610,12 @@ function Knob({
       ? `×${(value / base).toFixed(1).replace(".", ",")}`
       : `${value.toString().replace(".", ",")}${unit}`;
   return (
-    <div className="space-y-1">
+    <div>
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor={`knob-${k}`} className="text-sm font-medium">
           {label}
         </label>
-        <span className="tabular text-xs text-muted-foreground">{value === 0 ? "apagado" : shown}</span>
+        <span className={cn("tabular text-xs", value === 0 ? "text-muted-foreground/60" : "font-medium text-primary")}>{value === 0 ? "apagado" : shown}</span>
       </div>
       <input
         id={`knob-${k}`}
@@ -559,9 +625,9 @@ function Knob({
         step={range.step}
         value={value}
         onChange={(e) => onChange(k, Number(e.target.value))}
-        className="w-full accent-primary"
+        className="my-1 block h-4 w-full accent-primary"
       />
-      <p className="text-[11px] leading-snug text-muted-foreground">{hint}</p>
+      <p className="text-[11px] leading-tight text-muted-foreground">{hint}</p>
     </div>
   );
 }
@@ -611,22 +677,27 @@ function Missing({
 /* The curve, like an equaliser                                        */
 /* ------------------------------------------------------------------ */
 
-const W = 320;
-const H = 200;
-const PAD = 24;
-const xOf = (rating: number) => PAD + (rating / 100) * (W - 2 * PAD);
-const yOf = (worth: number) => H - PAD - (worth / CURVE_MAX) * (H - 2 * PAD);
+const W = 420;
+const H = 180;
+const PAD_X = 22;
+const PAD_Y = 14;
+const xOf = (rating: number) => PAD_X + (rating / 100) * (W - 2 * PAD_X);
 
 function CurveEditor({ curve, onChange }: { curve: readonly number[]; onChange: (curve: number[]) => void }) {
   const svg = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<number | null>(null);
+  // The chart grows with the curve, but holds still while a point is being
+  // dragged, or the point would run away from the finger.
+  const [frozenTop, setFrozenTop] = useState<number | null>(null);
+  const top = frozenTop ?? curveScaleTop(curve);
+  const yOf = (worth: number) => H - PAD_Y - (worth / top) * (H - 2 * PAD_Y);
 
   const worthAt = (event: ReactPointerEvent) => {
     const box = svg.current?.getBoundingClientRect();
     if (box === undefined) return null;
     const y = ((event.clientY - box.top) / box.height) * H;
-    const worth = ((H - PAD - y) / (H - 2 * PAD)) * CURVE_MAX;
-    return Math.round(Math.min(CURVE_MAX, Math.max(0, worth)));
+    const worth = ((H - PAD_Y - y) / (H - 2 * PAD_Y)) * top;
+    return Math.round(Math.min(top, Math.max(0, worth)));
   };
   const move = (event: ReactPointerEvent) => {
     if (dragging === null) return;
@@ -634,57 +705,77 @@ function CurveEditor({ curve, onChange }: { curve: readonly number[]; onChange: 
     if (worth === null) return;
     onChange(moveCurvePoint(curve, dragging, worth));
   };
+  const stop = () => {
+    setDragging(null);
+    setFrozenTop(null);
+  };
   const path = CURVE_XS.map((x, i) => `${i === 0 ? "M" : "L"}${xOf(x)},${yOf(curve[i])}`).join(" ");
+  const area = `${path} L${xOf(100)},${yOf(0)} L${xOf(0)},${yOf(0)} Z`;
+  const ratio = crackRatio(curve);
+  const shape = CURVE_SHAPES.find((s) => s.curve.every((y, i) => Math.abs(y - curve[i]) < 1e-9));
+  const grid = Array.from({ length: Math.floor(top / 50) + 1 }, (_, i) => i * 50);
 
   return (
     <div className="space-y-2">
-      <p className="text-[11px] leading-snug text-muted-foreground">
-        Cuánto vale cada puntaje en la cancha. La diagonal punteada es el puntaje tal cual; subí un punto para que ese
-        nivel pese más, bajalo para que pese menos. Siempre sube: un punto no pasa a su vecino, así un 6 nunca vale
-        más que un 7. Cambia el balanceo y el rinde, no los puntajes.
-      </p>
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium">La curva</h2>
+        <span className="text-right text-xs text-muted-foreground">
+          Un 90 vale como <span className="tabular font-semibold text-foreground">{decimal(ratio)}</span> de un 70
+          {!isIdentityCurve(curve) && <span className="text-muted-foreground/70"> (tal cual, 1,3)</span>}
+        </span>
+      </div>
       <svg
         ref={svg}
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full touch-none select-none rounded-lg bg-background/60"
+        className="max-h-64 w-full touch-none select-none"
         onPointerMove={move}
-        onPointerUp={() => setDragging(null)}
-        onPointerLeave={() => setDragging(null)}
+        onPointerUp={stop}
+        onPointerCancel={stop}
         role="img"
-        aria-label="Curva del puntaje"
+        aria-label="Curva del puntaje: cuánto vale cada puntaje en la cancha"
       >
-        {[0, 50, 100, 150].map((v) => (
+        {grid.map((v) => (
           <g key={v}>
-            <line x1={PAD} x2={W - PAD} y1={yOf(v)} y2={yOf(v)} stroke="currentColor" strokeOpacity={0.08} />
-            <text x={4} y={yOf(v) + 3} fontSize={8} fill="currentColor" opacity={0.5}>
+            <line x1={PAD_X} x2={W - PAD_X} y1={yOf(v)} y2={yOf(v)} stroke="currentColor" strokeOpacity={v === 0 ? 0.2 : 0.07} />
+            <text x={PAD_X - 4} y={yOf(v) + 3} fontSize={7} textAnchor="end" fill="currentColor" opacity={0.45}>
               {v}
             </text>
           </g>
         ))}
         <line x1={xOf(0)} y1={yOf(0)} x2={xOf(100)} y2={yOf(100)} stroke="currentColor" strokeOpacity={0.3} strokeDasharray="3 3" />
-        <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} />
+        <path d={area} fill="hsl(var(--primary))" fillOpacity={0.1} />
+        <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinejoin="round" />
         {CURVE_XS.map((x, i) => (
           <g key={x}>
-            <text x={xOf(x)} y={H - 6} fontSize={8} textAnchor="middle" fill="currentColor" opacity={0.6}>
+            <text x={xOf(x)} y={H - 2} fontSize={7} textAnchor="middle" fill="currentColor" opacity={0.5}>
               {x}
             </text>
+            {/* A fat invisible target, so a finger finds the point. */}
             <circle
               cx={xOf(x)}
               cy={yOf(curve[i])}
-              r={dragging === i ? 8 : 6}
-              fill="hsl(var(--primary))"
-              stroke="hsl(var(--background))"
-              strokeWidth={2}
+              r={14}
+              fill="transparent"
               className="cursor-ns-resize"
               onPointerDown={(e) => {
                 (e.target as Element).setPointerCapture(e.pointerId);
+                setFrozenTop(top);
                 setDragging(i);
               }}
             >
               <title>{`Un ${x} vale ${curve[i]}`}</title>
             </circle>
+            <circle
+              cx={xOf(x)}
+              cy={yOf(curve[i])}
+              r={dragging === i ? 6.5 : 4.5}
+              fill="hsl(var(--primary))"
+              stroke="hsl(var(--card))"
+              strokeWidth={2}
+              pointerEvents="none"
+            />
             {dragging === i && (
-              <text x={xOf(x)} y={yOf(curve[i]) - 12} fontSize={9} textAnchor="middle" fill="currentColor">
+              <text x={xOf(x)} y={yOf(curve[i]) - 10} fontSize={9} fontWeight={600} textAnchor="middle" fill="currentColor">
                 {curve[i]}
               </text>
             )}
@@ -692,26 +783,30 @@ function CurveEditor({ curve, onChange }: { curve: readonly number[]; onChange: 
         ))}
       </svg>
       <div className="flex flex-wrap items-center gap-1.5">
-        {CURVE_SHAPES.map((shape) => (
+        {CURVE_SHAPES.map((s) => (
           <button
-            key={shape.label}
+            key={s.label}
             type="button"
-            onClick={() => onChange([...shape.curve])}
-            className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            onClick={() => onChange([...s.curve])}
+            aria-pressed={s === shape}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+              s === shape ? "border-primary bg-primary/15 text-foreground" : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
           >
-            {shape.label}
+            {s.label}
           </button>
         ))}
-        {!isIdentityCurve(curve) && (
-          <span className="text-[11px] text-muted-foreground">
-            Un 50 vale {Math.round(curveValue(curve, 50))}, un 70 vale {Math.round(curveValue(curve, 70))} y un 90 vale{" "}
-            {Math.round(curveValue(curve, 90))}.
-          </span>
-        )}
       </div>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Cuánto vale cada puntaje en la cancha. Arrastrá un punto: arriba de la diagonal, ese nivel pesa más. Siempre
+        sube, así un 6 nunca vale más que un 7. Cambia el balanceo, no los puntajes.
+      </p>
     </div>
   );
 }
+
+const decimal = (v: number, digits = 1) => v.toFixed(digits).replace(".", ",");
 
 /* ------------------------------------------------------------------ */
 /* Se conocen                                                          */
@@ -839,54 +934,62 @@ function TestTeam({
   );
 }
 
-/** How the split reads against each knob that is on: the gaps the cost was made of. */
-function Readout({
-  a,
-  b,
-  profile,
-  basis,
-  context,
-  winRates,
-  bondIndex,
-  cost,
-}: {
-  a: TeamEvaluation;
-  b: TeamEvaluation;
-  profile: BalanceProfile;
-  basis: "total" | "average";
-  context: ReturnType<typeof strategyContext>;
-  winRates: ReadonlyMap<PlayerId, number>;
-  bondIndex: ReturnType<typeof buildBondIndex>;
+/**
+ * The test split in one look: how far apart the two sides' rinde is, and
+ * which knob put most of the cost in — the knobs that matter for this night.
+ */
+interface VerdictData {
+  ra: number;
+  rb: number;
+  gap: number;
   cost: number;
-}) {
-  const k = profile.knobs;
-  const ra = readSide(context, a, k.desgaste);
-  const rb = readSide(context, b, k.desgaste);
-  const fmt = (v: number) => Math.abs(v).toFixed(1).replace(".", ",");
-  const ids = (side: TeamEvaluation) => side.lineup.flatMap((p) => (p == null ? [] : [p.id]));
-  const rows: [string, string][] = [];
-  if (k.nivel > 0) rows.push(["Nivel (por jugador)", fmt(strengthEdge(a, b, basis))]);
-  if (k.aguante > 0) rows.push(["Nivel gastado por el aguante", fmt(enduringEdge(ra, rb, basis))]);
-  if (k.lineas > 0) rows.push(["Líneas", fmt(lineGap(a, b))]);
-  if (k.dispersion > 0) rows.push(["Dispersión", fmt(a.spread - b.spread)]);
-  if (k.estrellas > 0) rows.push(["Estrellas", fmt(a.best - b.best)]);
-  if (k.reglasFisicas) rows.push(["Aguante promedio", fmt(ra.stamina - rb.stamina)]);
-  if (k.winRate > 0) rows.push(["Win rate (puntos)", fmt(sideWinRate(winRates, a) - sideWinRate(winRates, b))]);
-  if (k.juntarConocidos > 0) rows.push(["Conocidos separados", String(bondsSplit(bondIndex, ids(a), ids(b)))]);
+  /** The parts worth a line, the heaviest first. */
+  shown: CostPart[];
+}
+
+function readVerdict(a: TeamEvaluation, b: TeamEvaluation, profile: BalanceProfile, inputs: ProfileInputs): VerdictData {
+  const ra = rindeOf(a).rinde;
+  const rb = rindeOf(b).rinde;
+  const parts = costBreakdown(profile, inputs, a, b).sort((x, y) => y.points - x.points);
+  const cost = parts.reduce((sum, part) => sum + part.points, 0);
+  return { ra, rb, gap: Math.abs(ra - rb), cost, shown: parts.filter((part) => part.points > 0.05) };
+}
+
+function Verdict({ data: { ra, rb, gap, cost, shown } }: { data: VerdictData }) {
   return (
     <ScoresVisible>
-      <div className="rounded-lg bg-background/50 p-2 text-[11px]">
-        <p className="mb-1 font-medium">Diferencias entre los dos</p>
-        <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
-          {rows.map(([label, value]) => (
-            <div key={label} className="contents">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="tabular text-right">{value}</dd>
-            </div>
-          ))}
-          <dt className="mt-1 font-medium">Costo total (menos es más parejo)</dt>
-          <dd className="tabular mt-1 text-right font-medium">{cost.toFixed(1).replace(".", ",")}</dd>
-        </dl>
+      <div className="rounded-lg bg-background/50 p-2.5">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] text-muted-foreground">Diferencia de rinde</p>
+            <p className="tabular text-3xl font-semibold leading-none">
+              {decimal(gap)}
+            </p>
+          </div>
+          <p className="tabular pb-0.5 text-right text-[11px] text-muted-foreground">
+            A {decimal(ra)} · B {decimal(rb)}
+            <br />
+            costo {decimal(cost)}
+          </p>
+        </div>
+        {shown.length > 0 && (
+          <ul className="mt-2.5 space-y-1">
+            {shown.map((part) => (
+              <li key={part.key} className="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-2 text-[11px]">
+                <span className="truncate text-muted-foreground">{PART_LABEL[part.key]}</span>
+                <span className="h-1.5 overflow-hidden rounded-full bg-border/60">
+                  <span className="block h-full rounded-full bg-primary/70" style={{ width: `${(100 * part.points) / cost}%` }} />
+                </span>
+                <span className="tabular text-right">{decimal(part.points)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {shown.length > 1 && (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Lo que más pesó: <span className="text-foreground">{PART_LABEL[shown[0].key]}</span>.
+          </p>
+        )}
       </div>
     </ScoresVisible>
   );
