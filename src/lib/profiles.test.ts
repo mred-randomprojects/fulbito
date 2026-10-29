@@ -14,7 +14,13 @@ import {
   CURVE_XS,
   FACTORY_PROFILES,
   IDENTITY_CURVE,
+  PRESET_PROFILES,
+  STRICT_CURVE,
   bondGroups,
+  costBreakdown,
+  crackRatio,
+  curveScaleTop,
+  isBuiltIn,
   bondPairs,
   buildBondIndex,
   curveValue,
@@ -249,6 +255,82 @@ describe("the curve", () => {
     assert.ok(climbs(flat));
     assert.equal(flat[flat.length - 1], CURVE_MAX);
     assert.deepEqual(normalizeCurve([...IDENTITY_CURVE]), [...IDENTITY_CURVE]);
+  });
+});
+
+describe("the strict preset", () => {
+  it("makes a 90 worth more than two 70s, and a 40 next to nothing", () => {
+    assert.ok(crackRatio(STRICT_CURVE) > 2);
+    assert.ok(curveValue(STRICT_CURVE, 40) < 20);
+    assert.equal(crackRatio(IDENTITY_CURVE).toFixed(2), (90 / 70).toFixed(2));
+  });
+
+  it("is Completo on the strict curve, built in and never stored", () => {
+    const estricto = PRESET_PROFILES.find((p) => p.id === "estricto")!;
+    assert.deepEqual(estricto.knobs, FACTORY_PROFILES[0].knobs);
+    assert.equal(estricto.strategy, undefined, "it is nobody's strategy, so the exactness tests do not hold it");
+    assert.ok(isBuiltIn("estricto") && isBuiltIn("completo") && !isBuiltIn("perfil-x"));
+    const store = parseProfileStore(JSON.stringify({ custom: [{ id: "estricto", name: "trampa" }], defaultId: "estricto" }));
+    assert.equal(store.custom.length, 0, "a stored one by that id is dropped");
+    assert.equal(profileById(store, store.defaultId).name, "Estricto");
+  });
+
+  it("never puts the two cracks on the same side", () => {
+    // Two cracks and a field of middling players: the strict curve should
+    // never put both cracks on one side.
+    const players = [player(92), player(90), player(70), player(68), player(66), player(64), player(62), player(60), player(58), player(56)];
+    const estricto = PRESET_PROFILES[0];
+    const context = strategyContext(players);
+    const found = findSplits({
+      players, sizeA: 5, sizeB: 5, formationA: formation, formationB: formation, pins: {}, basis: "total", handicap: 0,
+      context: profileEvaluationContext(estricto, {}),
+      cost: profileCost(estricto, { context, basis: "total", handicap: 0 }),
+    });
+    const a = new Set(found.options[0].teamA.map((p) => p.id));
+    assert.notEqual(a.has(players[0].id), a.has(players[1].id));
+  });
+
+  it("scales the chart to the curve: 150 for a straight one, more for a steep one, never past the max", () => {
+    assert.equal(curveScaleTop(IDENTITY_CURVE), 150);
+    assert.equal(curveScaleTop(STRICT_CURVE), 300);
+    assert.equal(curveScaleTop([0, 30, 40, 50, 60, 70, 80, 120, 180]), 250);
+    assert.ok(curveScaleTop(Array(9).fill(CURVE_MAX)) <= CURVE_MAX);
+  });
+});
+
+describe("the cost, taken apart", () => {
+  it("adds up to the cost, whatever is switched on", () => {
+    const players = squad();
+    const context = strategyContext(players);
+    const winRates = new Map(players.map((p, i) => [p.id, 0.3 + i * 0.04]));
+    const bonds = buildBondIndex([{ id: players[0].id, bonds: [players[1].id, players[4].id] }]);
+    const everything: BalanceProfile = {
+      id: "x",
+      name: "Todo",
+      knobs: { ...FACTORY_PROFILES[0].knobs, winRate: 0.5, juntarConocidos: 2, estrellas: 0.7 },
+      curve: STRICT_CURVE,
+    };
+    const random = seeded(5);
+    for (const profile of [...FACTORY_PROFILES, ...PRESET_PROFILES, everything]) {
+      for (const handicap of [0, 3]) {
+        const inputs = { context, basis: "total" as const, handicap, winRates, bonds };
+        const cost = profileCost(profile, inputs);
+        for (let round = 0; round < 20; round += 1) {
+          const order = [...players].sort(() => random() - 0.5);
+          const a = evaluateSquad(order.slice(0, 5), formation);
+          const b = evaluateSquad(order.slice(5), formation);
+          const sum = costBreakdown(profile, inputs, a, b).reduce((t, part) => t + part.points, 0);
+          assert.ok(Math.abs(sum - cost(a, b)) < 1e-9, `${profile.id}: ${sum} vs ${cost(a, b)}`);
+        }
+      }
+    }
+  });
+
+  it("leaves out what is off", () => {
+    const players = squad();
+    const nivel = FACTORY_PROFILES.find((p) => p.id === "nivel")!;
+    const parts = costBreakdown(nivel, { context: strategyContext(players), basis: "total", handicap: 0 }, evaluateSquad(players.slice(0, 5), formation), evaluateSquad(players.slice(5), formation));
+    assert.deepEqual(parts.map((p) => p.key), ["nivel", "lineas", "dispersion", "estrellas"]);
   });
 });
 

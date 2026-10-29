@@ -49,8 +49,8 @@ export const PROFILES_KEY = "fulbito-balance-v1";
 
 /** Where the curve's points sit. Most of a plantel lives between 40 and 90, so most of the points do too. */
 export const CURVE_XS = [0, 30, 40, 50, 60, 70, 80, 90, 100] as const;
-/** How far up a point may be dragged: a 100 worth one and a half times a 100. */
-export const CURVE_MAX = 150;
+/** How far up a point may be dragged: a 100 worth three times a 100, room for a curve that really means it. */
+export const CURVE_MAX = 300;
 export const IDENTITY_CURVE: readonly number[] = [...CURVE_XS];
 
 export interface BalanceKnobs {
@@ -134,6 +134,30 @@ export const FACTORY_PROFILES: readonly BalanceProfile[] = [
   },
 ];
 
+/**
+ * The 7 is a 7, the 8 is a lot more and the 9 is a different sport: a 90 is
+ * worth more than two 70s, and a 40 and a 50 barely add anything. The
+ * Estricto profile's curve, for a grupo where one crack decides the night.
+ */
+export const STRICT_CURVE: readonly number[] = [0, 10, 16, 24, 40, 65, 105, 160, 230];
+
+/**
+ * Built in like the factory ones, never stored, but nobody's strategy:
+ * Completo's knobs on the strict curve. Kept apart from `FACTORY_PROFILES`
+ * because those are held to be exactly their strategy, and this one is not.
+ */
+export const PRESET_PROFILES: readonly BalanceProfile[] = [
+  { id: "estricto", name: "Estricto", knobs: FACTORY_PROFILES[0].knobs, curve: STRICT_CURVE },
+];
+
+/** Every profile that ships with the app: the factory ones, then the presets. */
+export const BUILT_IN_PROFILES: readonly BalanceProfile[] = [...FACTORY_PROFILES, ...PRESET_PROFILES];
+
+/** A profile that ships with the app, which nobody can overwrite, rename or delete. */
+export function isBuiltIn(id: string): boolean {
+  return BUILT_IN_PROFILES.some((p) => p.id === id);
+}
+
 export const DEFAULT_PROFILE_ID = "completo";
 
 /**
@@ -167,6 +191,7 @@ export const CURVE_SHAPES: readonly { label: string; curve: readonly number[] }[
   { label: "Los cracks pesan", curve: [0, 25, 34, 43, 55, 70, 90, 115, 135] },
   // A 4 and a 5 are both "lo pusimos por lástima": nearly the same on the pitch.
   { label: "Abajo da igual", curve: [0, 36, 44, 48, 56, 70, 82, 93, 100] },
+  { label: "Estricta", curve: STRICT_CURVE },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -204,6 +229,21 @@ export function curveValue(curve: readonly number[], rating: number): number {
     }
   }
   return curve[curve.length - 1];
+}
+
+/**
+ * How many 70s a 90 is worth under the curve: the curve said in one number,
+ * for the line under the editor. A straight curve says 1,3.
+ */
+export function crackRatio(curve: readonly number[], crack = 90, regular = 70): number {
+  const base = curveValue(curve, regular);
+  return base <= 0 ? 0 : curveValue(curve, crack) / base;
+}
+
+/** The highest worth the editor's chart shows: room above the top point, in steps of 50, never under 150. */
+export function curveScaleTop(curve: readonly number[]): number {
+  const top = Math.max(...curve);
+  return Math.min(CURVE_MAX, Math.max(150, Math.ceil((top + 40) / 50) * 50));
 }
 
 /* ------------------------------------------------------------------ */
@@ -393,6 +433,54 @@ export function profileCost(profile: BalanceProfile, inputs: ProfileInputs): (a:
   };
 }
 
+/** One term of a profile's cost on a split: which knob, and how many of the cost's points it put in. */
+export interface CostPart {
+  key: "nivel" | "lineas" | "dispersion" | "estrellas" | "reglasFisicas" | "arqueros" | "puestos" | "winRate" | "juntarConocidos";
+  points: number;
+}
+
+/**
+ * `profileCost` taken apart, term by term, so Balanceo can say which knob
+ * weighed most on a split. The parts add up to `profileCost` exactly
+ * (`profiles.test.ts` holds it to that); terms that are off are left out.
+ */
+export function costBreakdown(profile: BalanceProfile, inputs: ProfileInputs, a: TeamEvaluation, b: TeamEvaluation): CostPart[] {
+  const k = profile.knobs;
+  const { context, basis, handicap } = inputs;
+  const plain = Math.abs(strengthEdge(a, b, basis) - handicap);
+  const parts: CostPart[] = [];
+  const add = (key: CostPart["key"], points: number) => parts.push({ key, points });
+  const needsReading = k.aguante > 0 || k.reglasFisicas || k.arqueros || k.puestos > 0;
+  if (needsReading) {
+    const ra = readSide(context, a, k.desgaste);
+    const rb = readSide(context, b, k.desgaste);
+    const level =
+      k.aguante > 0 ? (1 - k.aguante) * plain + k.aguante * Math.abs(enduringEdge(ra, rb, basis) - handicap) : plain;
+    add("nivel", k.nivel * level);
+    if (k.reglasFisicas) add("reglasFisicas", physicalTerms(ra, rb));
+    if (k.arqueros) add("arqueros", keeperTerms(context, ra, rb));
+    if (k.puestos > 0) add("puestos", k.puestos * aptitudeGap(ra, rb));
+  } else {
+    add("nivel", k.nivel * plain);
+  }
+  // The same three terms `balanceCost` adds, with its strength weight at 0.
+  const only = (w: Partial<{ lines: number; spread: number; stars: number }>) =>
+    balanceCost(a, b, basis, handicap, { strength: 0, lines: 0, spread: 0, stars: 0, ...w });
+  if (k.lineas > 0) add("lineas", only({ lines: k.lineas }));
+  if (k.dispersion > 0) add("dispersion", only({ spread: k.dispersion }));
+  if (k.estrellas > 0) add("estrellas", only({ stars: k.estrellas }));
+  if (k.winRate > 0) {
+    const rates = inputs.winRates ?? new Map<PlayerId, number>();
+    add("winRate", k.winRate * Math.abs(sideWinRate(rates, a) - sideWinRate(rates, b)));
+  }
+  if (k.juntarConocidos > 0) {
+    const bonds = inputs.bonds ?? new Map<PlayerId, ReadonlySet<PlayerId>>();
+    const ids = (side: TeamEvaluation) => side.lineup.flatMap((p) => (p == null ? [] : [p.id]));
+    add("juntarConocidos", k.juntarConocidos * BOND_SPLIT_COST * bondsSplit(bonds, ids(a), ids(b)));
+  }
+  return parts;
+}
+
 /**
  * What a side is worth under a profile: the history scaled by Química, the
  * "se conocen" bonus, and the curve. Built on whatever context the screen
@@ -517,7 +605,7 @@ export function parseProfileStore(raw: string | null): ProfileStore {
   }
   if (typeof data !== "object" || data === null) return empty;
   const r = data as Record<string, unknown>;
-  const factory = new Set(FACTORY_PROFILES.map((p) => p.id));
+  const factory = new Set(BUILT_IN_PROFILES.map((p) => p.id));
   const custom: BalanceProfile[] = [];
   for (const item of Array.isArray(r.custom) ? r.custom : []) {
     if (typeof item !== "object" || item === null) continue;
@@ -539,7 +627,7 @@ export function parseProfileStore(raw: string | null): ProfileStore {
 }
 
 export function allProfiles(store: ProfileStore): BalanceProfile[] {
-  return [...FACTORY_PROFILES, ...store.custom];
+  return [...BUILT_IN_PROFILES, ...store.custom];
 }
 
 /** The profile by id, falling back to the default one and then to Completo: a deleted profile never strands Armar. */
